@@ -75,10 +75,9 @@ States:
   3. The configured exporter:
      - `otlp`: a `BatchSpanProcessor` with `opentelemetry-exporter-otlp-proto-http`, configured only by the standard `OTEL_EXPORTER_OTLP_*` variables.
      - `console`: a `SimpleSpanProcessor` with the standard `ConsoleSpanExporter`, writing one JSON span per line to the file in `HARNESS_CONSOLE_PATH`, or to **stderr** by default, never stdout. Strands' docs show `ConsoleSpanExporter` taking an output stream ([Strands traces](https://strandsagents.com/latest/documentation/docs/user-guide/observability-evaluation/traces/)).
-- *All modes:* the provider is passed to Strands with `StrandsTelemetry(tracer_provider=provider)` ([Strands traces](https://strandsagents.com/latest/documentation/docs/user-guide/observability-evaluation/traces/), accessed 2026-11-03).
+- *All modes:* `telemetry.py` calls `trace.set_tracer_provider(provider)` once, then `StrandsTelemetry(tracer_provider=provider)`. **S1 showed that Strands' tracer reads the global provider**: passing the provider alone captured zero spans ([spikes.md](spikes.md)). The provider is ([Strands traces](https://strandsagents.com/latest/documentation/docs/user-guide/observability-evaluation/traces/), accessed 2026-11-03).
 - `HarnessHooks` emits its `harness.*` spans from `provider.get_tracer("harness")` on that **same explicit provider** object, never from the global `trace.get_tracer()`.
 - There is exactly one provider per process: `telemetry.py` sets it up once at start-up and never replaces it. Tests that need a different exporter use a new process (ADR-2).
-- Whether `StrandsTelemetry` also sets the global provider is **(unverified, S1)**; it doesn't matter, because there's only one provider per process.
 
 **Processors only do what OpenTelemetry allows.**
 - `RunContextProcessor.on_start` gets a *mutable* span. It sets run-level attributes on **every** span, including every model-call span:
@@ -130,10 +129,11 @@ The checker needs no Strands span content for AC2. Strands spans are kept for th
 How the hooks get their data:
 - **Reference labels.** `AfterToolCallEvent.result` is writable, so the hook prepends `[ref Tn] ` to the tool result text before the model sees it. **Tested:** with a tool result starting `[ref T1]`, Haiku 5.5 and Sonnet 5.5 both cited `"T1"` for all three claims. With only Bedrock's `toolUseId` available, both returned `null` and said they couldn't see an ID.
 - **Conversation history must not be trimmed.** Input messages are rebuilt from per-call deltas (AC2), so the agent is created with Strands' no-op conversation manager (`NullConversationManager`), never the default, which may trim history. The class name and the default behavior are **(unverified, S1)**. As a guard, `HarnessHooks` checks before each model call that `len(agent.messages)` hasn't shrunk since the last call. If it has, it sets `harness.model.messages_trimmed=true` on the `harness.model_result`, and the checker reports it as a missing-field failure for AC2.
-- **Model results.** Which fields `AfterModelCallEvent` exposes (the response, usage, reasoning blocks) is **(unverified, S1)**. If it doesn't expose them, the hook reads the newest assistant message from `agent.messages`, which keeps `reasoningContent` blocks **(unverified, S1)**.
+- **Model results** (S1, confirmed): `AfterModelCallEvent.stop_response.message` holds the output. Reasoning is at `content[].reasoningContent.reasoningText.text`, tokens at `metadata.usage` and latency at `metadata.metrics.latencyMs`. `stop_response.stop_reason` gives the stop reason.
+- **Tool latency** comes from `AfterToolCallEvent.duration` (seconds), and the input cap from `BeforeModelCallEvent.projected_input_tokens`. Cooperative cancel sets the `cancel` field every `Before*` event has (S1).
 - **Tool arguments.** `tool_use` comes from `BeforeToolCallEvent`, which the docs show as writable `tool_use`/`selected_tool`. It's carried to the matching `AfterToolCallEvent` by `tool_use_id`.
 
-**Agent spans** are the spans from the Strands tracer's instrumentation scope plus our `harness` scope. ADOT auto-instrumentation adds spans in other scopes, such as botocore and HTTP. The archive keeps every span with its scope name, but checks, signals, reports and AC4 count **agent spans only**. The Strands scope name is recorded in spike S1 and set in `analysis/trace.py`.
+**Agent spans** are the spans from the Strands tracer's instrumentation scope, `strands.telemetry.tracer` (S1), plus our `harness` scope. The MCP library's own `MCP send …` client spans are excluded. ADOT auto-instrumentation adds spans in other scopes, such as botocore and HTTP. The archive keeps every span with its scope name, but checks, signals, reports and AC4 count **agent spans only**. Strands' span names (S1) map to `harness.span_kind` like this: `invoke_agent*` → agent, `execute_event_loop_cycle` → cycle, `chat` → model, `execute_tool*` → tool. Message content is in span events (`gen_ai.*.message`, `gen_ai.choice`), which the archive keeps.
 
 **Model.** `BedrockModel(model_id=payload.model_id, max_tokens=payload.model_params.max_tokens, additional_request_fields=payload.model_params.request_fields)`. The params come from the model's entry in `harness.yaml`, are sent in the payload, and are recorded verbatim as `harness.model.params`. So AC2 records the real values, and a model that rejects thinking fields just gets an entry without them (AC10). Client config: botocore `Config(connect_timeout=10, read_timeout=120, retries={"mode":"standard","max_attempts":3})`. Whether `BedrockModel` accepts a client config is **(unverified, S1)**.
 
@@ -152,7 +152,7 @@ How the hooks get their data:
 - **Steps:** at most 40 model calls plus tool calls. The 41st `BeforeModelCallEvent` or `BeforeToolCallEvent` raises `LimitExceeded`. Raising from a hook propagates, per the hooks docs.
 - **Output tokens:** `max_tokens` is 16,000 per call, because thinking tokens count against it. At most 200,000 output tokens per run, checked like input tokens: *used + max_tokens > 200,000* stops the run. A model result with `stop_reason=max_tokens` is a trouble spot. If it's the final answer, the run ends `error` with `error: "final answer truncated at max_tokens"`, and AC6 reports the missing or partial claims block.
 - **Input tokens:** at most 400,000 input tokens per run, summed from `harness.usage.input_tokens`. At every `BeforeModelCallEvent`, the check is *used so far + the previous call's input tokens* (the next call's context is at least that large) > 400,000, so the last call can't overshoot by a whole context.
-- **Tool calls:** a 60-second timeout per tool call, set on `MCPClient` **(parameter name unverified, S1)**.
+- **Tool calls:** a 60-second timeout per tool call. S1 found that `MCPClient` has only `startup_timeout`, and that `MCPAgentTool` calls `call_tool_async` without `read_timeout_seconds`. So `agent/tools.py` wraps each MCP tool in a thin `AgentTool` that calls `call_tool_async(..., read_timeout_seconds=timedelta(seconds=60))`.
 - **Wall clock:** `main.py` runs the agent in a worker thread and waits 600 seconds. Python can't kill a thread, so cancellation is cooperative:
   - On timeout, `main.py` sets a `cancel` flag that `HarnessHooks` checks at every `Before*` event. The next model or tool call raises `LimitExceeded`, so no new paid call starts.
   - `main.py` waits up to 180 more seconds for the thread to stop: the longest in-flight call is a 120-second model read.
@@ -259,7 +259,7 @@ The snapshot makes replay deterministic (AC9). Replay uses the prices and rubric
 
 Known limits of this version: claims are checked on `value` only, not on the `claim` text, and a coordinate pair's two parts are matched independently, so they could match in unrelated places in the result.
 
-**Datasets accessed (AC2).** `analysis/datasets.py` maps each tool to the argument or result field that names a dataset. For example, RODA `get_dataset_details` and `preview_dataset` give the dataset ID, and LGND tools give the imagery source (Sentinel-2 or NAIP). The exact field names are filled in from the `input_schema` recorded in S1. A tool with no mapping is listed as "dataset unknown", never silently dropped.
+**Datasets accessed (AC2).** `analysis/datasets.py` maps each tool to the argument or result field that names a dataset. RODA (S1): the `slug` argument of `get_dataset_details`, `preview_dataset`, `sample_dataset` and `find_related_datasets`, plus each `results[].slug` in a `search_datasets` or `list_datasets` result. LGND tools give the imagery source (Sentinel-2 or NAIP); those field names come from S3. A tool with no mapping is listed as "dataset unknown", never silently dropped.
 
 **Suite file** (`suites/*.yaml`, read by `harness run --suite`):
 ```yaml
@@ -463,7 +463,7 @@ Ordered by risk. Local spikes S1 and S6 run Tuesday 1:00–3:00 pm. S2 runs as t
 
 | Spike | Question | Pass | If it fails |
 | --- | --- | --- | --- |
-| **S1** (local) | What does `AfterModelCallEvent` expose? Does `BedrockModel` pass the thinking fields through and accept a client config? What's the MCP timeout parameter? What's Strands' instrumentation scope name? What do RODA's tool schemas look like? Does Strands accept a custom (scripted) model provider for the AC4 test? What's the no-op conversation manager called, and does the default trim history? | A local run emits `harness.model_result` with reasoning text, and `harness.tool_result` with arguments and result | Read reasoning from `agent.messages`; call Bedrock through a custom model provider; enforce the tool timeout with a wrapper around `call_tool` |
+| **S1** (local) **done, see [spikes.md](spikes.md)** | What does `AfterModelCallEvent` expose? Does `BedrockModel` pass the thinking fields through and accept a client config? What's the MCP timeout parameter? What's Strands' instrumentation scope name? What do RODA's tool schemas look like? Does Strands accept a custom (scripted) model provider for the AC4 test? What's the no-op conversation manager called, and does the default trim history? | A local run emits `harness.model_result` with reasoning text, and `harness.tool_result` with arguments and result | Read reasoning from `agent.messages`; call Bedrock through a custom model provider; enforce the tool timeout with a wrapper around `call_tool` |
 | **S2** (deployed) | Does ADOT's provider accept `add_span_processor`? Can `uvx` start inside the runtime with internet access? Does a 13-minute synchronous invocation work? Does the content opt-out apply inside the runtime? Does a span with a 16 KB attribute reach CloudWatch? | A hello-world agent lists RODA tools, makes one real `preview_dataset` call that succeeds, archives 100% of spans (the decision spans the hooks emit equal the decision spans archived), and holds a 13-minute synchronous call | Our own provider plus ADOT's exporter; RODA hosted separately; the background invocation pattern |
 | **S3** | Can a headless agent authenticate to LGND Geo? | `list_tools` from a script | Ask LGND or Clay for a hackathon token (spec A4); RODA only meanwhile |
 | **S6** | (Informs the prompt's bound only; no scorer uses the answer key in this version.) How many OSM data centers are within 50 km of Dallas (the spec's answer key)? | An Overpass count of at least 10 | Also include `building=data_center`, or change the bound. Both Overpass mirrors failed or returned nothing on 2026-11-03 |
@@ -478,9 +478,45 @@ Phoenix was dropped, and its spikes (S4, S5) with it.
 
 ## Implementation plan
 
-Each slice ends green (tests pass) and runnable.
+Slices are ordered riskiest first. Each ends green (tests, lint and type checks pass), runnable, and committed to `design/eval-harness`. **Toolchain:** Python 3.12 managed by `uv` (`uv python install 3.12`); `uv` 0.13.6 pinned in `.tool-versions`; podman for the arm64 image; Node for CDK.
 
-1. **Analysis on fixtures** (no AWS): `analysis/*`, and `harness check|replay|compare` on `file://` fixtures. CI with pytest, the import lint and gitleaks. Covers AC5–AC9 and AC11 as unit tests.
-2. **Local agent**: Strands with Bedrock and RODA, `HarnessHooks`, the processors and a `file://` archive. Spike S1. The exporter-swap test (AC4). `harness check` on a real local run (AC2, AC3).
-3. **Deploy** with CDK: bucket, ECR (arm64), role, `agent-agentcore`, budget, tags, then Transaction Search after confirmation. Spike S2. `harness run` end to end (AC1, AC5 on S3).
-4. **LGND Geo and suites**: spike S3, the real prompts, `--suite` live, the narrative, and the answer-key check S6 (AC10, AC11).
+**Slice 0: Spike S1, local and throwaway.** Code goes in `spikes/s1/` and is deleted or kept only as notes.
+1. `spikes/s1/run.py`: a Strands `Agent` with `BedrockModel(us.anthropic.claude-haiku-5-5, thinking adaptive/summarized)`, RODA over stdio, a `ConsoleSpanExporter` writing to a file, and a probe `HookProvider` that logs every event's fields.
+2. Run it once against the sandbox and record the answers to S1 in `docs/eval-harness/spikes.md`:
+   - the scope name;
+   - the `AfterModelCallEvent` fields;
+   - whether `client_config` works and what the MCP timeout parameter is called;
+   - the RODA schemas;
+   - whether a scripted model provider works;
+   - the conversation manager.
+3. Update the design wherever an answer differs. **Commit:** "Spike S1 findings".
+
+**Slice 1: Contracts and analysis on fixtures** (no AWS).
+1. `pyproject.toml` (packages `agent`, `harness`, `analysis`; dev dependencies pytest, moto, pytest-socket, ruff, mypy), `.tool-versions`, `tests/allowed_deps.txt`.
+2. `analysis/trace.py`: load an archive (`file://` or `s3://`), the span model, the agent-span filter (scope from S1), `harness.span_kind`.
+3. `tests/fixtures/`: a builder that writes synthetic archives (spans, tool-result files, `run.json`, `suite.json`), plus the named fixtures from Traceability.
+4. Test-first, one commit each:
+   - `analysis/check.py` (AC2 rules);
+   - `analysis/provenance.py` (AC6 parsing, classing and matching);
+   - `analysis/signals.py` and `analysis/datasets.py`;
+   - `analysis/summary.py` (trouble-spot rule; the narrative filter);
+   - `analysis/score.py` (rubric and the `none` scorer);
+   - `analysis/report.py` (Jinja2 with autoescape);
+   - `analysis/compare.py`.
+5. `harness/cli.py`, `config.py`, `manifest.py` (`out/index.json`): the `check`, `replay` and `compare` commands, end to end against fixtures in a subprocess. AC9 runs with networking blocked.
+6. CI: `.github/workflows/ci.yml` running ruff, mypy, pytest, the import lint (AC3), and the gitleaks action. **Commit** after each numbered item.
+
+**Slice 2: Agent, local.**
+1. `agent/telemetry.py` (the `adot`, `otlp` and `console` exporters, one provider per process), `agent/archive.py` (serialize in `on_end`, background writer, `force_flush`), `agent/hooks.py` (refs, decision spans, limits, cancel, trim guard), `agent/main.py` (`handle()`, the HTTP `/invocations` and `/ping` routes), `agent/local.py`, and `prompts/system.md` plus `prompts/dallas-dc.md`.
+2. Unit tests for the archive and hooks; the scripted-run fixture; `tests/test_exporter_swap.py` (AC4).
+3. `harness run --backend local` against Bedrock and RODA, then `harness check` on that run (AC2 and AC3 live). **Commit.**
+
+**Slice 3: Deploy** (needs confirmation before the account-wide step).
+1. `infra/` CDK (Python): the bucket (retained), the ECR image asset (linux/arm64, `boot.sh`), the execution role, one runtime, the budget (`-c budget_email`), and tags.
+2. Spike S2 on the deployed image: 100% archived, a real RODA `preview_dataset` call, a 13-minute call, a 16 KB attribute, ADOT `add_span_processor`.
+3. Transaction Search, **after the user confirms**. Then `harness run` against AgentCore end to end (AC1, AC5 on S3), and a check that the spans are visible in CloudWatch. **Commit.**
+
+**Slice 4: LGND Geo, suites and narrative.**
+1. Spike S3 (LGND headless auth); add LGND to the agent if it passes.
+2. `harness run --suite` with the cost guard and `suite.json`; the narrative call (ADR-3); `suites/dallas-dc-v1.yaml`.
+3. Live: a 2 prompts × 2 models suite and `harness compare` (AC10, AC11). Spike S6 sets the prompt's bound. **Commit**, then the Verify stage.
