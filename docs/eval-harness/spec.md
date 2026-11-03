@@ -48,12 +48,12 @@ Clay and ADB can't tell whether to trust a dataset an AI agent built (V13). Noth
 
   Every model-call span records:
   - model ID, parameters, and system-prompt hash;
-  - the full input messages and the full output;
+  - the full input messages (recorded as the messages added since the previous call, which reassemble the full input) and the full output;
   - reasoning text, or `reasoning.available=false`;
   - token usage.
 
   Every tool-call span records:
-  - server and tool name, arguments, and the full result or error;
+  - server and tool name, arguments, and the full result or error (the full result can live in an archived file the span points to, verified by its hash);
   - latency and retry number.
 
   The checker reports zero missing fields.
