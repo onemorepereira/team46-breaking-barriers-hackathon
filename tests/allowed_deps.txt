@@ -1,0 +1,4 @@
+# Reviewed allowlist of runtime dependencies (AC3). No observability-backend SDK may appear here.
+boto3
+jinja2
+pyyaml
