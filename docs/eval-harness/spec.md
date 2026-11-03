@@ -58,12 +58,12 @@ Clay and ADB can't tell whether to trust a dataset an AI agent built (V13). Noth
 
   The checker reports zero missing fields.
 - [ ] **AC3 OpenTelemetry only.** Given the codebase, when it's searched, then no agent or harness code imports a specific observability backend's SDK. All telemetry leaves as OpenTelemetry spans through exporters chosen in config.
-- [ ] **AC4 Backend swap.** Given one prompt, when it runs once with AgentCore Observability (CloudWatch) as the backend and once with Arize Phoenix, changing only config **[team]**, then both backends show the run with the same number of spans and the same span names.
+- [ ] **AC4 Exporter swap.** Given the agent's telemetry setup and one scripted agent run, when the test runs it twice, changing only the exporter config (first an OTLP exporter sending to a test OTLP receiver, then an in-memory exporter), then both exporters receive the same **agent spans**: the same count, and the same span kinds (agent, model or tool). The code is unchanged between the two, and the test runs in CI. Agent spans are the spans the agent framework and the harness emit; spans that a backend's own auto-instrumentation adds, such as AWS SDK calls, are excluded. There's no live two-backend demo **[team]**. The deployed runtime uses AgentCore Observability (CloudWatch).
 - [ ] **AC5 Archive.** Given any run, whichever backend is configured, then its spans are also written as JSONL to the archive: S3 in AWS, or a local directory in development.
-- [ ] **AC6 Claim provenance.** Given a run's final output, then each claim states its value and cites the ID of the tool-call span it came from. The report gives each claim one status:
-  - **matched:** the cited span is a tool result, and the claimed value appears in that result. Text is compared ignoring case and whitespace; numbers are compared as numbers.
+- [ ] **AC6 Claim provenance.** Given a run's final output, then each claim states its value and cites the reference label (for example `T3`) of the tool result it came from. The harness stamps every tool result with a label the model can see, and maps each label to its tool-call span. The report gives each claim one status:
+  - **matched:** the cited span is a tool result, and the claimed value appears in that result. Text is compared ignoring case and with whitespace runs collapsed, and values under 3 characters must match a whole word. Numbers are compared as numbers, within the precision the claim states (`32.80` matches `32.8008`).
   - **mismatch:** the cited span is a tool result, but the value doesn't appear in it.
-  - **unsourced:** there's no citation, or the cited span doesn't exist or isn't a tool result.
+  - **unsourced:** there's no citation, or the cited label doesn't map to a tool result.
 
   A test fixture with one claim of each kind gets all three statuses right.
 - [ ] **AC7 Summary.** Given an archived trace, when the summary is generated, then it lists the run's steps in order and the tools used. It names every **trouble spot**: a step with an error or a retry, and every claim marked mismatch or unsourced (AC6). Every step or claim it mentions links to a span ID that exists in the trace. A fixture trace with known trouble spots gets every one of them named, with no false span IDs.
@@ -87,7 +87,7 @@ Clay and ADB can't tell whether to trust a dataset an AI agent built (V13). Noth
 
 ## Success signals
 
-- At the Wednesday 5:30 pm rehearsal **[event]**, the backend swap (AC4), the replay (AC9) and one comparison table (AC11) are each shown live, once.
+- At the Wednesday 5:30 pm rehearsal **[event]**, the replay (AC9) and one comparison table (AC11) are each shown live, once, and the AC4 exporter-swap test is green in CI.
 - 100% of the runs recorded before judging pass the trace checker (AC2). Measured as runs that pass divided by runs recorded, from Tuesday's first run until Thursday at 10 am.
 - Clay, looking at one report and one comparison table, can answer "can we trust this run?" and "which setup did better?", and point to the evidence. This one is qualitative; we ask them directly.
 
@@ -107,7 +107,7 @@ Clay and ADB can't tell whether to trust a dataset an AI agent built (V13). Noth
 
 **Decided**
 - Workflow scoring reports raw signals only in this version (AC8). The scoring method is still open. *Owner:* Miguel.
-- The swap demo uses AgentCore Observability and Arize Phoenix (AC4).
+- No live backend-swap demo, and no Phoenix **[team]**. Pluggability is proven by the AC4 test. The deployed backend is AgentCore Observability.
 - The agent runs on AgentCore Runtime from day 1 (AC1).
 - Claim provenance checks values, not just citations (AC6).
 - This version includes run comparison (AC11), as raw numbers only.
@@ -129,6 +129,5 @@ Clay and ADB can't tell whether to trust a dataset an AI agent built (V13). Noth
 - **What "near Dallas" means.** The bound decides what counts as a correct answer. *Owner:* Miguel. *Default:* within 50 km of downtown Dallas.
 - **The answer key.** *Owner:* Miguel. *Default:* OpenStreetMap features tagged as data centers within the bound. OSM is a listed data source (T143). We believe OSM has a data-center tag, but haven't checked it or how complete the Dallas coverage is (unverified).
 - **The rubric file format and how it's scored.** *Owner:* Miguel. *Default:* a list of criteria, each with a question, scored by a pluggable evaluator. Nothing is scored until a rubric is configured.
-- **Where does Phoenix run?** The agent runs in AWS, so Phoenix must be reachable from there. *Owner:* Miguel. *Default:* a single small Phoenix container in the sandbox account, reachable only from the agent.
-- **How does the agent state claims?** *Owner:* Miguel. *Default:* the final answer ends with a structured claims list (`claim`, `value`, `span_id`) that the system prompt requires. A run that's missing the list fails AC6.
+- **Decided (Design):** claims cite tool-result labels such as `T3`, not raw IDs. A test showed the model can't see Bedrock's `toolUseId`, but it reliably repeats a label printed in the tool result.
 - **Is the summary written by an LLM or generated by code?** *Owner:* Miguel. *Default:* the timeline is generated by code, the narrative by an LLM, and the narrative is saved with the run so replay doesn't need the model.

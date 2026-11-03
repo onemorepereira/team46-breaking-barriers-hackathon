@@ -1,0 +1,8 @@
+# Never commit credentials (temporary AWS sandbox keys, API tokens)
+.env
+.env.*
+*.env
+aws-sandbox*
+.aws/
+credentials
+*.pem

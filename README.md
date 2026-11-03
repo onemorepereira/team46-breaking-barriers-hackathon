@@ -20,7 +20,7 @@ Track 1 evaluates an agent doing an ADB-style "how to use AI / build datasets" t
 2. **Trace everything, including the model's decisions.** Trace capture is our top priority **[team]**. Every run keeps its traces and inputs[^V34], and never gets judged on its final output alone[^T176]. See [Traceability](#traceability).
 3. **Summarize the run.** A readable account, generated from the trace, of what the agent did and where it struggled[^T115].
 4. **Score two things.** The workflow, from the traces[^T117]; the output, against ADB's rubric[^T31]. How we score the workflow is still **open** **[team]**.
-5. **Keep observation pluggable.** The model and the tracing tool both stay swappable[^T10][^V113]. OpenTelemetry is the linchpin that proves it: we switch the backend that observes the model, with no code change **[team]**. See [OpenTelemetry](#opentelemetry-the-pluggability-contract).
+5. **Keep observation pluggable.** The model and the tracing tool both stay swappable[^T10][^V113]. OpenTelemetry is the linchpin that proves it: a CI test sends the same agent spans to two different exporters, changing only config **[team]**. See [OpenTelemetry](#opentelemetry-the-pluggability-contract).
 6. **Never fail the demo.** Recorded traces replay through the scorer and still produce a full report[^T121][^V114].
 7. **Ship it open.** Apache-2.0[^V33], in an open-source repo Clay can access after the event[^V166]. Infrastructure as code with CDK, public before judging **[team]**.
 8. **Stretch: compare runs.** The same task on two models side by side, showing the eval tells them apart[^T190][^V153].
@@ -56,11 +56,11 @@ Inputs and outputs are stored in full, not summarized, so the summary and the re
 
 OpenTelemetry is a must **[team]**. The brief names an OpenTelemetry-based trace approach as a reasonable default[^T88] and says never to hard-wire a tracing vendor[^T177]. Three rules follow **[team]**:
 
-1. **OpenTelemetry is the only contract.** The agent emits OpenTelemetry spans; nothing in our code calls a specific backend. AgentCore/CloudWatch, Langfuse, Phoenix and our S3 JSONL archive are all swappable exporters.
+1. **OpenTelemetry is the only contract.** The agent emits OpenTelemetry spans; nothing in our code calls a specific backend. AgentCore/CloudWatch is the deployed backend. Any OpenTelemetry backend, such as Langfuse or Phoenix, can be swapped in as an exporter, and our S3 JSONL archive runs alongside whichever is used.
 2. **Decision data lives in the spans.** Prompts, reasoning, tool choices, tool results and claim-provenance links are span attributes and events, following the OpenTelemetry GenAI conventions where they exist. Nothing goes in a side channel, so a backend swap loses nothing.
 3. **Replay and the report read OpenTelemetry data.** They work from the stored spans, not a backend's API, so they keep working whichever backend is plugged in.
 
-**The demo:** run the agent with traces going to one backend, change only the exporter setting, and run it again. The same decision trail appears in the second backend **[team]**. This meets the brief's requirement that the tracing tool be demonstrated as swappable[^V164].
+**The proof:** we decided against a live two-backend demo **[team]**. Instead, an automated test runs the same agent activity through two exporters, changing only config, and checks that both receive the same agent spans **[team]**. This meets the brief's requirement that the tracing tool be demonstrated as swappable[^V164].
 
 ## Not doing
 
@@ -78,7 +78,7 @@ The order of the milestones follows the brief: one trace first, then scoring, th
 - [ ] **Tue, by 3:00 pm:** sandbox up, Bedrock access checked, roles assigned, ADB task and rubric agreed with Clay[^V191].
 - [ ] **Tue, by 5:30 pm:** one agent run captured end to end as an OpenTelemetry trace, decisions included[^T34] **[team]**.
 - [ ] **Wed, by noon:** trace summary and both scores working; first report produced[^V162].
-- [ ] **Wed, by 5:30 pm:** model swap, observability-backend swap, replay fallback, CDK and public repo done; demo rehearsed[^V164][^V165].
+- [ ] **Wed, by 5:30 pm:** model swap, exporter-swap test green, replay fallback, CDK and public repo done; demo rehearsed[^V164][^V165].
 - [ ] **Thu, 10:00 am–noon:** present in prelims; our slot is announced at 9:15 **[event]**.
 
 ## How we win
@@ -90,7 +90,7 @@ The four judging criteria are weighted equally, and five other teams have the sa
 | Technological Implementation | Bedrock[^T105], AgentCore and Strands, OpenTelemetry, S3[^T90] and CDK **[team]**, each named on the architecture slide **[team]** |
 | Design | Swappable parts[^T177], with OpenTelemetry as the one contract between the agent and whatever observes it **[team]**; a readable report page[^V130] |
 | Potential Impact | Clay and ADB can trust agent-built datasets[^V13] and start working through their eval backlog[^V13][^V19] |
-| Quality of Idea | Decision-level traceability with claim provenance **[team]**, a live backend swap **[team]**, and a side-by-side model comparison[^T190] |
+| Quality of Idea | Decision-level traceability with claim provenance **[team]**, an exporter swap proven by test **[team]**, and a side-by-side model comparison[^T190] |
 
 ## Open questions
 
