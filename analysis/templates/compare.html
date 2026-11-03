@@ -1,0 +1,7 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Suite comparison {{ suite_id }}</title>{% include "_style.html" %}</head><body>
+<h1>Suite comparison</h1><div class="muted"><code>{{ suite_id }}</code> · {{ rows | length }} runs · generated {{ generated_at }}</div>
+<p class="muted">Raw numbers side by side; no winner is declared.</p>
+<table><tr>{% for c in columns %}<th>{{ c.replace("_", " ") }}</th>{% endfor %}</tr>
+{% for row in rows %}<tr>{% for c in columns %}<td{% if c == "status" and row[c] != "ok" %} class="bad"{% endif %}>{{ "—" if row[c] is none else row[c] }}</td>{% endfor %}</tr>{% endfor %}</table>
+</body></html>

@@ -1,0 +1,47 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Run report {{ r.run.run_id }}</title>{% include "_style.html" %}</head><body>
+<h1>Run report</h1>
+<div class="muted"><code>{{ r.run.run_id }}</code> · status <b>{{ r.run.status }}</b> · generated {{ generated_at }}</div>
+{% if r.run.partial %}<div class="banner">Run ended early: {{ r.run.status }}{% if r.run.result and r.run.result.error %} — {{ r.run.result.error }}{% endif %}. Every span that ended is shown below.</div>{% endif %}
+
+<h2>Run</h2>
+<table><tr><th>Model</th><td>{{ m.model_key }} · <code>{{ m.model_id }}</code></td></tr>
+<tr><th>Prompt</th><td>{{ m.prompt_file }} · <code>{{ m.prompt_sha256 }}</code></td></tr>
+<tr><th>Suite</th><td>{{ m.suite_id or "—" }}</td></tr>
+<tr><th>Started / ended</th><td>{{ m.started_at }} → {{ m.ended_at }}</td></tr>
+<tr><th>Backend</th><td>{{ m.backend }}</td></tr></table>
+
+<h2>Tools available</h2>
+{% if r.tools %}<table><tr><th>Server</th><th>Tool</th></tr>{% for t in r.tools %}<tr><td>{{ t.server }}</td><td>{{ t.tool }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">Not recorded.</p>{% endif %}
+
+<h2>Datasets accessed</h2>
+{% if r.datasets %}<table><tr><th>Dataset</th><th>Via</th></tr>{% for d in r.datasets %}<tr><td>{{ d.dataset }}</td><td>{{ d.via }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">None.</p>{% endif %}
+
+<h2>Summary</h2>
+{% if r.summ.narrative %}<p>{{ r.summ.narrative }}</p>{% else %}<p class="muted">Narrative unavailable; timeline below is complete.</p>{% endif %}
+<p>Tools used: {% for t in r.summ.tools_used %}<code>{{ t }}</code> {% else %}<span class="muted">none</span>{% endfor %}</p>
+<h3>Trouble spots</h3>
+{% if r.summ.trouble_spots %}<table><tr><th>Span</th><th>What happened</th></tr>{% for t in r.summ.trouble_spots %}<tr><td><code>{{ t.span_id }}</code></td><td class="warn">{{ t.reason }}</td></tr>{% endfor %}</table>{% else %}<p class="ok">None.</p>{% endif %}
+
+<h2>Timeline</h2>
+<table><tr><th>#</th><th>Span</th><th>Step</th><th>Detail</th></tr>{% for s in r.summ.steps %}<tr><td>{{ loop.index }}</td><td><code>{{ s.span_id }}</code></td><td>{{ s.label }}</td><td>{{ s.detail }}</td></tr>{% endfor %}</table>
+
+<h2>Workflow signals</h2>
+<p class="muted">Raw numbers; no score.</p>
+<div class="grid">{% for k, v in r.sig.as_dict().items() %}<div class="tile"><span class="muted">{{ k.replace("_", " ") }}</span><b>{{ "—" if v is none else v }}</b></div>{% endfor %}</div>
+
+<h2>Claim provenance</h2>
+{% set c = r.prov.counts() %}<p><span class="ok">{{ c.matched }} matched</span> · <span class="warn">{{ c.mismatch }} mismatch</span> · <span class="bad">{{ c.unsourced }} unsourced</span></p>
+{% if r.prov.claims_block_missing %}<div class="banner">Claims block missing from the final answer (span <code>{{ r.prov.anchor_span_id }}</code>).</div>{% endif %}
+{% if r.prov.claims %}<table><tr><th>Claim</th><th>Value</th><th>Ref</th><th>Status</th><th>Span</th><th>Notes</th></tr>
+{% for x in r.prov.claims %}<tr><td>{{ x.claim }}</td><td><code>{{ x.value }}</code></td><td>{{ x.ref or "—" }}</td><td class="{{ 'ok' if x.status == 'matched' else ('warn' if x.status == 'mismatch' else 'bad') }}">{{ x.status }}</td><td><code>{{ x.span_id }}</code></td><td>{{ x.notes | join(", ") }}</td></tr>{% endfor %}</table>{% endif %}
+
+<h2>Output score</h2>
+{% if r.scores is none %}<p class="muted">awaiting rubric</p>
+{% else %}<table><tr><th>Criterion</th><th>Question</th><th>Score</th><th>Rationale</th></tr>{% for s in r.scores %}<tr><td>{{ s.criterion_id }}</td><td>{{ s.question }}</td><td>{{ "—" if s.score is none else s.score }}</td><td>{{ s.rationale }}</td></tr>{% endfor %}</table>{% endif %}
+
+<h2>Trace check (AC2)</h2>
+{% if r.missing %}<p class="bad">{{ r.missing | length }} missing fields</p><ul>{% for x in r.missing %}<li><code>{{ x.line() }}</code></li>{% endfor %}</ul>{% else %}<p class="ok">0 missing fields</p>{% endif %}
+
+<h2>Final answer</h2><pre style="white-space:pre-wrap">{{ r.run.final_output }}</pre>
+</body></html>

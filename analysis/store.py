@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
-S3_CONFIG = {"connect_timeout": 5, "read_timeout": 30, "retries": {"mode": "standard", "max_attempts": 3}}
+
+def s3_config(config_cls: Any) -> Any:
+    """S3 reads and writes: 5 s connect, 30 s read, 3 standard-mode attempts (design: Data and contracts)."""
+    return config_cls(connect_timeout=5, read_timeout=30, retries={"mode": "standard", "max_attempts": 3})
 
 
 class Store(Protocol):
@@ -52,7 +55,7 @@ class S3Store:
         parsed = urlparse(uri)
         self.bucket = parsed.netloc
         self.prefix = parsed.path.lstrip("/")
-        self.client = client or boto3.client("s3", config=Config(**S3_CONFIG))
+        self.client = client or boto3.client("s3", config=s3_config(Config))
 
     def _key(self, key: str) -> str:
         return f"{self.prefix.rstrip('/')}/{key}" if self.prefix else key

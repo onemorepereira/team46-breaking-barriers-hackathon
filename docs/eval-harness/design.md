@@ -259,7 +259,7 @@ The snapshot makes replay deterministic (AC9). Replay uses the prices and rubric
 
 Known limits of this version: claims are checked on `value` only, not on the `claim` text, and a coordinate pair's two parts are matched independently, so they could match in unrelated places in the result.
 
-**Datasets accessed (AC2).** `analysis/datasets.py` maps each tool to the argument or result field that names a dataset. RODA (S1): the `slug` argument of `get_dataset_details`, `preview_dataset`, `sample_dataset` and `find_related_datasets`, plus each `results[].slug` in a `search_datasets` or `list_datasets` result. LGND tools give the imagery source (Sentinel-2 or NAIP); those field names come from S3. A tool with no mapping is listed as "dataset unknown", never silently dropped.
+**Datasets accessed (AC2).** `analysis/datasets.py` maps each tool to the argument or result field that names a dataset. RODA (S1): the `slug` argument of `get_dataset_details`, `preview_dataset`, `sample_dataset` and `find_related_datasets`. **Build deviation:** slugs that only appear in `search_datasets` or `list_datasets` results aren't counted, because a search hit isn't an access. The search results stay visible in the timeline and in the tool-result files. LGND tools give the imagery source (Sentinel-2 or NAIP); those field names come from S3. A tool with no mapping is listed as "dataset unknown", never silently dropped.
 
 **Suite file** (`suites/*.yaml`, read by `harness run --suite`):
 ```yaml
