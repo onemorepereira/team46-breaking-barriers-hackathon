@@ -14,6 +14,7 @@ Every number or factual claim in `deck.html`, with the file it comes from. If a 
 | 3 | The Texas parks run was built by Kimi K3 on AgentCore | `docs/console-polish/handoff.md:38` |
 | 3 | Kimi steps down for its own agent, and Mistral sits | `docs/judging/guide.md` (recusal); seats recorded in run `a5670c6b`'s judgement |
 | 3 | 15/15 claims verified, 8/8 sites inside Texas | `docs/console-polish/handoff.md:38` |
+| 3 (demo) | The judges disagreed on the Texas run: Opus 43.8, DeepSeek 81.2, Mistral 93.8 | Run `a5670c6b`'s `judgement.json` in Miguel's S3 archive; the harness printed these votes when it judged the run (`harness run` output, 2026-11-04) |
 | 3 | The score varies slightly when re-judged | Judges are LLMs; `docs/judging/guide.md` ("Repeat stability") |
 | 4 | 2 measured and 8 judged criteria; median per criterion; High/Medium/Low confidence; no answer means FAILED | `docs/judging/guide.md:15–80`; `rubrics/geo-dataset-v1.yaml` |
 | 4 | No judge grades its own family's agent | `docs/judging/guide.md` (recusal); `harness.yaml` `recuse_same_family: true` |
@@ -28,7 +29,7 @@ Every number or factual claim in `deck.html`, with the file it comes from. If a 
 | 6 | The LGND token lives 300 s, and every call after 290 s failed | `docs/console-polish/handoff.md:50` |
 | 6 | Narrowed searches (16 km circles) were widened to all of Texas | `docs/console-polish/spec.md`, problem 3 |
 | 7 | Strands on Bedrock AgentCore; Sonnet 5.5 or Kimi K3; RODA and LGND Geo over MCP; OTel to S3; FastAPI console; CDK | `README.md`, "How it works" and "Decisions" |
-| 7 | The exporter is swapped by config, proved in CI | `README.md:45` and `README.md:129` |
+| 7 | The exporter is swapped by config, proved in CI | `README.md`: "OpenTelemetry is the only telemetry API" and goal 5, "Keep observation pluggable" |
 | 7 | ADB's rubric is one YAML file | `docs/judging/guide.md`, "To use ADB's rubric" |
 | 7 | Replays work offline from the trace | `README.md` ("Reports work offline"); `docs/tile-cache/handoff.md:24` (31/31 tiles from the archive with every provider blocked) |
 | 8 | Checks claims against the tool output, not the world; no answer key yet | `docs/judging/gaps.md`; `docs/factory.md`, "Open work" |

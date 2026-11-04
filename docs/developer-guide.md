@@ -76,9 +76,9 @@ The layers (`core` → `tools` → `agent`; `analysis`; `harness`) and their imp
 
 ## 5. Configuration reference (`harness.yaml`)
 
-Committed, and it holds no secrets. Unset keys take the defaults in `harness/config.py`. Run `--config <path>` to use another file.
+Committed, and it holds no secrets. Unset keys take the defaults in `harness/config.py`. Run `--config <path>` to use another file; a `<name>.local.yaml` next to it is merged on top in the same way.
 
-**Your own sandbox:** put account-specific values (`archive_uri`, `lgnd_secret_id`, `runtime_arn`, from your stack's CDK outputs) in `harness.local.yaml` next to `harness.yaml`. It's git-ignored, and it's merged on top key by key, nested blocks included. The committed file never needs your changes. See [your own AWS sandbox](factory.md#your-own-aws-sandbox).
+**Your own sandbox:** put account-specific values (`archive_uri`, `lgnd_secret_id`, `runtime_arn`, from your stack's CDK outputs) in `harness.local.yaml` next to `harness.yaml`. It's git-ignored, and it's merged on top key by key, nested blocks included. It can override any value but not remove a key: to drop a judge, for example, set the whole `judging.panel` list. The committed file never needs your changes. See [your own AWS sandbox](factory.md#your-own-aws-sandbox).
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -160,7 +160,16 @@ Per-run limits (40 steps, 400k input and 200k output tokens, 600 s wall clock, 6
 
 **Change what the agent is told.** Edit `prompts/agent/*.md`. Never inline prompt text in Python (tests enforce this). Redeploy for AgentCore.
 
-## 8. Testing
+## 8. Using the console
+`uv run harness ui` opens http://127.0.0.1:8787. It's dark only.
+- **Run:** type a prompt or click an example card, pick the agent model, then **Run & judge**. Steps stream in plain English, then each judge's verdict.
+- **The map:** results are outlined cyan inside the requested area and orange outside. Click a result, or a tile in the strip under the map, to open its details in the panel docked inside the map (Esc or × closes it). The mouse wheel scrolls the page; zoom the map with Ctrl or ⌘ plus the wheel, a pinch, or its + and − buttons.
+- **Step links** (`T3`, "from T5"): these scroll the "What the agent did" list to that step without moving the page. If the list is off screen, a small "Show" prompt offers the jump.
+- **Judge again:** on any finished run, re-scores it from its archived trace. It doesn't re-run the agent.
+- **Runs:** every archived run, newest first, 50 at a time.
+- **API:** the reference at `/api/docs`. It needs internet access (it loads Scalar from jsDelivr); `/openapi.json` always works offline.
+
+## 9. Testing
 
 - `uv run pytest` runs everything offline. `pytest-socket` blocks the network in the tests that must not reach it.
 - **Building runs:** `tests/fixtures/builder.py` (`RunBuilder`, `standard_run`) writes a realistic archived run, so analysis, judging, report and console tests work from real files.
@@ -170,7 +179,7 @@ Per-run limits (40 steps, 400k input and 200k output tokens, 600 s wall clock, 6
 - **Live checks** (real Bedrock, LGND, S3) aren't in CI. Each feature's `handoff.md` records the live runs that proved it.
 - **CI** runs ruff (lint and format), mypy, pytest and gitleaks; see [CONTRIBUTING](../CONTRIBUTING.md#before-you-push).
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
@@ -180,5 +189,7 @@ Per-run limits (40 steps, 400k input and 200k output tokens, 600 s wall clock, 6
 | "Couldn't resolve the prompt's area … no official boundary" | The place has no administrative boundary (e.g. "Northern California") | Intended: the run goes ahead without an area check. Name a county, state or city to get one |
 | A judge shows "failed" | Throttling, model access or a bad reply (retried once) | A reserve stands in. If the reserves run out the run isn't scored; re-judge from the run page |
 | Blank map tiles | Provider down and the tile was never cached | Switch basemaps; `harness replay <id>` archives an archived run's result tiles. See the [tile-cache runbook](tile-cache/launch.md) |
+| `/api/docs` is blank | No internet: the API reference loads Scalar from jsDelivr | Use `/openapi.json` (always local), or reconnect |
+| LGND calls fail mid-run with an auth error | The stored LGND login has no valid refresh token. Tokens themselves refresh automatically every ~4 minutes | `uv run harness lgnd-login` into your own secret (see [your own AWS sandbox](factory.md#your-own-aws-sandbox)) |
 | Console shows old behavior after a code change | The console process predates the change | Restart `harness ui` |
 | `ruff format --check` fails in CI | Unformatted file | `uv run ruff format .` |

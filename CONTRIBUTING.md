@@ -57,7 +57,7 @@ Write tests alongside the code:
 ## Changing behavior that others depend on
 
 - **API changes:** when `/api/*` changes, update every caller in the repo in the same change: `harness/web/static/*.js`, the tests, the endpoint table in `docs/judging/design.md`, and the models and prose in `harness/web/api_docs.py` (shown at `/api/docs`).
-- **Agent-side changes** (`agent/`, `tools/`, `prompts/agent/`) only reach AgentCore after a redeploy (`cd infra && npx aws-cdk deploy`). Say so in the commit if you don't deploy.
+- **Agent-side changes** (`agent/`, `tools/`, `prompts/agent/`) only reach AgentCore after a redeploy (`cd infra && CDK_DOCKER=podman npx aws-cdk deploy`). Say so in the commit if you don't deploy.
 - **Rubric and judge changes** are config (`rubrics/*.yaml`, the `judging:` block in `harness.yaml`). Run `uv run harness calibrate <run-id>` afterwards to check that the panel still catches planted defects.
 
 ## Reviewing

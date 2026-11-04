@@ -24,7 +24,7 @@ Verified by code: every claimed value appears in the tool result it cites, and e
 Not yet. It checks the agent against its own evidence, not against the world. That needs an answer key, e.g. a public registry of solar sites, and it's our top next step. (`docs/judging/gaps.md`)
 
 **8. What happens when tools or the area lookup fail?**
-The trace shows it. A run where the model never answered is marked "not scored", not failed. A place with no official boundary runs without an area check, and the page says so. Both were found and fixed from real runs. (`docs/developer-guide.md`, Troubleshooting)
+The trace shows it, and the verdict says which kind of failure it was. If no model call succeeded at all (e.g. expired credentials), the run is **not scored**: it's an infrastructure failure, not the agent's. If the agent ran but gave no answer, or no tool call succeeded, it's **FAILED**, like the Laos run in the demo. A place with no official boundary runs without an area check, and the page says so. These cases were found and fixed from real runs. (`docs/developer-guide.md`, Troubleshooting)
 
 **9. Could ADB use its own rubric?**
 Yes: it's one YAML file, with no code changes. The judges read whatever criteria it defines, and calibration says which criterion each planted defect should lower. (`docs/judging/guide.md`, "To use ADB's rubric")
