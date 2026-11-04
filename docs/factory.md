@@ -25,9 +25,9 @@ Four self-contained slices, one per person. Each spec says what exists, the test
 | **Evals in plain language** | A plain summary on every run ("what was found, how much to trust it, what to check by hand"), built from the archive with no new model calls | about half a day | Open | — | [spec](plain-verdict/spec.md) |
 | **Prompt compliance** | Check each result against **every** condition in the prompt (e.g. "within 10 miles of a protected area, inside ZIP 75082") and show evidence or its absence, per claim | about a day (splits in two) | Open | — | [spec](prompt-compliance/spec.md) |
 | **Visual design** | Make the console read as a designed product on a projector: type, spacing, hierarchy, a matching report; visual only, behavior unchanged | about a day | Open | — | [spec](visual-design/spec.md) |
-| **Presentation** | An interactive HTML deck (8 slides), a live demo of **judging** an already-built run, a one-pager for ADB, and Q&A prep; every number sourced to the repo | about a day | In progress | Miguel | [spec](presentation/spec.md) |
+| **Presentation** | An interactive HTML deck (9 slides), a live demo of **judging** an already-built run, a one-pager for ADB, and Q&A prep; every number sourced to the repo | about a day | In progress (built; rehearsal pending) | Miguel | [spec](presentation/spec.md) · [handoff](presentation/handoff.md) |
 
-**Before anyone starts:** `design/eval-harness` must be merged to `main` (Miguel). Until then, `main` holds only the README and the briefs.
+**Starting point:** `main` holds everything: `design/eval-harness` was merged in PR #1 on 2026-11-04 and is retired. Branch from `main`.
 
 **Who owns what, and the merge order:** the slices touch some of the same files, so they merge in this order, each rebasing on `main` before its PR:
 1. **Plain language** merges first, as the smallest change. It adds `analysis/judging/explain.py`, the optional `plain:` line in the rubric (with its loader support in `rubric.py`), `run_view(...)["explanation"]`, and one card in `run.html`, `app.js` and `report.html`.
@@ -70,8 +70,11 @@ Fixes and small features, each with a test and recorded in its commit. All on 20
 | Judge **tribunal of three**, with reserves that stand in for a failed judge | The user's call: three judges, dropping the most problematic. Grok was slowest and was the only one to error | `74d434d`, `08401ae` |
 | The report renders the answer as **Markdown** | It showed raw `**` and `\|---\|` next to formatted sections | `e4ef776` |
 | **Area lookup** only accepts boundaries and places; enforcement keeps a narrower area | "Northern California" resolved to a 20 m building, and a run hit the 40-step limit | `c041b6f` |
-| Runs list from **saved rows**; documented API at `/api/docs` | The runs list took about 7 s (S3 re-reads); the API docs were bare | `07d197c` |
+| Runs list from **saved rows**; documented API at `/api/docs` (Swagger, later replaced by Scalar in console polish) | The runs list took about 7 s (S3 re-reads); the API docs were bare | `07d197c` |
 | Runs API **cursor paging** and filters; every API consumer updated | Paging asked for; consumers audited | `bd2ae60`, `bd2970a` |
+| **Team slices**: four self-contained specs, plus how to take a slice and the merge order | The team works in parallel on the day before the presentation | `b3d5520` |
+| **`harness.local.yaml`**: a git-ignored override merged over `harness.yaml` | Teammates work in their own AWS sandboxes without editing the shared config | `ec7ea92` |
+| **Branch rule**: every change goes on a `feature/`, `doc/`, `chore/` or `slice/` branch from `main`, through a PR | `main` is the shared baseline | PRs #1–#3 |
 
 ## Open work
 
@@ -81,7 +84,7 @@ Fixes and small features, each with a test and recorded in its commit. All on 20
 | **Answer key** for outcome correctness | Judge whether found sites are real, not just traceable, e.g. solar farms against USPVDB, with a measured recall and precision criterion | Open | Team. See [gaps](judging/gaps.md) |
 | **Human-expert ratings** of about 20 runs | Validate the panel against experts, as the GRA paper did (expert α ≈ 0.56) | Open | Team |
 | **A gate for unconfirmed results** | A run whose imagery checks confirm no candidate still scores about 96 and High | Open, proposed 2026-11-04 | Team |
-| **AgentCore redeploy** | The agent-side area-narrowing fix (`c041b6f`) reaches AgentCore runs only after a redeploy | Open | Team: `cd infra && CDK_DOCKER=podman npx aws-cdk deploy` |
+| **AgentCore redeploy** | The agent-side fixes (area narrowing, LGND token refresh) reach AgentCore runs only after a redeploy | **Done** 2026-11-04 (run `a5670c6b` used them; [console-polish handoff](console-polish/handoff.md)) | Redeploy after any change to `agent/`, `tools/` or `prompts/agent/` |
 | **Tile backfill** for older runs | Archive result tiles for runs made before the tile cache | Open (2 runs done) | Team: the loop in [tile-cache launch](tile-cache/launch.md) |
 | **Unrun example cards** | 15 of the 16 cards have verified areas but no full run | Open | Team: reword or drop a card whose feature LGND can't find |
 | Harness follow-ups | A long synchronous AgentCore call (spike S2), the OSM answer-key count (S6), the token cap for country-scale prompts | Open | See the [eval-harness](eval-harness/handoff.md) and [layering](layering/handoff.md) handoffs |

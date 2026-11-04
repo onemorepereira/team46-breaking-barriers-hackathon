@@ -1,6 +1,6 @@
 # Tile Cache and Archived Result Tiles: Launch
 
-**Ship:** merge `design/eval-harness` as usual. Nothing is deployed. The tile cache runs in the operator's console (`harness ui`), and archiving runs in the harness on the operator's machine. The AgentCore runtime is unchanged.
+**Ship:** merged to `main` with the rest of the harness (originally via `design/eval-harness`, merged 2026-11-04). Nothing is deployed. The tile cache runs in the operator's console (`harness ui`), and archiving runs in the harness on the operator's machine. The AgentCore runtime is unchanged.
 
 **Rollout:** on by default through `harness.yaml`:
 

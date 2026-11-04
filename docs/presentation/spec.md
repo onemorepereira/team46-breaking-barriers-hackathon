@@ -24,7 +24,7 @@ Tomorrow we present to the judges and to Clay and ADB. The work is spread across
 Runtime data is never committed, so the demo runs exist only on Miguel's machine and in his S3 bucket. **The demo runs from Miguel's laptop.** The slice owner writes the script against the run IDs above, using screenshots Miguel shares (or runs of their own made in their sandbox), and rehearses on Miguel's laptop.
 
 ## Acceptance criteria
-- [ ] **AC1 An interactive HTML deck of about 8 slides** (decided 2026-11-04), `docs/presentation/deck.html`:
+- [x] **AC1 An interactive HTML deck of 9 slides** (decided 2026-11-04), `docs/presentation/deck.html`:
   - **one self-contained file:** no framework or CDN, so it opens from disk; arrow keys or a click advance it;
   - **a presenter view:** `N` shows notes and a slide timer;
   - **a print style:** prints to `docs/presentation/deck.pdf` for the judges and as a backup;
@@ -39,7 +39,7 @@ Runtime data is never committed, so the demo runs exist only on Miguel's machine
 
   Each of the four judging criteria is answered visibly on at least one slide.
 - [ ] **AC2 Every claim is sourced.** `docs/presentation/claims.md` lists each number or factual claim in the deck with the repo file and line it comes from (e.g. "α = 0.50, docs/judging/handoff.md"). Anything without a source is cut or marked as our opinion. A teammate checks the list against the files.
-- [ ] **AC3 A demo script that can't fail.** The demo **judges an already-built run; it doesn't build one** (decided 2026-11-04). `docs/presentation/demo.md` is a timed walkthrough of about 2 minutes:
+- [x] **AC3 A demo script that can't fail.** The demo **judges an already-built run; it doesn't build one** (decided 2026-11-04). `docs/presentation/demo.md` is a timed walkthrough of about 2 minutes:
   1. open the Texas parks run (`a5670c6b`), whose judges disagreed (43.8, 81.2, 93.8);
   2. click **Judge again**, and point out the recusal ("Mistral seated for Kimi");
   3. while they think, show the code-measured checks (15/15 claims verified, 8/8 inside Texas, on the map);
@@ -51,8 +51,8 @@ Runtime data is never committed, so the demo runs exist only on Miguel's machine
   - **a pre-flight checklist**: fresh AWS credentials sourced, `harness ui` running, LGND login valid, a test run done within the hour, the browser zoomed for the projector;
   - **a fallback path**: if the network or a model fails, open the local-archive runs (IDs above) and replay them offline. The S3 run needs AWS credentials;
   - **a timing**: rehearse it at least once, end to end, and record how long it took.
-- [ ] **AC4 A one-page explainer** (`docs/presentation/one-pager.md`, or a PDF) for ADB and Clay readers with no technical background: what the evaluator checks, how to read a score and its confidence, and what it does **not** prove yet (no answer key; it checks the agent's work against its own tool results).
-- [ ] **AC5 Ready for hard questions.** `docs/presentation/qa.md` gives 10 or more likely questions with short answers sourced to the docs. Cover at least:
+- [x] **AC4 A one-page explainer** (`docs/presentation/one-pager.md`, or a PDF) for ADB and Clay readers with no technical background: what the evaluator checks, how to read a score and its confidence, and what it does **not** prove yet (no answer key; it checks the agent's work against its own tool results).
+- [x] **AC5 Ready for hard questions.** `docs/presentation/qa.md` gives 10 or more likely questions with short answers sourced to the docs. Cover at least:
   - LLM judge bias and recusal;
   - why three judges;
   - what α 0.50 means;

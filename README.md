@@ -6,7 +6,7 @@ Nov 3, 2026 · @Miguel · updated Nov 4 with what we built
 
 > **Sources.** Each statement cites where it comes from. Most cite the two briefs, [Technical](docs/Clay-Foundry-Technical-Hackathon.md) (T) and [Vision](docs/Clay-Foundry-Vision-Hackathon.md) (V), with line numbers. Both briefs include Clay's suggested edits from [the Nov 3 PDF](<docs/suggested hackathon edits.pdf>). Statements that are not in either brief carry a tag instead: **[team]** for our own decisions, **[event]** for event logistics from the organizers, and **[ext]** for general background.
 
-> **Docs.** New here? Start with the [developer guide](docs/developer-guide.md), for setup, configuration, the CLI and recipes. Before a change, read [contributing](CONTRIBUTING.md). [All documentation](docs/README.md) indexes every spec, design and handoff, and [the factory](docs/factory.md) tracks each effort's purpose and status **[team]**.
+> **Docs.** New here? Start with the [developer guide](docs/developer-guide.md), for setup, configuration, the CLI and recipes. Before a change, read [contributing](CONTRIBUTING.md). [All documentation](docs/README.md) indexes the guides, briefs, feature records and open slices, and [the factory](docs/factory.md) tracks each effort's purpose and status **[team]**.
 
 ## Mission
 
@@ -20,7 +20,7 @@ Track 1 evaluates an agent doing an ADB-style "how to use AI / build datasets" t
 
 ## What we built
 
-A working Track 1 evaluation harness, on branch `design/eval-harness` **[team]**. An agent finds sites from a prompt, for example data centers in Richardson, TX, or farmland in Khammouane, Laos. Every model and tool decision is recorded. Each run is then checked, graded, **scored by a three-judge tribunal**, summarized and reported from the archive alone, and shown in the **Team Foundry console** **[team]**.
+A working Track 1 evaluation harness, on `main` **[team]**. An agent finds sites from a prompt, for example data centers in Richardson, TX, or farmland in Khammouane, Laos. Every model and tool decision is recorded. Each run is then checked, graded, **scored by a three-judge tribunal**, summarized and reported from the archive alone, and shown in the **Team Foundry console** **[team]**.
 
 - Harness: [spec](docs/eval-harness/spec.md), [design](docs/eval-harness/design.md), [spike results](docs/eval-harness/spikes.md), [handoff and verification](docs/eval-harness/handoff.md).
 - Map imagery: [tile cache and archived result tiles](docs/tile-cache/spec.md) ([design](docs/tile-cache/design.md), [handoff](docs/tile-cache/handoff.md)).
@@ -56,7 +56,7 @@ harness CLI ──▶ AgentCore Runtime ──▶ Strands agent ──▶ Bedroc
   - score, cost, tool calls, tokens, claims verified and judge agreement up front.
 
   It carries the Team Foundry name and logo **[team]**.
-- **Infrastructure is code.** A CDK stack creates the S3 archive, the arm64 agent image, a least-privilege role, the AgentCore runtime, the LGND login secret and an optional budget alert **[team]**. CI runs ruff (lint and format), mypy, pytest (157 tests) and a gitleaks secret scan **[team]**.
+- **Infrastructure is code.** A CDK stack creates the S3 archive, the arm64 agent image, a least-privilege role, the AgentCore runtime, the LGND login secret and an optional budget alert **[team]**. CI runs ruff (lint and format), mypy, the full pytest suite (offline) and a gitleaks secret scan **[team]**.
 
 ### Code layout
 
@@ -78,7 +78,7 @@ Needs `uv`, AWS credentials for the sandbox account, and podman or Docker for de
 
 ```sh
 uv sync                                                       # Python 3.12 environment
-uv run pytest                                                 # 157 tests, no AWS needed
+uv run pytest                                                 # the full suite, offline, no AWS needed
 uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend local      # agent on your machine
 uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend agentcore  # agent on AgentCore
 uv run harness run --suite suites/dallas-dc-v1.yaml           # both prompts on Sonnet 5.5 and Kimi K3
@@ -93,7 +93,7 @@ uv run harness lgnd-login                                     # one-time browser
 cd infra && CDK_DOCKER=podman npx aws-cdk deploy              # deploy or update the stack
 ```
 
-**[team]** Reports land in `out/<run-id>/report.html`; settings live in `harness.yaml` **[team]**.
+**[team]** Reports land in `out/<run-id>/report.html`. Settings live in `harness.yaml`, and your own AWS sandbox's values go in the git-ignored `harness.local.yaml` ([developer guide](docs/developer-guide.md#5-configuration-reference-harnessyaml)) **[team]**.
 
 ### Verified results
 
@@ -119,7 +119,7 @@ From the Verify stage on Nov 4; the evidence is in the [handoff](docs/eval-harne
   - across those runs, Krippendorff's α was 0.50 (95% CI 0.12–0.67), close to the 0.56 the GRA paper reports among human experts **[team]**;
   - on live runs, all three planted defects (unscoped searches, a fabricated site, a missing answer) lowered the criterion they target **[team]**.
 
-  Judging costs $0.12–0.46 per run **[team]**.
+  Judging cost $0.12–0.46 per run with the first five-judge panel. The current three-judge tribunal costs $0.10–0.31 per run (`docs/judging/handoff.md`) **[team]**.
 - **Live runs found grader bugs, and replay re-graded old runs after the fixes**: JSON-escaped line breaks, Unicode escapes, cached prompt tokens counted as input, and tool errors counted twice **[team]**.
 
 ## Goals

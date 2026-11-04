@@ -1,6 +1,6 @@
 # Documentation
 
-Start with the [project README](../README.md) for the mission, what we built and why. This page lists every document by what you're trying to do.
+Start with the [project README](../README.md) for the mission, what we built and why. This page lists the documents by what you're trying to do. [The factory](factory.md) is the ledger of every effort and its status.
 
 ## Guides: start here
 
@@ -36,6 +36,9 @@ Each folder holds a feature's spec (problem and acceptance criteria), its design
 | Tile cache | [spec](tile-cache/spec.md) · [design](tile-cache/design.md) · [launch](tile-cache/launch.md) · [handoff](tile-cache/handoff.md) | Result tiles archived with each run; basemaps and tiles served from a disk cache |
 | Console polish | [spec](console-polish/spec.md) · [design](console-polish/design.md) · [handoff](console-polish/handoff.md) | Dark theme, a docked result panel, timeline-only step jumps, and the area-narrowing fix behind run `fdacf7cf` |
 | Docs pass | [spec](docs-pass/spec.md) · [handoff](docs-pass/handoff.md) | This index, the developer guide and CONTRIBUTING, plus the accuracy audit |
+| Presentation | [README](presentation/README.md) · [deck](presentation/deck.html) · [demo script](presentation/demo.md) · [claims](presentation/claims.md) · [Q&A](presentation/qa.md) · [one-pager](presentation/one-pager.md) · [spec](presentation/spec.md) · [handoff](presentation/handoff.md) | The interactive HTML deck, the judging-only live demo, and their sources |
+
+**Open slices** (specs for the team; status in [the factory](factory.md#slices-open-for-the-team-2026-11-04)): [plain-language evals](plain-verdict/spec.md) · [prompt compliance](prompt-compliance/spec.md) · [visual design](visual-design/spec.md)
 
 ## Data and configuration in the repo
 
