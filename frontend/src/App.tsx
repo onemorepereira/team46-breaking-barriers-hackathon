@@ -331,7 +331,8 @@ export default function App() {
     [historyNext, setHistoryNext] = useState<string | null>(null),
     [loading, setLoading] = useState(false),
     [modal, setModal] = useState(false),
-    [focusedRef, setFocusedRef] = useState<string | null>(null);
+    [focusedRef, setFocusedRef] = useState<string | null>(null),
+    [focusChip, setFocusChip] = useState<{ index: number; nonce: number } | null>(null);
   const stream = useRef<{ close: () => void } | null>(null),
     active = useRef(""),
     busyRef = useRef(false),
@@ -369,6 +370,7 @@ export default function App() {
       setPrompt(data.run.prompt);
       active.current = id;
       setSelected(null);
+      setFocusChip(null);
       setEvents([]);
       setPhase(data.kpis.verdict || "Run loaded");
       setHistory(null);
@@ -422,6 +424,7 @@ export default function App() {
     active.current = "";
     setPrompt("");
     setSelected(null);
+    setFocusChip(null);
     setHistory(null);
     setEvents([]);
     setTab("findings");
@@ -435,6 +438,7 @@ export default function App() {
     active.current = id;
     setBusy(true);
     setSelected(null);
+    setFocusChip(null);
     setEvents([]);
     setPhase("Following a run in progress");
     if (updateUrl)
@@ -539,6 +543,7 @@ export default function App() {
     setBusy(true);
     setView(null);
     setSelected(null);
+    setFocusChip(null);
     setEvents([]);
     setPhase("Starting research");
     try {
@@ -750,6 +755,7 @@ export default function App() {
               <EvidenceMap
                 view={view}
                 selected={selected}
+                focusChip={focusChip}
                 onSelect={(i) => {
                   setSelected(i);
                   setTab("findings");
@@ -1031,10 +1037,19 @@ export default function App() {
                         aria-label="Tool-returned imagery"
                       >
                         {chips
-                          .filter((f: any) => f.properties.tile_url)
+                          .map((f: any, index: number) => ({ f, index }))
+                          .filter(({ f }: any) => f.properties.tile_url)
                           .slice(0, 24)
-                          .map((f: any, i: number) => (
-                            <figure key={i}>
+                          .map(({ f, index }: any, i: number) => (
+                            <figure key={index}>
+                              <button
+                                type="button"
+                                className="evidence-thumb"
+                                aria-label={`Show imagery ${f.properties.node || i + 1} on the map`}
+                                onClick={() =>
+                                  setFocusChip({ index, nonce: Date.now() })
+                                }
+                              >
                               <img
                                 src={f.properties.tile_url}
                                 alt={`Tool-returned imagery ${f.properties.node || i + 1}`}
@@ -1043,6 +1058,7 @@ export default function App() {
                                   e.currentTarget.hidden = true;
                                 }}
                               />
+                              </button>
                               <figcaption>
                                 {f.properties.ref} ·{" "}
                                 {f.properties.index || "Imagery"}
