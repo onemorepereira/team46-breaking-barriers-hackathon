@@ -135,6 +135,9 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str,
 
                     model_id = cfg["models"][cfg["narrative_model"]]["id"]
                     narrative.write_summary(run, store, model_id, cfg["region"])
+                from harness.conditions import ensure
+
+                ensure(cfg, run)
                 if (cfg.get("judging") or {}).get("auto"):
                     judge_into(cfg, state, run, store)
                 run = Run.load(store, plan.run_id)
@@ -201,8 +204,13 @@ def rejudge(cfg: config_mod.Config, index: Index, run_id: str) -> RunState:
             judge_into(cfg, state, run, store)
             run = Run.load(store, run_id)
             write_report(cfg, run, archive_tiles=False)
-            view = run_view(run, serve_tiles=state.serve_tiles, deploy_store=_deploy_or_none(cfg),
-                            reconsider=_reconsider(cfg), rubric_path=(cfg.get("judging") or {}).get("rubric"))  # fmt: skip
+            view = run_view(
+                run,
+                serve_tiles=state.serve_tiles,
+                deploy_store=_deploy_or_none(cfg),
+                reconsider=_reconsider(cfg),
+                rubric_path=(cfg.get("judging") or {}).get("rubric"),
+            )
             state.final = {"type": "done", "status": run.status, "error": None, "view": view}
             finished = run
         except Exception as e:  # noqa: BLE001

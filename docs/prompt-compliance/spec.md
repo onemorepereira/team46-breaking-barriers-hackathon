@@ -1,6 +1,6 @@
 # Slice: Do the Results Honor Every Condition in the Prompt?
 
-**Status:** Open · **Owner:** unassigned · **Size:** about a day (split point in Plan below) · **Branch:** `slice/prompt-compliance` from `main` · **Merges:** second, after plain language (rebase on its rubric changes)
+**Status:** Implemented; live sandbox validation pending · **Owner:** Aditya · **Size:** about a day (split point in Plan below) · **Branch:** `slice/prompt-compliance` from `main` · **Merges:** second, after plain language (rebase on its rubric changes)
 **Read first:** [how a run is scored](../judging/guide.md), [developer guide](../developer-guide.md), the [factory rules for slices](../factory.md#how-to-take-a-slice).
 
 ## Problem
@@ -54,3 +54,11 @@ uv run harness calibrate <a-known-good-run-id>
 
 ## When done
 Write `docs/prompt-compliance/handoff.md` (each AC with its proof, the AC6 run ID and matrix), set Status to `Built`, update [the factory](../factory.md), and open a PR to `main`.
+
+## Implementation corrections (2026-11-04)
+
+Far-away recorded references alone do not prove a nearer reference is absent. They are unverified, not contradicted. A reference must carry matching feature metadata and coordinates in a successful tool result. The check measures distance to a recorded reference point; it does not claim boundary-distance accuracy. Target and other conditions remain for judges/humans.
+
+Version 2 caps the output dimension at measured spatial-condition coverage. Missing conditions lower confidence; extraction failure makes the overall evaluation not scored, rather than awarding a misleading overall score. New runs extract once before judging/reporting; replay and re-judge never extract. Extraction usage and errors are archived.
+
+See [handoff](handoff.md) for actual verification and remaining live checks.

@@ -73,3 +73,13 @@ def simplify(points: list[list[float]], tol: float) -> list[list[float]]:
             keep[idx] = True
             stack += [(i, idx), (idx, j)]
     return [p for p, k in zip(points, keep, strict=True) if k]
+
+
+def distance_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance between two recorded points, in kilometres."""
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    a = (
+        math.sin((p2 - p1) / 2) ** 2
+        + math.cos(p1) * math.cos(p2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2
+    )
+    return 6371.0088 * 2 * math.asin(math.sqrt(min(1.0, max(0.0, a))))

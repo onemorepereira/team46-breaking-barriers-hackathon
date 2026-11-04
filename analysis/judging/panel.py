@@ -76,7 +76,11 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
             value = (
                 f"{measured.claims_matched}/{measured.claims_total}"
                 if c.id == "claim_provenance"
-                else f"{measured.claims_inside}/{measured.claims_located}"
+                else (
+                    f"{measured.conditions_supported}/{measured.conditions_total}"
+                    if c.id == "condition_compliance"
+                    else f"{measured.claims_inside}/{measured.claims_located}"
+                )
             )
             results.append(
                 CriterionResult(
@@ -135,6 +139,10 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
         dims[d] = round(sum(vals) / len(vals), 1) if vals else None
     if not usable:
         dims = {d: None for d in dims}  # a dimension isn't scored on measured criteria alone
+    # A good process cannot average away a missing required spatial constraint.
+    output = dims.get("output")
+    if measured.condition_compliance is not None and output is not None:
+        dims["output"] = min(output, round(measured.condition_compliance * 100, 1))
     present = [v for v in dims.values() if v is not None]
     overall = round(sum(present) / len(present), 1) if present else None
     status = "scored" if usable else "insufficient"
@@ -161,7 +169,14 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
     mad_all = round(sum(mads) / len(mads), 3) if mads else None
     seated = [sum(1 for j in p.get("judges", []) if not j.get("stood_in_for")) for p in passes]
     conf, reasons = confidence(measured, valid_counts, within, bool(usable), seated)
+    if measured.conditions_need_review:
+        if conf == "High":
+            conf = "Medium"
+        reasons.append("Some request conditions lack supporting evidence; review the conditions table")
     verdict = "FAILED" if gates else ("scored" if usable else "not scored")
+    if measured.conditions_error and not gates:
+        overall, status, verdict, conf = None, "insufficient", "not scored", "Low"
+        reasons.append("Request condition extraction failed; evaluation is incomplete")
     return PanelResult(
         status,
         overall,

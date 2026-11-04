@@ -3,7 +3,7 @@
 # arrives; code names only the measured criteria (claim_provenance, area_compliance). Calibration targets are
 # declared below, so a replacement rubric maps its own criteria.
 id: geo-dataset
-version: 1
+version: 2
 title: Agentic geospatial dataset build — workflow and output
 scale: [0, 1, 2]
 
@@ -54,7 +54,7 @@ criteria:
     plain: Are the results actually what you asked for?
     dimension: output
     kind: judged
-    question: Do the returned results match the requested target, based on the evidence the tools returned?
+    question: Does the executed evidence support the requested target and every condition in the request? Do not award full credit if a required condition has no evidence.
     anchors:
       0: Most reported results are not the requested target, or relevance is not supported by any tool evidence.
       1: A mix — some results are clearly the target, others are doubtful or a different class (e.g. warehouses reported as data centers).
@@ -74,7 +74,7 @@ criteria:
     plain: Did the answer cover every part of your request?
     dimension: output
     kind: judged
-    question: Does the answer address every part of the request?
+    question: Does executed work answer every request condition? Missing proximity, target, temporal or other constraints mean the answer is incomplete even if it lists sites.
     anchors:
       0: The main question is unanswered, or the answer is only a plan.
       1: The main question is answered, but a requested part (attributes, locations, evidence, datasets) is missing.
@@ -101,6 +101,12 @@ criteria:
     dimension: output
     kind: measured
     question: Share of coordinate claims (the dataset's locations) inside the requested area (code-checked). N/A with no area or no coordinates. Search results inside the area are shown separately as search footprint, not scored.
+
+  - id: condition_compliance
+    plain: Does saved evidence support each location and distance condition?
+    dimension: output
+    kind: measured
+    question: Share of location-by-condition checks supported by successful tool evidence. Missing evidence is unverified. N/A for legacy runs or requests without a distance condition.
 
 failure_modes:
   - {id: premature_fallback, meaning: Gave up on a capable tool or approach too early and fell back to a weaker one.}

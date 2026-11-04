@@ -13,6 +13,11 @@
 <ul>{% for item in explanation.check_by_hand %}<li>{{ item }}</li>{% endfor %}</ul>
 </section>
 
+{% if conditions %}<h2>Conditions in your request</h2>
+{% if conditions.error %}<p>Request conditions could not be extracted. This request is not fully verified.</p>{% endif %}
+<table><tr><th>Location</th>{% for c in conditions.conditions %}<th>{{ c.text }}</th>{% endfor %}</tr>
+{% for row in conditions.rows %}<tr><td>{{ row.value }}</td>{% for cell in row.cells %}<td><strong>{{ cell.status }}</strong><br>{{ cell.reason }}</td>{% endfor %}</tr>{% endfor %}</table>
+{% endif %}
 <h2>Run</h2>
 <table><tr><th>Model</th><td>{{ m.model_key }} · <code>{{ m.model_id }}</code></td></tr>
 <tr><th>Prompt</th><td>{{ m.prompt_file }} · <code>{{ m.prompt_sha256 }}</code></td></tr>

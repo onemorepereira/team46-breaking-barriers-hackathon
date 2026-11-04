@@ -181,7 +181,8 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         judge agreement), `timeline` (each step in plain English, with the raw span), `map` (GeoJSON:
         the requested boundary, result footprints, claimed sites), `scorecard` (every criterion, each judge's
         vote and rationale, the seats, failure modes), `claims`, `final_answer`, `narrative` and
-        `trouble_spots`."""
+        `trouble_spots`, `explanation`, `source_check_note`, and `conditions` (null for legacy archives;
+        otherwise a claim-by-condition evidence matrix with statuses, reasons and refs)."""
         return view_of(load(run_id))
 
     @app.post("/api/runs", tags=["Runs"], response_model=RunStarted, summary="Start a run",

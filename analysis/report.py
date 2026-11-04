@@ -12,7 +12,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from markdown_it import MarkdownIt
 
 from analysis import check, provenance, signals, summary
-from analysis.judging import measure, panel, rubric
+from analysis.judging import conditions, measure, panel, rubric
 from analysis.judging.explain import explain
 from analysis.trace import Run
 
@@ -85,6 +85,7 @@ def render_run(rep: RunReport, generated_at: str) -> str:
         answer=measure.answer_text(rep.run.final_output),
         claims_json=claims_blocks(rep.run.final_output),
         explanation=explain(rep.run, rep.panel, measured=rep.measured),
+        conditions=conditions.evaluate(rep.run),
         source_check_note=provenance.matcher_update_note(rep.judgement),
     )
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from analysis import provenance, signals, summary, timeline
-from analysis.judging import measure, rubric
+from analysis.judging import conditions, measure, rubric
 from analysis.judging.explain import explain
 from analysis.trace import Run
 from core import geometry
@@ -240,6 +240,7 @@ def run_view(
         "timeline": entries,
         "map": map_layers(m, run.run_id, serve_tiles),
         "scorecard": card,
+        "conditions": conditions.evaluate(run),
         "explanation": explain(run, judge.rescore(run.judgement, run) if run.judgement else None, measured=m),
         "source_check_note": provenance.matcher_update_note(run.judgement),
         "claims": claims,

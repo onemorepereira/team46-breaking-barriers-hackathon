@@ -373,6 +373,23 @@
     $("explanation-checks").replaceChildren(...explanation.check_by_hand.map((text) => el("li", { text })));
   }
 
+  function renderConditions(data) {
+    show("conditions-card", Boolean(data));
+    const box = $("conditions-content");
+    box.replaceChildren();
+    if (!data) return;
+    if (data.error) box.append(el("p", {text:"Request conditions could not be extracted. This request is not fully verified."}));
+    const table = el("table", {class:"table table-sm"});
+    table.append(el("thead", {}, el("tr", {}, el("th", {text:"Listed location"}),
+      ...data.conditions.map(c => el("th", {text:c.text})))));
+    const body = el("tbody");
+    for (const row of data.rows) body.append(el("tr", {}, el("td", {text:row.value}),
+      ...row.cells.map(c => el("td", {title:c.reason}, el("strong", {text:c.status}),
+        el("div", {class:"small text-secondary",text:c.reason})))));
+    table.append(body); box.append(table);
+    if (!data.rows.length) box.append(el("p", {text:"No declared coordinate claims are available to check."}));
+  }
+
   // ---------- scorecard ----------
   function renderScorecard(card) {
     const box = $("scorecard");
@@ -518,6 +535,7 @@
     setText("map-note", v.map.area ? "" : "No area in the prompt: results are shown without a boundary check.");
     fitAll();
     renderExplanation(v.explanation);
+    renderConditions(v.conditions);
     setText("source-check-note", v.source_check_note || "");
     show("source-check-note", Boolean(v.source_check_note));
     renderScorecard(v.scorecard);

@@ -333,7 +333,7 @@ def test_proposal_reads_only_training_runs_and_drops_bad_lessons(tmp_path):
     assert all(i in seen["text"] for i in train_ids) and not any(i in seen["text"] for i in held_ids)
     assert [x["text"] for x in v["lessons"]] == ["Judge step count against the area's size."]
     assert v["proposal"]["dropped"] == 3 and v["status"] == "draft" and v["version"] == 1
-    assert (tmp_path / "deploy/feedback/guidance/geo-dataset-v1/versions/1.json").is_file()
+    assert (tmp_path / "deploy/feedback/guidance/geo-dataset-v2/versions/1.json").is_file()
 
 
 def test_no_disagreement_means_nothing_to_propose(tmp_path):
@@ -413,7 +413,7 @@ def test_guidance_is_scoped_to_its_deployment_and_rubric_version(tmp_path):
     other = {**cfg, "archive_uri": f"file://{tmp_path}/other-deploy"}
     r = hf.active_rubric(cfg)
     assert hf.active_version(cfg, r)["version"] == n and hf.active_version(other, r) is None
-    v2 = rubric.parse({**r.raw, "version": 2})
+    v2 = rubric.parse({**r.raw, "version": r.version + 1})
     assert hf.active_version(cfg, v2) is None  # guidance for v1 never applies to v2
 
 

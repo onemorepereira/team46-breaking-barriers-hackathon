@@ -194,3 +194,8 @@ class ByRequest(BaseModel):
 
 class EvaluateRequest(BaseModel):
     confirm: bool = Field(False, description="False returns the cost estimate and does nothing; true starts.")
+
+
+# Condition-aware run views (v2): `conditions` is null for legacy runs, otherwise contains
+# extracted conditions, rows of cells (condition_id, status, reason, refs), supported/total,
+# score, needs_review and error. Cell status: supported / contradicted / unverified.

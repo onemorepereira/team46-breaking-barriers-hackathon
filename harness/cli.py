@@ -139,6 +139,10 @@ def _run_one(cfg: config_mod.Config, index: Index, plan: invoke.RunPlan) -> tupl
                 file=sys.stderr,
             )
         run = Run.load(store, plan.run_id)
+    if not os.environ.get("HARNESS_TEST_SCRIPT") and run.all_spans:
+        from harness.conditions import ensure
+
+        ensure(cfg, run)
     if (cfg.get("judging") or {}).get("auto") and not os.environ.get("HARNESS_TEST_SCRIPT") and run.all_spans:
         from harness import judge
 

@@ -12,7 +12,11 @@ import yaml
 
 DIMENSIONS = ("workflow", "output")
 KINDS = ("judged", "measured")
-MEASURED = ("claim_provenance", "area_compliance")  # the measured criteria code knows how to compute
+MEASURED = (
+    "claim_provenance",
+    "area_compliance",
+    "condition_compliance",
+)  # the measured criteria code knows how to compute
 
 
 class RubricError(ValueError):

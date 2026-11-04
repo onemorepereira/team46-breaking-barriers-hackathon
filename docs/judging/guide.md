@@ -153,3 +153,9 @@ uv run harness ui                            # the console: live runs, scores, m
 
 - **Compare, don't rank in the absolute.** A stricter panel scores everything lower (GRA §6). Comparisons are fair when they use the same rubric and the same panel. Every judgement records `rubric.sha256` and its seats, so that's checkable.
 - **A 100 is not proof.** It means the panel found no material flaw in what the agent executed, and that the agent's claims match its tool outputs. It doesn't mean the agent found every facility. Read the agent's own caveats in its answer, and the honest-uncertainty criterion.
+
+## Request conditions (rubric v2)
+
+New runs archive extracted request conditions before judging. Code checks each declared location against the saved boundary and any evidenced distance reference. A missing reference is unverified. Finding only far references does not prove no nearer one exists. Distance is to the recorded reference point, not the area's edge. Identity and other constraints remain judge/human assessments.
+
+The output dimension is capped at measured spatial-condition coverage, so good scores elsewhere cannot hide missing required evidence. Unverified or contradicted spatial conditions lower confidence. Extraction errors leave the overall evaluation not scored. Old archives without conditions remain N/A and are never re-extracted by replay/re-judge. Compare runs only with the same rubric/checker versions.

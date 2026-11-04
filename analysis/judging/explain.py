@@ -108,6 +108,10 @@ def explain(run: Run, result: PanelResult | None, *, measured: Measured | None =
         if "no_tool_data" in ids:
             doubts.append("No tool returned usable data.")
             checks.append("Check tool access and errors before trying again.")
+    elif m.conditions_error:
+        headline = "This evaluation is incomplete because the request conditions could not be read."
+        facts.append("No overall score is available until the request conditions can be checked.")
+        checks.append("Check service access, then start a new run to read the request conditions.")
     elif result.overall is None:
         headline = "There were not enough judge replies to give this run a score."
         facts.append("No score is available because too few judges returned usable replies.")
@@ -120,7 +124,10 @@ def explain(run: Run, result: PanelResult | None, *, measured: Measured | None =
         if not m.trace_integrity:
             doubts.append("Parts of the saved record are missing or could not be checked.")
             checks.append("Restore the missing records before relying on this score.")
-        if result.confidence == "Medium":
+        if m.conditions_need_review:
+            doubts.append("Some conditions in your request have no supporting evidence.")
+            checks.insert(0, "Review each unverified or contradicted condition in the conditions table.")
+        if result.confidence == "Medium" and not m.conditions_need_review:
             doubts.append("Some judge replies are missing or the judges disagree on parts of the work.")
         elif result.confidence == "Low" and m.trace_integrity:
             doubts.append("The judges disagree too much to rely on this score alone.")

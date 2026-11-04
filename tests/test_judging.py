@@ -25,6 +25,7 @@ def test_rubric_loads_and_snapshot_round_trips():
     assert len(RUBRIC.judged) == 8 and [c.id for c in RUBRIC.measured] == [
         "claim_provenance",
         "area_compliance",
+        "condition_compliance",
     ]
     assert RUBRIC.calibration == {
         "unscoped": "tool_arguments",
