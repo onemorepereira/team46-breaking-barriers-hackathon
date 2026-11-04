@@ -13,6 +13,10 @@ models:
     id: us.anthropic.claude-sonnet-5-5
     max_tokens: 16000
     request_fields: {thinking: {type: adaptive, display: summarized}, output_config: {effort: high}}
+  kimi:
+    id: us.moonshotai.kimi-k3     # returns reasoningContent natively; Claude thinking fields don't apply
+    max_tokens: 16000
+    request_fields: {}
 
 narrative_model: sonnet
 max_runs_per_suite: 8
@@ -23,6 +27,8 @@ max_suite_usd: 50
 # may differ slightly from the global one.
 prices_per_mtok:
   sonnet: {in: 2.0, out: 10.0}
+  # Kimi K3: AWS Price List API, AmazonBedrock us-west-2, standard (regional) tier: $0.0033 / $0.0165 per 1K.
+  kimi: {in: 3.3, out: 16.5}
 
 rubric: null
 scorer: none

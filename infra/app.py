@@ -40,6 +40,8 @@ class HarnessStack(cdk.Stack):
                 resources=[
                     "arn:aws:bedrock:*::foundation-model/anthropic.claude-*",
                     f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/*anthropic.claude-*",
+                    "arn:aws:bedrock:*::foundation-model/moonshotai.kimi-*",
+                    f"arn:aws:bedrock:{self.region}:{self.account}:inference-profile/*moonshotai.kimi-*",
                 ],
             )
         )
