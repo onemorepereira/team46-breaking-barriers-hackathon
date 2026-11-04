@@ -202,3 +202,41 @@ def test_example_cards_cover_every_continent_with_asia_first_and_are_served():
         Path(__file__).parents[1] / "harness/web/static/vendor/tabler-icons/tabler-icons.min.css"
     ).read_text()
     assert all(f".ti-{x['icon']}:before" in icons for x in examples)  # every icon is in the vendored font
+
+
+def test_runs_list_reads_saved_rows_and_reports_keep_them_current(tmp_path, monkeypatch):
+    """The runs table reads out/<id>/row.json; re-judging (via write_report) rewrites it."""
+    from harness import rows
+    from harness.cli import write_report
+
+    cfg = cfg_for(tmp_path)
+    run = lgnd_run(tmp_path / "archive")
+    Index(cfg["out_dir"]).record_run(run.run_id, f"file://{tmp_path}/archive")
+    write_report(cfg, run)
+    saved = rows.load(cfg["out_dir"], run.run_id)
+    assert saved is not None and saved["verdict"] == "not judged"
+
+    def no_archive(*a, **k):
+        raise AssertionError("the runs list re-read an archive it already had a row for")
+
+    client = TestClient(create_app(cfg))
+    monkeypatch.setattr("harness.web.app.Run.load", no_archive)
+    assert client.get("/api/runs").json()["runs"][0]["id"] == run.run_id
+
+    (tmp_path / "out" / run.run_id / "row.json").write_text('{"version": 0, "row": {}}')  # an older shape
+    assert rows.load(cfg["out_dir"], run.run_id) is None
+
+
+def test_api_docs_explain_every_endpoint_and_hide_the_pages(tmp_path):
+    spec = TestClient(create_app(cfg_for(tmp_path))).get("/openapi.json").json()
+    assert "tribunal" in spec["info"]["description"] and {t["name"] for t in spec["tags"]} >= {
+        "Runs",
+        "Judging",
+    }
+    assert "/" not in spec["paths"] and "/runs" not in spec["paths"] and "/runs/{run_id}" not in spec["paths"]
+    for path, ops in spec["paths"].items():
+        for method, op in ops.items():
+            assert op.get("summary") and op.get("description") and op.get("tags"), (method, path)
+    row = spec["components"]["schemas"]["RunRow"]["properties"]
+    assert "description" in row["verdict"] and "description" in row["confidence"]
+    assert "not_scored" in spec["paths"]["/api/runs/{run_id}/events"]["get"]["description"]

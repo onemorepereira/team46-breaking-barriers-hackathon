@@ -43,6 +43,9 @@ def write_report(cfg: config_mod.Config, run: Run) -> Path:
     out.mkdir(parents=True, exist_ok=True)
     path = out / "report.html"
     path.write_text(report.render_run(report.analyze(run), _now()), encoding="utf-8")
+    from harness import rows
+
+    rows.save(cfg["out_dir"], run)  # the runs table row, kept in step with the report
     return path
 
 

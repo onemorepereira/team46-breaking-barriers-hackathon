@@ -35,7 +35,6 @@ class RunState:
         self.area_event: dict[str, Any] | None = None  # published only once complete
         self.extra: list[dict[str, Any]] = []  # judging events, in order
         self.final: dict[str, Any] | None = None
-        self.dirty = True  # the runs table must re-read this run once it's done
         self.lock = threading.Lock()
 
     def push(self, ev: dict[str, Any]) -> None:

@@ -13,6 +13,7 @@ dependencies = [
   "mcp>=2.3",
   "opentelemetry-exporter-otlp-proto-http>=1.45",
   "opentelemetry-sdk>=1.45",
+  "pydantic>=2.14",
   "pyyaml>=6.0",
   "strands-agents[otel]>=1.63",
   "uvicorn>=0.54",
@@ -65,3 +66,4 @@ addopts = "-q"
 
 [tool.ruff.lint.per-file-ignores]
 "infra/app.py" = ["E501"]
+"harness/web/api_docs.py" = ["E501"]  # API prose and Markdown tables shown at /api/docs

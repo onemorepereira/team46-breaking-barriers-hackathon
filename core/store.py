@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlparse
@@ -46,16 +47,29 @@ class FileStore:
         return sorted(str(p.relative_to(self.root)) for p in base.iterdir() if p.is_file())
 
 
+_shared_client: Any = None
+_client_lock = threading.Lock()
+
+
+def _s3_client() -> Any:
+    """One S3 client per process (boto3 clients are thread-safe); creating one per run cost ~100 ms each."""
+    global _shared_client
+    with _client_lock:
+        if _shared_client is None:
+            import boto3
+            from botocore.config import Config
+
+            _shared_client = boto3.client("s3", config=s3_config(Config))
+        return _shared_client
+
+
 class S3Store:
     def __init__(self, uri: str, client: Any = None) -> None:
-        import boto3
-        from botocore.config import Config
-
         self.uri = uri
         parsed = urlparse(uri)
         self.bucket = parsed.netloc
         self.prefix = parsed.path.lstrip("/")
-        self.client = client or boto3.client("s3", config=s3_config(Config))
+        self.client = client or _s3_client()
 
     def _key(self, key: str) -> str:
         return f"{self.prefix.rstrip('/')}/{key}" if self.prefix else key
