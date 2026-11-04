@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from analysis.provenance import (
@@ -228,3 +230,37 @@ def test_old_replays_warn_about_updated_source_checks(tmp_path):
     assert run.store.read_text(f"runs/{run.run_id}/judgement.json") == before
     assert matcher_update_note({"value_matcher_version": VALUE_MATCHER_VERSION}) is None
     assert matcher_update_note(None) is None
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_lgnd_per_place_verdict_table_is_checked_beside_overall_verdict(wrapped):
+    # Real LGND result shape: top-level verdict summarises a mixed table of per-place answers.
+    data = {
+        "verdict": "partly supported",
+        "places": {
+            "columns": ["node", "answer", "reason"],
+            "rows": [
+                ["naip/obs:a", "maybe", "Cooling is not clearly visible"],
+                ["naip/obs:b", "yes", "Cooling plant visible"],
+            ],
+        },
+    }
+    if wrapped:
+        data = {"content": [{"type": "text", "text": json.dumps(data)}]}
+    result = json.dumps(data)
+    assert match_text("yes", result)
+    assert match_text("maybe", result)
+    assert not match_text("no", result)
+    assert not match_text("supported", result)
+
+
+def test_verdict_table_reason_text_is_not_an_answer():
+    data = {
+        "verdict": "not supported",
+        "places": {
+            "columns": ["node", "answer", "reason"],
+            "rows": [["a", "no", "The proposed yes answer is unsupported"]],
+        },
+    }
+    assert not match_text("yes", json.dumps(data))
+    assert match_text("no", json.dumps(data))
