@@ -43,7 +43,12 @@ def _seed(cache_dir, key, value):
     geo._store(cache_dir, key, value)
 
 
-def test_resolve_city_postal_radius_and_point_only(tmp_path):
+def test_resolve_city_postal_radius_and_point_only(tmp_path, monkeypatch):
+    # A cache fixture must never fall through to the real geocoder.
+    def no_network(url):
+        pytest.fail(f"unseeded geocoder request: {url}")
+
+    monkeypatch.setattr(geo, "_get_json", no_network)
     poly = {"type": "Polygon", "coordinates": [SQUARE]}
     q = {"format": "jsonv2", "polygon_geojson": "1", "limit": "5"}
     _seed(
@@ -74,7 +79,7 @@ def test_resolve_city_postal_radius_and_point_only(tmp_path):
     )
     _seed(
         tmp_path,
-        "nominatim:" + json.dumps({"q": "EC2A, London", **q}, sort_keys=True),
+        "nominatim:" + json.dumps({"q": "EC2A, London", "countrycodes": "gb", **q}, sort_keys=True),
         [{"lat": "51.52", "lon": "-0.08", "geojson": {"type": "Point", "coordinates": [-0.08, 51.52]}}],
     )
     point = geo.resolve_area(geo.AreaSpec("postal_code", "EC2A, London", "EC2A", "gb"), tmp_path)
