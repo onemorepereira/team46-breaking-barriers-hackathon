@@ -1,0 +1,1 @@
+LGND Geo searches are limited to this boundary automatically. You may narrow a search to a smaller area that lies entirely inside it; an area that reaches outside the boundary is replaced by the whole boundary.

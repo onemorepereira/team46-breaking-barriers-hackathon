@@ -1,0 +1,70 @@
+[project]
+name = "team46-eval-harness"
+version = "0.1.0"
+description = "Track 1 evaluation harness: trace, summarize and score an agentic geospatial workflow"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+dependencies = [
+  "bedrock-agentcore>=1.25",
+  "boto3>=1.43",
+  "fastapi>=0.162",
+  "httpx>=0.28",
+  "jinja2>=3.1",
+  "markdown-it-py>=4",
+  "mcp>=2.3",
+  "opentelemetry-exporter-otlp-proto-http>=1.45",
+  "opentelemetry-sdk>=1.45",
+  "pydantic>=2.14",
+  "pyyaml>=6.0",
+  "strands-agents[otel]>=1.63",
+  "uvicorn>=0.54",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "pytest-socket>=0.7",
+  "moto[s3]>=5",
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "types-PyYAML",
+  "boto3-stubs[s3]",
+  "opentelemetry-proto>=1.45",
+  "httpx>=0.28",
+]
+infra = [
+    "aws-cdk-lib>=2.220",
+    "constructs>=10",
+]
+
+[project.scripts]
+harness = "harness.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["core", "tools", "analysis", "harness", "agent"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["spikes"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["core", "tools", "analysis", "harness"]
+ignore_missing_imports = true
+check_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff.lint.per-file-ignores]
+"infra/app.py" = ["E501"]
+"harness/web/api_docs.py" = ["E501"]  # API prose and Markdown tables shown at /api/docs

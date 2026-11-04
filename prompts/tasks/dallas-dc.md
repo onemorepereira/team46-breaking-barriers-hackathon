@@ -1,0 +1,1 @@
+Find the data centers within 50 km of downtown Dallas, TX. Identify which public datasets can locate them, and list each data center you can confirm with its name, operator and location, with the evidence for each.

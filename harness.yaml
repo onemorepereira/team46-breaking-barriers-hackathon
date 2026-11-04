@@ -1,0 +1,85 @@
+# harness.yaml — committed config, no secrets (design: Data and contracts).
+region: us-west-2
+backend: local                 # agentcore | local; --backend overrides per run
+archive_uri: s3://team46evalharness-archiveda4cb258-qgbj570ey9mw  # CDK output ArchiveUri
+local_archive_uri: file://./archive
+local_exporter: console
+lgnd_secret_id: arn:aws:secretsmanager:us-west-2:892605951158:secret:LgndGeoLoginB45FADD8-pJaQ232LszQT-hw8RFt  # CDK output LgndSecretArn
+runtime_arn: arn:aws:bedrock-agentcore:us-west-2:892605951158:runtime/team46_eval_harness-VzYWReDy9h  # CDK output RuntimeArn
+out_dir: out
+
+# Models: agents (picked per run) and judges (agent: false). `family` drives judge recusal (docs/judging/design.md).
+models:
+  sonnet:
+    id: us.anthropic.claude-sonnet-5-5
+    family: anthropic
+    max_tokens: 16000
+    request_fields: {thinking: {type: adaptive, display: summarized}, output_config: {effort: high}}
+  kimi:
+    id: us.moonshotai.kimi-k3     # returns reasoningContent natively; Claude thinking fields don't apply
+    family: moonshot
+    max_tokens: 16000
+    request_fields: {}
+  opus:
+    id: us.anthropic.claude-opus-5-5
+    family: anthropic
+    agent: false
+  grok:
+    id: us.xai.grok-4.7
+    family: xai
+    agent: false
+  deepseek:
+    id: deepseek.v3.2
+    family: deepseek
+    agent: false
+  mistral:
+    id: mistral.mistral-large-3-675b-instruct
+    family: mistral
+    agent: false
+  qwen:
+    id: qwen.qwen3-235b-a22b-2507-v1:0
+    family: alibaba
+    agent: false
+
+# The judge panel (docs/judging): one judge per family, so no vendor carries a majority; a judge sharing the
+# agent's family recuses and the first reserve of another family takes the seat.
+judging:
+  rubric: rubrics/geo-dataset-v1.yaml
+  # A tribunal of three, from three families. Reserves, in order, sit for a recused judge (same family as
+  # the agent) or stand in for one that fails, so a pass still has three votes. Grok was dropped (slowest,
+  # 140 s average, and the only judge that errored). Kimi judges as well as being an agent; on Kimi runs it
+  # recuses and Mistral sits. Mistral and Qwen, the two most lenient judges, are reserves.
+  panel: [opus, deepseek, kimi]
+  reserves: [mistral, qwen, sonnet]
+  recuse_same_family: true
+  passes: 1
+  auto: true                     # judge every finished run (harness run, the console)
+
+# Map imagery (docs/tile-cache): result tiles are archived with each run when its report is written, and the
+# console serves basemap and result tiles from a disk cache under out/tile-cache/. OSM always loads directly.
+tiles:
+  archive: true
+  serve: true
+  cache_max_mb: 1024
+  max_age_days: 30
+
+area_mode: enforce              # enforce | observe | off: how the prompt's area applies to LGND searches
+narrative_model: sonnet
+max_runs_per_suite: 8
+max_suite_usd: 50
+
+# USD per million tokens, from the Bedrock pricing page (Global Cross-region Inference table, US West (Oregon)),
+# read on 2026-11-03 from a screenshot the user provided. Our model ID uses the `us.` regional profile, whose rate
+# may differ slightly from the global one.
+prices_per_mtok:
+  sonnet: {in: 2.0, out: 10.0}
+  # Kimi K3: AWS Price List API, AmazonBedrock us-west-2, standard (regional) tier: $0.0033 / $0.0165 per 1K.
+  kimi: {in: 3.3, out: 16.5}
+  # Opus 5.5: Bedrock pricing page screenshot (user, 2026-11-03); the Price List API doesn't list it yet.
+  opus: {in: 4.0, out: 20.0}
+  # AWS Price List API, AmazonBedrock us-west-2, standard tier, read 2026-11-04 (per 1K -> per Mtok).
+  grok: {in: 2.2, out: 6.6}
+  deepseek: {in: 0.62, out: 1.85}
+  mistral: {in: 0.5, out: 1.5}
+  qwen: {in: 0.22, out: 0.88}
+

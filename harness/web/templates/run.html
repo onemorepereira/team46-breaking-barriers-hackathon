@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Run ' ~ run_id[:8] if run_id else 'Console' }} · {{ team }}{% endblock %}
+{% block body %}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-3 align-items-center">
+      <div class="col">
+        <div class="page-pretitle" id="run-pretitle">{{ 'Archived run' if run_id else 'New evaluation run' }}</div>
+        <h2 class="page-title" id="run-title">{{ 'Run ' ~ run_id[:8] if run_id else 'Ask the agent to build a dataset' }}</h2>
+        <div class="text-secondary mt-1 small" id="run-meta"></div>
+      </div>
+      <div class="col-auto d-flex gap-2" id="run-actions" hidden>
+        <button class="btn" id="btn-rejudge"><i class="ti ti-gavel me-1"></i>Re-judge</button>
+        <a class="btn" id="btn-report" target="_blank"><i class="ti ti-file-text me-1"></i>Static report</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="page-body">
+  <div class="container-xl">
+
+    <!-- prompt -->
+    <div class="card mb-3" id="prompt-card">
+      <div class="card-body">
+        <form id="run-form" class="row g-2 align-items-end" {{ 'hidden' if run_id }}>
+          <div class="col-12 col-lg">
+            <label class="form-label" for="prompt">Prompt <span class="text-secondary fw-normal">· the area (city, ZIP, postal code, country…) is read from the prompt</span></label>
+            <textarea class="form-control" id="prompt" rows="2" placeholder="Find the data centers within the city limits of Richardson, TX. Give each one's location exactly as the tool returned it."></textarea>
+          </div>
+          <div class="col-6 col-lg-auto">
+            <label class="form-label" for="model">Agent model</label>
+            <select class="form-select" id="model">{% for m in models %}<option>{{ m }}</option>{% endfor %}</select>
+          </div>
+          <div class="col-6 col-lg-auto">
+            <button class="btn btn-primary w-100" id="btn-run" type="submit"><i class="ti ti-player-play me-1"></i>Run &amp; judge</button>
+          </div>
+          <div class="col-12 foundry-examples" id="examples" hidden>
+            <div class="d-flex flex-wrap align-items-center gap-1 mb-2" role="group" aria-label="Example prompts by continent">
+              <span class="text-secondary small me-1"><i class="ti ti-world me-1"></i>Try an example:</span>
+              <span class="d-flex flex-wrap gap-1" id="example-tabs"></span>
+            </div>
+            <div class="row g-2" id="example-grid"></div>
+          </div>
+        </form>
+        <div id="prompt-view" class="foundry-prompt" {{ '' if run_id else 'hidden' }}></div>
+        <div id="progress" class="mt-3" hidden>
+          <div class="d-flex align-items-center gap-2 small text-secondary mb-1">
+            <span class="spinner-border spinner-border-sm" id="progress-spin"></span><span id="progress-text">Starting…</span>
+          </div>
+          <div class="progress progress-sm"><div class="progress-bar progress-bar-indeterminate" id="progress-bar"></div></div>
+        </div>
+        <div class="alert alert-danger mt-3 mb-0" id="error" hidden></div>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="row row-deck row-cards mb-3" id="kpis">
+      <div class="col-lg-3">
+        <div class="card foundry-score-card">
+          <div class="card-body">
+            <div class="d-flex align-items-center">
+              <div class="subheader">Panel score</div>
+              <div class="ms-auto" id="k-confidence"></div>
+            </div>
+            <div class="d-flex align-items-baseline gap-2 my-2">
+              <div class="foundry-score" id="k-score">—</div>
+              <div class="text-secondary" id="k-verdict">not judged yet</div>
+            </div>
+            <div class="small mb-1 d-flex"><span>Workflow</span><span class="ms-auto" id="k-workflow-v">—</span></div>
+            <div class="progress progress-sm mb-2"><div class="progress-bar bg-cyan" id="k-workflow" style="width:0"></div></div>
+            <div class="small mb-1 d-flex"><span>Output</span><span class="ms-auto" id="k-output-v">—</span></div>
+            <div class="progress progress-sm"><div class="progress-bar bg-orange" id="k-output" style="width:0"></div></div>
+            <div class="text-secondary small mt-2" id="k-confidence-why"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-9">
+        <div class="row row-cards g-2 w-100 m-0">
+          {% for id, icon, label in [
+            ('cost', 'coin', 'Agent cost'), ('jcost', 'gavel', 'Judging cost'), ('tools', 'tool', 'Tool calls'),
+            ('tokens', 'cpu', 'Tokens in / out'), ('runtime', 'clock', 'Runtime'), ('claims', 'checks', 'Claims verified'),
+            ('inarea', 'map-pin', 'Claims in area'), ('agree', 'users-group', 'Judge agreement'), ('trace', 'shield-check', 'Trace integrity')] %}
+          <div class="col-6 col-md-4">
+            <div class="card card-sm foundry-kpi">
+              <div class="card-body d-flex align-items-center gap-3">
+                <span class="avatar foundry-kpi-icon"><i class="ti ti-{{ icon }}"></i></span>
+                <div class="min-w-0">
+                  <div class="foundry-kpi-value" id="k-{{ id }}">—</div>
+                  <div class="text-secondary small text-truncate">{{ label }} <span id="k-{{ id }}-sub" class="foundry-kpi-sub"></span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- map + scorecard -->
+    <div class="row row-cards mb-3">
+      <div class="col-lg-8">
+        <div class="card h-100">
+          <div class="card-header">
+            <h3 class="card-title"><i class="ti ti-satellite me-2"></i>Where the agent looked</h3>
+            <div class="card-actions btn-group btn-group-sm" id="basemaps" role="group" aria-label="Basemap"></div>
+          </div>
+          <div class="position-relative">
+            <div id="map" class="foundry-map"></div>
+            <div class="foundry-legend small" id="legend">
+              <div><span class="swatch swatch-area"></span>Requested area</div>
+              <div><span class="swatch swatch-in"></span>Result inside</div>
+              <div><span class="swatch swatch-out"></span>Result outside</div>
+              <div><span class="swatch swatch-claim"></span>Claimed location</div>
+            </div>
+            <div class="foundry-map-note small" id="map-note"></div>
+            <aside class="foundry-detail" id="detail" role="region" aria-label="Result details" hidden>
+              <button type="button" class="foundry-detail-close" id="detail-close" aria-label="Close result details"><i class="ti ti-x" aria-hidden="true"></i></button>
+              <div id="detail-body"></div>
+            </aside>
+          </div>
+          <div class="card-footer p-2">
+            <div class="d-flex align-items-center gap-2 mb-1 small text-secondary"><i class="ti ti-photo"></i><span id="tiles-caption">Imagery tiles the tools returned appear here.</span></div>
+            <div class="foundry-tiles" id="tiles"></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-4">
+        <div class="card h-100">
+          <div class="card-header">
+            <h3 class="card-title"><i class="ti ti-scale me-2"></i>Scorecard</h3>
+            <div class="card-actions small text-secondary" id="rubric-name"></div>
+          </div>
+          <div class="card-body p-0">
+            <div class="alert alert-danger m-3 mb-0" id="gate" hidden></div>
+            <div class="list-group list-group-flush" id="scorecard">
+              <div class="list-group-item text-secondary small">The panel scores the run once the agent finishes.</div>
+            </div>
+          </div>
+          <div class="card-footer small" id="modes"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- timeline + judges/claims -->
+    <div class="row row-cards mb-3">
+      <div class="col-lg-7">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title"><i class="ti ti-route me-2"></i>What the agent did</h3>
+            <div class="card-actions small text-secondary">Plain-language trace · click a step to show it on the map</div>
+          </div>
+          <div class="list-group list-group-flush foundry-timeline" id="timeline">
+            <div class="list-group-item text-secondary small">Steps appear here as the agent works.</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-5 d-flex flex-column gap-3">
+        <div class="card">
+          <div class="card-header"><h3 class="card-title"><i class="ti ti-gavel me-2"></i>Judge panel</h3><div class="card-actions small text-secondary" id="panel-note"></div></div>
+          <div class="table-responsive">
+            <table class="table table-sm table-vcenter card-table">
+              <thead><tr><th>Judge</th><th>Family</th><th class="text-end">Score</th><th class="text-end">Cost</th><th class="text-end">Time</th></tr></thead>
+              <tbody id="judges"><tr><td colspan="5" class="text-secondary small">Three judges from three model families score every run.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header"><h3 class="card-title"><i class="ti ti-checks me-2"></i>Claims</h3><div class="card-actions small text-secondary">each value checked against the tool result it cites</div></div>
+          <div class="table-responsive foundry-claims">
+            <table class="table table-sm table-vcenter card-table">
+              <thead><tr><th>Claim</th><th>Value</th><th>Ref</th><th>Source</th><th>Area</th></tr></thead>
+              <tbody id="claims"><tr><td colspan="5" class="text-secondary small">No claims yet.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- answer + narrative -->
+    <div class="row row-cards">
+      <div class="col-lg-7">
+        <div class="card"><div class="card-header"><h3 class="card-title"><i class="ti ti-message-chatbot me-2"></i>Final answer</h3></div>
+          <div class="card-body"><div id="answer" class="foundry-answer text-secondary">—</div></div></div>
+      </div>
+      <div class="col-lg-5">
+        <div class="card"><div class="card-header"><h3 class="card-title"><i class="ti ti-sparkles me-2"></i>Run summary</h3><div class="card-actions small text-secondary">generated from the trace</div></div>
+          <div class="card-body"><div id="narrative" class="text-secondary">—</div><div id="trouble" class="mt-2"></div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="foundry-toast" id="toast" role="status" aria-live="polite" hidden>
+  <span id="toast-text"></span>
+  <button type="button" class="btn btn-sm btn-primary ms-2" id="toast-show">Show</button>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/vendor/maplibre/maplibre-gl.js"></script>
+<script src="/static/vendor/marked/marked.umd.js"></script>
+<script src="/static/vendor/dompurify/purify.min.js"></script>
+<script>window.FOUNDRY = {runId: {{ run_id | tojson }}};</script>
+<script src="/static/app.js"></script>
+{% endblock %}

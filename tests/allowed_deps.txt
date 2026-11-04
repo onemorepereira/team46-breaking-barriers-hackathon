@@ -1,0 +1,18 @@
+# Reviewed allowlist of runtime dependencies (AC3). No observability-backend SDK may appear here.
+boto3
+jinja2
+pyyaml
+strands-agents
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-http
+mcp
+bedrock-agentcore
+# Console web stack (docs/judging/design.md: Foundry console; brief T99 names FastAPI). Not observability.
+fastapi
+uvicorn
+# Renders the agent's Markdown answer in the static report (raw HTML off). Not observability.
+markdown-it-py
+# Request/response models for the console API docs (FastAPI depends on it already). Not observability.
+pydantic
+# Auth for the LGND MCP client (RefreshingBearer, an httpx.Auth); mcp already depends on it. Not observability.
+httpx

@@ -1,0 +1,23 @@
+/* /api/docs: Team Foundry colors for Scalar 1.75.0 (docs/console-polish). A normal stylesheet, not Scalar's
+   `customCss` option: in 1.75.0 that option renders a phantom second document stuck on a loading placeholder.
+   Scalar puts `dark-mode` on <body> itself; `html body.dark-mode` outranks its own `.dark-mode` variables. */
+html body.dark-mode, html body .dark-mode {
+  --scalar-background-1: #0b1220; --scalar-background-2: #111a2e; --scalar-background-3: #1e293b;
+  --scalar-background-accent: rgba(34, 211, 238, .12);
+  --scalar-color-1: #e2e8f0; --scalar-color-2: #a3b0c2; --scalar-color-3: #7c8aa0;
+  --scalar-color-accent: #22d3ee; --scalar-border-color: rgba(148, 163, 184, .18);
+  --scalar-color-green: #4ade80; --scalar-color-blue: #38bdf8; --scalar-color-orange: #fb923c;
+  --scalar-color-red: #f87171; --scalar-color-yellow: #facc15; --scalar-color-purple: #c4b5fd;
+  --scalar-button-1: #0e7490; --scalar-button-1-hover: #155e75; --scalar-button-1-color: #ffffff;
+  --scalar-sidebar-background-1: #0b1220; --scalar-sidebar-color-1: #e2e8f0; --scalar-sidebar-color-2: #a3b0c2;
+  --scalar-sidebar-color-active: #22d3ee; --scalar-sidebar-item-active-background: rgba(34, 211, 238, .12);
+  --scalar-sidebar-border-color: rgba(148, 163, 184, .18); --scalar-sidebar-search-background: #111a2e;
+  --scalar-sidebar-search-color: #a3b0c2; --scalar-sidebar-search-border-color: rgba(148, 163, 184, .18);
+}
+html body .scalar-app { --scalar-font: var(--tblr-font-sans-serif, Inter, system-ui, sans-serif); --scalar-radius: 6px; }
+
+/* Scalar's hosted upsells (they send the API document to scalar.com): not for a local eval console */
+body .explore-scalar-cta, body .explore-scalar-reveal, body .explore-scalar-reveal-inner,
+body .selected-client-action, body .generate-sdk-button { display: none !important; }
+/* The page behind Scalar matches its background */
+html, body { margin: 0; background: #0b1220; }

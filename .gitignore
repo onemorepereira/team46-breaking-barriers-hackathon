@@ -1,0 +1,25 @@
+# Never commit credentials (temporary AWS sandbox keys, API tokens)
+.env
+.env.*
+*.env
+aws-sandbox*
+.aws/
+credentials
+*.pem
+
+# Your own sandbox's settings (archive bucket, LGND secret, runtime): never commit them
+*.local.yaml
+
+# Python / local outputs
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+out/
+archive/
+
+# CDK
+infra/cdk.out/
+cdk.context.json
