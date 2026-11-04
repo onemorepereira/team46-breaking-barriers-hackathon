@@ -2,6 +2,8 @@
 
 Nov 3, 2026 · @Miguel · updated Nov 4 with what we built
 
+**Team Foundry (Team 46):** Aditya Pasarti · Farhan Shahriar · Uday Kandi · Miguel Pereira **[team]**. Presentation: [`docs/presentation/`](docs/presentation/README.md)
+
 > **Sources.** Each statement cites where it comes from. Most cite the two briefs, [Technical](docs/Clay-Foundry-Technical-Hackathon.md) (T) and [Vision](docs/Clay-Foundry-Vision-Hackathon.md) (V), with line numbers. Both briefs include Clay's suggested edits from [the Nov 3 PDF](<docs/suggested hackathon edits.pdf>). Statements that are not in either brief carry a tag instead: **[team]** for our own decisions, **[event]** for event logistics from the organizers, and **[ext]** for general background.
 
 > **Docs.** New here? Start with the [developer guide](docs/developer-guide.md), for setup, configuration, the CLI and recipes. Before a change, read [contributing](CONTRIBUTING.md). [All documentation](docs/README.md) indexes every spec, design and handoff, and [the factory](docs/factory.md) tracks each effort's purpose and status **[team]**.
@@ -54,7 +56,7 @@ harness CLI ──▶ AgentCore Runtime ──▶ Strands agent ──▶ Bedroc
   - score, cost, tool calls, tokens, claims verified and judge agreement up front.
 
   It carries the Team Foundry name and logo **[team]**.
-- **Infrastructure is code.** A CDK stack creates the S3 archive, the arm64 agent image, a least-privilege role, the AgentCore runtime, the LGND login secret and an optional budget alert **[team]**. CI runs ruff (lint and format), mypy, pytest (151 tests) and a gitleaks secret scan **[team]**.
+- **Infrastructure is code.** A CDK stack creates the S3 archive, the arm64 agent image, a least-privilege role, the AgentCore runtime, the LGND login secret and an optional budget alert **[team]**. CI runs ruff (lint and format), mypy, pytest (157 tests) and a gitleaks secret scan **[team]**.
 
 ### Code layout
 
@@ -76,7 +78,7 @@ Needs `uv`, AWS credentials for the sandbox account, and podman or Docker for de
 
 ```sh
 uv sync                                                       # Python 3.12 environment
-uv run pytest                                                 # 151 tests, no AWS needed
+uv run pytest                                                 # 157 tests, no AWS needed
 uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend local      # agent on your machine
 uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend agentcore  # agent on AgentCore
 uv run harness run --suite suites/dallas-dc-v1.yaml           # both prompts on Sonnet 5.5 and Kimi K3
