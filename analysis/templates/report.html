@@ -15,8 +15,10 @@
 
 {% if conditions %}<h2>Conditions in your request</h2>
 {% if conditions.error %}<p>Request conditions could not be extracted. This request is not fully verified.</p>{% endif %}
-<table><tr><th>Location</th>{% for c in conditions.conditions %}<th>{{ c.text }}</th>{% endfor %}</tr>
-{% for row in conditions.rows %}<tr><td>{{ row.value }}</td>{% for cell in row.cells %}<td><strong>{{ cell.status }}</strong><br>{{ cell.reason }}</td>{% endfor %}</tr>{% endfor %}</table>
+{% if conditions.status == "not_checked" %}<p>Request conditions were not checked: no model is set to read them.</p>
+{% elif not conditions.conditions %}{% if not conditions.error %}<p>No checkable conditions were found in this request.</p>{% endif %}
+{% else %}<table><tr><th>Location</th>{% for c in conditions.conditions %}<th>{{ c.text }}</th>{% endfor %}</tr>
+{% for row in conditions.rows %}<tr><td>{{ row.value }}</td>{% for cell in row.cells %}<td><strong>{{ cell.status }}</strong><br>{{ cell.reason }}</td>{% endfor %}</tr>{% endfor %}</table>{% endif %}
 {% endif %}
 <h2>Run</h2>
 <table><tr><th>Model</th><td>{{ m.model_key }} · <code>{{ m.model_id }}</code></td></tr>

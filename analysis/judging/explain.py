@@ -90,32 +90,36 @@ def explain(run: Run, result: PanelResult | None, *, measured: Measured | None =
 
     doubts: list[str] = []
     checks: list[str] = []
+    # These always survive the cut to three checks: condition reviews lead, recovery steps close.
+    condition_checks: list[str] = []
+    recovery: list[str] = []
+    has_conditions = result is not None and any(c.id == "condition_compliance" for c in result.criteria)
     if run.not_scored:
         headline = "This run could not be scored because the AI service did not return a usable reply."
         facts = [asked, "The agent could not complete a usable AI call. It received no score."]
-        checks.append("Check service access and limits, then run the task again.")
+        recovery.append("Check service access and limits, then run the task again.")
     elif result is None:
         headline = "This run has not been judged yet."
         facts.append("Use Re-judge on this page to get a score.")
-        checks.append("Read the answer and use Re-judge to ask the judges to assess it.")
+        recovery.append("Read the answer and use Re-judge to ask the judges to assess it.")
     elif result.verdict == "FAILED":
         headline = "This run failed to deliver a usable answer."
         facts.append("The run received 0/100.")
         ids = {g["id"] for g in result.gates}
         if "no_answer" in ids:
             doubts.append("It ended without a final answer.")
-            checks.append("Check why the run stopped before giving an answer, then try again.")
+            recovery.append("Check why the run stopped before giving an answer, then try again.")
         if "no_tool_data" in ids:
             doubts.append("No tool returned usable data.")
-            checks.append("Check tool access and errors before trying again.")
-    elif m.conditions_error and any(c.id == "condition_compliance" for c in result.criteria):
+            recovery.append("Check tool access and errors before trying again.")
+    elif m.conditions_error and has_conditions:
         headline = "This evaluation is incomplete because the request conditions could not be read."
         facts.append("No overall score is available until the request conditions can be checked.")
-        checks.append("Check service access, then use Re-judge to retry reading the request conditions.")
+        recovery.append("Check service access, then use Re-judge to retry reading the request conditions.")
     elif result.overall is None:
         headline = "There were not enough judge replies to give this run a score."
         facts.append("No score is available because too few judges returned usable replies.")
-        checks.append("Check judge access and try Re-judge again.")
+        recovery.append("Check judge access and try Re-judge again.")
     else:
         headline = f"The judges gave this run {result.overall:g}/100; review the evidence before using it."
         facts.append(
@@ -123,11 +127,25 @@ def explain(run: Run, result: PanelResult | None, *, measured: Measured | None =
         )
         if not m.trace_integrity:
             doubts.append("Parts of the saved record are missing or could not be checked.")
-            checks.append("Restore the missing records before relying on this score.")
-        if m.conditions_need_review and any(c.id == "condition_compliance" for c in result.criteria):
+            recovery.append("Restore the missing records before relying on this score.")
+        if has_conditions and m.conditions_not_checked:
+            doubts.append("The conditions in your request were not checked: no model is set to read them.")
+            condition_checks.append(
+                "Set narrative_model, then use Re-judge to check the conditions in your request."
+            )
+        elif has_conditions and m.condition_cap is not None and not m.conditions_total:
+            doubts.append(
+                "This request sets a distance condition but the run listed no locations, so output scored 0."
+            )
+            condition_checks.append(
+                "If none found is the right answer, confirm it by hand; the score can't recognize it."
+            )
+        elif has_conditions and m.conditions_need_review:
             doubts.append("Some conditions in your request have no supporting evidence.")
-            checks.insert(0, "Review each unverified or contradicted condition in the conditions table.")
-        if result.confidence == "Medium" and not m.conditions_need_review:
+            condition_checks.append(
+                "Review each unverified or contradicted condition in the conditions table."
+            )
+        if result.confidence == "Medium" and result.judges_in_doubt:
             doubts.append("Some judge replies are missing or the judges disagree on parts of the work.")
         elif result.confidence == "Low" and m.trace_integrity:
             doubts.append("The judges disagree too much to rely on this score alone.")
@@ -156,8 +174,9 @@ def explain(run: Run, result: PanelResult | None, *, measured: Measured | None =
         evidence_checks.append(f"Check {outside} listed {noun} outside the area you asked for.")
     if m.claims_total > m.claims_matched or m.claims_block_missing:
         evidence_checks.append("Compare the listed values with their sources; some could not be matched.")
-    condition_checks = [c for c in checks if c.startswith("Review each unverified")]
-    checks = list(dict.fromkeys([*condition_checks, *evidence_checks, *checks]))[:3]
+    reserved = [*condition_checks, *recovery]
+    others = [c for c in dict.fromkeys([*evidence_checks, *checks]) if c not in reserved]
+    checks = [*condition_checks, *others[: max(3 - len(reserved), 0)], *recovery]
     if not checks:
         checks = ["Check a few listed results against an independent source before using them."]
     if result and result.overall is not None and result.verdict != "FAILED":

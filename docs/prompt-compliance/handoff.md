@@ -42,3 +42,22 @@ Browser: actual running synthetic app inspected; matrix and explanations visible
 ## Review fixes (Nov 4)
 
 All nine PR #7 review threads were addressed: tolerant JSON parsing with one corrective retry; retrying failed/missing extraction on explicit re-judge; optional-model N/A handling; proximity-only omission detection; rubric-scoped caps and extraction-error handling; excluding the claimed site's own coordinates as reference evidence; shared coordinate parsing for lng, mixed-case fields and GeoJSON Points; preserving condition-review actions; and one provenance pass per run view/static report. Valid saved conditions are reused and offline replay never calls Bedrock. Regression tests cover the reported cases, including successful retry after timeout and preserving not-scored state after two invalid replies.
+
+## Second review pass (Nov 4)
+
+A re-review of `ffb3284` found ten more problems, all addressed here with regression tests in `tests/test_conditions.py`:
+
+- **Self-reference:** a claimed site's own record is now the closest match in its cited result at the claim's own rounding, for every claim. An unclaimed site whose label contains the reference words can still count.
+- **Nothing to extract:** an empty conditions list or blank prompt is saved as no checkable conditions, not an error.
+- **Model unset:** runs show "not checked" and stay below High confidence.
+- **Omitted distances:** the safety net covers radius, "from", "closer than" and "under" phrasings, ignores minimum distances, and counts distinct limits.
+- **Reference shapes:** polygon, multipolygon and nested-centroid references now count. A site inside the polygon is 0 km; otherwise the nearest outer-ring vertex is used, which can only overstate the distance.
+- **Damaged `conditions.json`:** reads as an extraction error, so the page still opens and Re-judge can replace the file.
+- **Explanations:** recovery steps always survive the cut to three checks, and the judges-disagree doubt depends on the actual confidence reasons.
+
+**Scoring rulings to review:**
+
+- **The output cap now uses the weakest condition's coverage**, not the pooled share. The `condition_compliance` criterion stays the pooled share (spec AC3). This lowers scores on runs with gaps: the live ZIP run above recorded output 50 and overall 68.8 under the pooled cap. If its 3/6 is all area cells, as the notes suggest, output becomes 0 on replay. That run was not re-scored here.
+- **"None found" still scores 0 on output**, as commit `c212302` intended, because code can't tell it from no work. The page now says so and asks for a check by hand. An explicit negative result in the agent's claims format would be the real fix.
+
+**Not changed:** `judge_run` still pays for the panel after a failed extraction, and new runs still extract under rubrics without the criterion.

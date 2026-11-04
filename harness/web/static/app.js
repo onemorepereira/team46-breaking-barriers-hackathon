@@ -379,6 +379,8 @@
     box.replaceChildren();
     if (!data) return;
     if (data.error) box.append(el("p", {text:"Request conditions could not be extracted. This request is not fully verified."}));
+    if (data.status === "not_checked") { box.append(el("p", {text:"Request conditions were not checked: no model is set to read them."})); return; }
+    if (!data.conditions.length) { if (!data.error) box.append(el("p", {text:"No checkable conditions were found in this request."})); return; }
     const table = el("table", {class:"table table-sm"});
     table.append(el("thead", {}, el("tr", {}, el("th", {text:"Listed location"}),
       ...data.conditions.map(c => el("th", {text:c.text})))));

@@ -10,10 +10,38 @@ from typing import Any
 from analysis.trace import Run
 from core import prompts
 
+_NUM = r"\d+(?:\.\d+)?"
+_UNIT = r"(?:mi|miles?|kms?|kilomet(?:er|re)s?)\b"
+_FILLER = r"(?:(?:a|an|about|around|approximately|roughly)\s+)*"
+# A distance that sets a minimum isn't a "within" condition.
+_MINIMUM = re.compile(
+    rf"\b(?:more than|greater than|at least|over|beyond|further than|farther than|outside)\s+{_FILLER}"
+    rf"{_NUM}[\s-]*{_UNIT}",
+    re.I,
+)
+_PROXIMITY = re.compile(
+    rf"\b(?:within|less than|under|up to|no more than|at most|closer than|no further than|no farther than"
+    rf"|near)\s+{_FILLER}{_NUM}[\s-]*{_UNIT}(?:\s+(?:radius|buffer))?\s+(?:of|from|to|around)\b"
+    rf"|\b{_NUM}[\s-]*{_UNIT}\s+(?:radius|buffer)\s+(?:of|from|around)\b"
+    rf"|\b{_NUM}[\s-]*{_UNIT}\s+from\b",
+    re.I,
+)
+
+
+def proximity_phrases(prompt: str) -> int:
+    """How many distinct proximity limits the request states: a safety net under the model."""
+    text = _MINIMUM.sub(" ", prompt)
+    # Keyed with the feature's first word: a restated limit counts once, limits on two features twice.
+    limits = set()
+    for m in _PROXIMITY.finditer(text):
+        feature = re.match(r"\s+(?:(?:a|an|the)\s+)?(\w+)", text[m.end() :])
+        limits.add((m.group(0).lower(), feature.group(1).lower() if feature else ""))
+    return len(limits)
+
 
 def validate(data: Any) -> list[dict[str, Any]]:
-    if not isinstance(data, dict) or not isinstance(data.get("conditions"), list) or not data["conditions"]:
-        raise ValueError("condition extraction returned no conditions")
+    if not isinstance(data, dict) or not isinstance(data.get("conditions"), list):
+        raise ValueError("condition extraction returned no conditions list")
     out = []
     for i, raw in enumerate(data["conditions"]):
         if not isinstance(raw, dict):
@@ -43,12 +71,16 @@ def ensure(cfg: Any, run: Run, client: Any = None) -> None:
     if previous:
         try:
             cached = json.loads(previous)
-            if not cached.get("error") and cached.get("conditions"):
+            if not cached.get("error") and cached.get("status") != "not_checked":
                 validate(cached)
                 return
         except (ValueError, AttributeError):
             pass
     saved: dict[str, Any] = {"schema_version": 1, "conditions": []}
+    if not (run.prompt or "").strip():
+        # No saved request means nothing to extract, which isn't a failure.
+        run.store.write_text(key, json.dumps(saved))
+        return
     try:
         model = cfg.get("narrative_model")
         if not model:
@@ -85,14 +117,8 @@ def ensure(cfg: Any, run: Run, client: Any = None) -> None:
                     raise ValueError("no JSON object in reply")
                 data, _ = json.JSONDecoder().raw_decode(text[start:])
                 extracted = validate(data)
-                proximity = re.search(
-                    r"\b(?:within|less than|up to|no more than|near)\s+(?:about\s+)?"
-                    r"\d+(?:\.\d+)?\s*(?:miles?|km|kilomet(?:er|re)s?)\s+"
-                    r"(?:of|from)\b",
-                    run.prompt,
-                    re.I,
-                )
-                if proximity and not any(c["kind"] == "within_distance" for c in extracted):
+                found = sum(c["kind"] == "within_distance" for c in extracted)
+                if found < proximity_phrases(run.prompt):
                     raise ValueError("Distance condition omitted by extraction")
                 saved["conditions"] = extracted
                 break

@@ -57,6 +57,8 @@ class Measured:
     conditions_total: int = 0
     conditions_need_review: bool = False
     conditions_error: bool = False
+    condition_cap: float | None = None
+    conditions_not_checked: bool = False
     conditions: dict[str, Any] | None = None
 
     def score_of(self, criterion_id: str) -> float | None:
@@ -183,5 +185,7 @@ def measure(run: Run, prov: Provenance | None = None) -> Measured:
         conditions_total=compliance["total"] if compliance else 0,
         conditions_need_review=bool(compliance and compliance["needs_review"]),
         conditions_error=bool(compliance and compliance.get("error")),
+        condition_cap=compliance["cap"] if compliance else None,
+        conditions_not_checked=bool(compliance and compliance["status"] == "not_checked"),
         conditions=compliance,
     )

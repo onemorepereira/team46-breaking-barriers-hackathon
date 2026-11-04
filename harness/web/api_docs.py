@@ -197,5 +197,5 @@ class EvaluateRequest(BaseModel):
 
 
 # Condition-aware run views (v2): `conditions` is null for legacy runs, otherwise contains
-# extracted conditions, rows of cells (condition_id, status, reason, refs), supported/total,
-# score, needs_review and error. Cell status: supported / contradicted / unverified.
+# status (checked / not_checked), extracted conditions, rows of cells (condition_id, status,
+# reason, refs), supported/total, score, cap (weakest condition's coverage), needs_review and error. Cell status: supported / contradicted / unverified.
