@@ -21,6 +21,12 @@ uv run pytest                  # the whole suite; offline, no AWS needed
 
 CI also runs **gitleaks** on the full history. Never commit credentials: no AWS keys, session tokens, LGND tokens or `.env` files. Keep local credential files outside the repo. If one slips into a commit, rotate it and rewrite the branch before pushing.
 
+Also never commit:
+- **your sandbox's settings**: they go in the git-ignored `harness.local.yaml`, never in `harness.yaml`;
+- **runtime data**: runs, archives, reports and tiles (`archive/`, `out/`).
+
+Check `git status` before you push.
+
 ## Rules the tests enforce
 
 | Rule | Enforced by |

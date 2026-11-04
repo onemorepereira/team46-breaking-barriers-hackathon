@@ -78,6 +78,8 @@ The layers (`core` → `tools` → `agent`; `analysis`; `harness`) and their imp
 
 Committed, and it holds no secrets. Unset keys take the defaults in `harness/config.py`. Run `--config <path>` to use another file.
 
+**Your own sandbox:** put account-specific values (`archive_uri`, `lgnd_secret_id`, `runtime_arn`, from your stack's CDK outputs) in `harness.local.yaml` next to `harness.yaml`. It's git-ignored, and it's merged on top key by key, nested blocks included. The committed file never needs your changes. See [your own AWS sandbox](factory.md#your-own-aws-sandbox).
+
 | Key | Default | Meaning |
 | --- | --- | --- |
 | `region` | `us-west-2` | AWS region for Bedrock, S3, Secrets Manager and AgentCore |

@@ -35,15 +35,24 @@ Four self-contained slices, one per person. Each spec says what exists, the test
 3. **Visual design** merges last, because it restyles the pages the other two add cards to. Until then, style by class names (new cards use Tabler `card` markup), and rebase and restyle the new cards before merging.
 4. **Presentation** changes no code, and freezes its deck at the time set in its spec.
 
-### Accounts and credentials (open question; owner: Miguel; default below)
-`harness.yaml` points at Miguel's sandbox account (892605951158): its S3 archive, its LGND login secret and its AgentCore runtime.
-- **Default:** teammates use the same sandbox account (Miguel shares temporary credentials) and the `local` backend. **Don't run `harness lgnd-login`** against the shared secret: the harness refreshes the shared LGND token by itself, and a new login replaces it for everyone.
-- **With your own stack:** copy `harness.yaml` to a git-ignored file, e.g. `harness.local.yaml` (add it to `.gitignore` in your branch), and set your own `archive_uri`, `lgnd_secret_id` and `runtime_arn` from your CDK outputs. Then run `harness --config harness.local.yaml …`, and `lgnd-login` against your own secret.
+### Your own AWS sandbox
+Each teammate works in **their own sandbox account**. The committed `harness.yaml` points at Miguel's (892605951158), so you override its account-specific settings in a personal file. **Never edit or commit `harness.yaml` for your sandbox.**
+1. Deploy the stack into your account: `cd infra && CDK_DOCKER=podman npx aws-cdk deploy` (see the [developer guide](developer-guide.md)). Note its outputs: `ArchiveUri`, `LgndSecretArn` and `RuntimeArn`.
+2. Create `harness.local.yaml` next to `harness.yaml`. It's git-ignored (`*.local.yaml`), and the harness reads it on top of `harness.yaml` automatically:
+   ```yaml
+   archive_uri: s3://<your ArchiveUri bucket>
+   lgnd_secret_id: <your LgndSecretArn>
+   runtime_arn: <your RuntimeArn>
+   ```
+3. Log in to LGND Geo once, into **your** secret: `uv run harness lgnd-login`.
+4. Check before you push that `git status` doesn't list `harness.yaml`. If it does, `git restore harness.yaml`.
+
+**Runtime data is never committed.** Runs, archives, reports and tiles (`archive/`, `out/`) stay on your machine and in your own S3 bucket, and git ignores them. Everyone works with runs they made themselves.
 
 ### How to take a slice
-1. **Set up:** follow the [developer guide](developer-guide.md) (`uv sync`; `uv run pytest` passes offline). For anything live you need sandbox AWS credentials in your shell (they expire every few hours) and a one-time `uv run harness lgnd-login`.
+1. **Set up:** follow the [developer guide](developer-guide.md) (`uv sync`; `uv run pytest` passes offline). For anything live, set up [your own AWS sandbox](#your-own-aws-sandbox), and keep its temporary credentials in your shell (they expire every few hours).
 2. **Branch:** `git switch -c slice/<name> main`. Never commit to `main` directly, and never commit credentials.
-3. **Get runs to look at:** a fresh clone has no runs, because `archive/` and `out/` aren't in git. Make a few with `uv run harness ui` and the example cards, or `uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend local`. Each costs about $0.20–1.00 in Bedrock and takes 1–7 minutes. Don't restart the console while one of your runs is going, or the run dies.
+3. **Get runs to look at:** a fresh clone has no runs, because runtime data is never committed. Make a few with `uv run harness ui` and the example cards, or `uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend local`. Each costs about $0.20–1.00 in Bedrock and takes 1–7 minutes. Don't restart the console while one of your runs is going, or the run dies.
 4. **Build to the spec:** keep to its non-goals, and if the spec is wrong or unclear, fix the spec first and say so in the PR. Run the checks it lists, plus `uv run pytest && uv run ruff check . && uv run ruff format --check . && uv run mypy`. The browser probe needs a run that exists on your machine: `uv run --no-project --with playwright python tests/browser/console_probe.py <your-run-id>`.
 5. **Finish:**
    - write `docs/<slice>/handoff.md`: what shipped, and each acceptance criterion with what proved it (a test name, a command, a screenshot, a run ID);

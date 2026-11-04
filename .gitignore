@@ -7,6 +7,9 @@ aws-sandbox*
 credentials
 *.pem
 
+# Your own sandbox's settings (archive bucket, LGND secret, runtime): never commit them
+*.local.yaml
+
 # Python / local outputs
 .venv/
 __pycache__/

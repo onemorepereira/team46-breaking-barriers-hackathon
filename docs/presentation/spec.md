@@ -20,9 +20,8 @@ Tomorrow we present to the judges and to Clay and ADB. The work is spread across
     - local archive, which replays offline: `a9a69e76` (India solar parks, 87.5 High), `53fd4e2a` (ZIP 75080), `b2bdb4d6` (a FAILED run, which shows that the evaluator says no);
     - S3 archive, which needs AWS: `a5670c6b` (Texas parks on AgentCore, 85.4 High).
 
-## Open question (owner: Miguel; default applies until answered)
-- **Where the demo runs live.** `archive/` and `out/` are git-ignored, so a fresh clone has no runs, and a teammate's own deployed stack starts with an empty archive. Committing a curated demo archive would also publish LGND Geo results from a commercial service, so check its terms first. **Default:** the demo runs on Miguel's machine. The slice owner writes the script against the run IDs above, using screenshots Miguel shares, and rehearses on Miguel's laptop.
-- **What the briefs ask for:** `docs/Clay-Foundry-Vision-Hackathon.md`, e.g. the MVP success criteria near line 106, and the "recorded-trace fallback" near line 64.
+## Where the demo runs live (decided)
+Runtime data is never committed, so the demo runs exist only on Miguel's machine and in his S3 bucket. **The demo runs from Miguel's laptop.** The slice owner writes the script against the run IDs above, using screenshots Miguel shares (or runs of their own made in their sandbox), and rehearses on Miguel's laptop.
 
 ## Acceptance criteria
 - [ ] **AC1 A deck of 12 slides or fewer**, in any tool (Google Slides, Keynote, Canva, or Markdown slides), with a PDF export at `docs/presentation/deck.pdf` and the source or a share link in `docs/presentation/README.md`. The arc:
