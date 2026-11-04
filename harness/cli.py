@@ -205,7 +205,9 @@ def cmd_lgnd_login(cfg: config_mod.Config, index: Index, args: argparse.Namespac
     if not secret:
         print("lgnd_secret_id is not set in harness.yaml; deploy with CDK first (output LgndSecretArn).")
         return 2
-    return lgnd.login(secret, cfg["region"])
+    if args.device:
+        return lgnd.login_device(secret, cfg["region"])
+    return lgnd.login_browser(secret, cfg["region"])
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -222,6 +224,7 @@ def build_parser() -> argparse.ArgumentParser:
         "lgnd-login", help="one-time OAuth device login to LGND Geo; saves to Secrets Manager"
     )
     lg.add_argument("--secret", default=None, help="secret ID (default: lgnd_secret_id in harness.yaml)")
+    lg.add_argument("--device", action="store_true", help="use the device-code flow instead of the browser")
     c = sub.add_parser("check", help="run the AC2 trace checker on an archived run")
     c.add_argument("run_id")
     r = sub.add_parser("replay", help="rebuild a run's report from the archive only")
