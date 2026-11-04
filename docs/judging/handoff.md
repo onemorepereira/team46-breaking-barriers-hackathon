@@ -23,7 +23,7 @@
   - an Apache-2.0 `LICENSE`.
 
 **Verification** (2026-11-04):
-- **Static checks:** `uv run pytest` gave 115 passed. `ruff check .` and `mypy` are clean.
+- **Static checks:** `uv run pytest` gave 122 passed. `ruff check .` and `mypy` are clean.
 - [x] **AC1 Rubric.** Tested in `test_judging.py`:
   - `test_rubric_loads_and_snapshot_round_trips`;
   - `test_malformed_rubric_is_refused_naming_the_field` (6 cases: anchors, dimension, kind, unknown measured ID, calibration target, scale);
@@ -53,6 +53,16 @@
   | `no_answer` | `completeness` | 2 → 0 | 0 |
 
   The first live pass **failed** `no_answer` (2 → 2). The final reply was still visible inside the last model step, so the dossier now carries the answer once. That is the calibration catching a real bug.
+
+  **After the Verify fixes**, the run was repeated on the concave Richardson boundary (`harness calibrate 5769706d…`, $0.73):
+
+  | Defect | Target | Before → after | Largest other drop |
+  | --- | --- | --- | --- |
+  | `unscoped` | `tool_arguments` | 2 → 0 | 0 |
+  | `fabricated` | `grounding` | 2 → 0 | 1 |
+  | `no_answer` | `completeness` | 2 → 0 | 2 (flagged non-specific: removing the answer also sinks honest uncertainty, which is expected) |
+
+  The fabricated site is now found by a grid search inside the polygon. The run exited 0.
 - [x] **AC10, AC12–AC14 Console.**
   - Tests in `test_web.py`:
     - `test_pages_assets_and_archive_endpoints_render_offline`: every asset is vendored and there are no CDN URLs;
@@ -70,13 +80,29 @@
 
 | Run | Agent | Task | Score | Confidence | Judging $ |
 | --- | --- | --- | --- | --- | --- |
-| `5769706d` | Sonnet | Richardson data centers (console) | 100 | High | 0.15 |
-| `8a12c6ba` | Sonnet | Dallas 50 km data centers | 100 | High | 0.13 |
+| `5769706d` | Sonnet | Richardson data centers (console) | 100 (re-judged after the hash fix: 100) | High | 0.15 / 0.14 |
+| `8a12c6ba` | Sonnet | Dallas 50 km data centers | 100 (re-judged; the first judgement had a false `no_tool_data` gate from a status-name bug) | High | 0.12 |
+| `8a6e054b` | Kimi | Dallas data centers | 87.5 (workflow 75) | Medium | 0.38 |
+| `ade80a36` | Sonnet | ZIP 75080 data centers | 90 (output 80) | High | 0.20 |
 | `c9edb642` | Sonnet | Khammouane farmland | 88.8 | High | 0.20 |
 | `b2bdb4d6` | Kimi | Laos farmland (token limit, no answer) | FAILED (workflow 50) | Low | 0.46 |
 | `daa193db` | Kimi **on AgentCore** (`harness run --backend agentcore`, auto-judged) | `dallas-dc-strict` | 100 (MAD 0.13; Opus voted 1 on 3 criteria) | High | 0.26 |
 
 On `daa193db`, Kimi was the agent, so Kimi recused and Opus sat. `harness check` reported 0 missing fields and 16/16 claims matched.
+
+**Agreement across runs:** `harness agreement --all` gives Krippendorff's α (ordinal) = **0.502**, 95% CI 0.12–0.67, over 7 judged runs, 56 run × criterion units and 6 distinct judges. That is moderate agreement, close to the paper's α ≈ 0.56 among human experts. Two things widen the CI:
+- most votes are 2, a ceiling effect that depresses α;
+- there are only 7 runs.
+
+More runs, and runs that are actually weaker, will tighten it.
+
+**Verify review** (independent subagent): 115 tests passed and ruff and mypy were clean before its findings. It found 4 bugs, all fixed with regression tests:
+1. within-one was averaged after the spread, not per pass;
+2. the fabricated site could fall outside a concave area;
+3. the unscoped relabel missed trimmed outputs and `area` keys;
+4. a no-op perturbation was still judged.
+
+Minors were fixed too: claim-to-area matching by position, the scale max, no dimension scores when no judge is valid, dropped passes left out of α, and the design text on `gated`. It rated the console's JS behavior (map clicks, toggles) as PARTIAL, because only the JSON shapes are tested; the headless screenshots are the evidence for the rendering.
 
 **Deploy:** no AgentCore redeploy was needed. `git diff a68daf2 -- agent/ infra/ Dockerfile`, the tool clients and `prompts/agent/` are all empty. Judging and the console run in the harness, on the operator's machine, against the archive. The live AgentCore run `daa193db` above used the deployed runtime unchanged.
 
