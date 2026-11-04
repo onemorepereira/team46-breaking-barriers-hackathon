@@ -2,3 +2,8 @@
 boto3
 jinja2
 pyyaml
+strands-agents
+opentelemetry-sdk
+opentelemetry-exporter-otlp-proto-http
+mcp
+bedrock-agentcore

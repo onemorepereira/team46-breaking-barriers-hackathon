@@ -13,6 +13,7 @@ from analysis import check, report
 from analysis.store import Store, open_store
 from analysis.trace import ArchiveError, Run
 from harness import config as config_mod
+from harness import invoke
 from harness.manifest import Index
 
 
@@ -77,10 +78,42 @@ def cmd_compare(cfg: config_mod.Config, index: Index, args: argparse.Namespace) 
     return 0
 
 
+def cmd_run(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
+    backend = args.backend or cfg["backend"]
+    model_key = args.model or next(iter(cfg["models"]), None)
+    try:
+        plan = invoke.plan_run(cfg, prompt_file=args.prompt, model_key=model_key, backend=backend)
+    except invoke.RunRefused as e:
+        print(str(e))
+        return 2
+    print(f"worst case for this run: ${plan.worst_case_usd:.2f}")
+    outcome = invoke.execute(cfg, index, plan)
+    run = Run.load(open_store(plan.archive_uri), plan.run_id)
+    path = write_report(cfg, run)
+    rep = report.analyze(run)
+    c = rep.prov.counts()
+    if outcome.status in ("ok", "limit_exceeded"):
+        print(
+            f"run {plan.run_id} done: {rep.sig.steps} steps, {rep.sig.errors} errors, "
+            f"claims {c['matched']} matched / {c['mismatch']} mismatch / {c['unsourced']} unsourced → {path}"
+            + (f" (status {outcome.status}: {outcome.error})" if outcome.status != "ok" else "")
+        )
+        return 0
+    print(
+        f"run {plan.run_id} failed: {outcome.error}. Partial trace archived; "
+        f"run 'harness replay {plan.run_id}' to see what happened."
+    )
+    return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="harness", description="Track 1 evaluation harness")
     p.add_argument("--config", default=None, help="path to harness.yaml (default: ./harness.yaml)")
     sub = p.add_subparsers(dest="command", required=True)
+    run = sub.add_parser("run", help="run the agent on a prompt and report it")
+    run.add_argument("--prompt", required=True, help="prompt file, e.g. prompts/dallas-dc.md")
+    run.add_argument("--model", default=None, help="model key from harness.yaml models")
+    run.add_argument("--backend", choices=["agentcore", "local"], default=None)
     c = sub.add_parser("check", help="run the AC2 trace checker on an archived run")
     c.add_argument("run_id")
     r = sub.add_parser("replay", help="rebuild a run's report from the archive only")
@@ -95,7 +128,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         cfg = config_mod.load(args.config)
         index = Index(cfg["out_dir"])
-        handler = {"check": cmd_check, "replay": cmd_replay, "compare": cmd_compare}[args.command]
+        handler = {"run": cmd_run, "check": cmd_check, "replay": cmd_replay, "compare": cmd_compare}[
+            args.command
+        ]
         return handler(cfg, index, args)
     except (ArchiveError, FileNotFoundError, ValueError) as e:
         print(str(e), file=sys.stderr)

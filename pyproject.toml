@@ -5,9 +5,14 @@ description = "Track 1 evaluation harness: trace, summarize and score an agentic
 requires-python = ">=3.12"
 license = "Apache-2.0"
 dependencies = [
+  "bedrock-agentcore>=1.25",
   "boto3>=1.43",
   "jinja2>=3.1",
+  "mcp>=2.3",
+  "opentelemetry-exporter-otlp-proto-http>=1.45",
+  "opentelemetry-sdk>=1.45",
   "pyyaml>=6.0",
+  "strands-agents[otel]>=1.63",
 ]
 
 [dependency-groups]
@@ -19,6 +24,7 @@ dev = [
   "mypy>=1.13",
   "types-PyYAML",
   "boto3-stubs[s3]",
+  "opentelemetry-proto>=1.45",
 ]
 
 [project.scripts]

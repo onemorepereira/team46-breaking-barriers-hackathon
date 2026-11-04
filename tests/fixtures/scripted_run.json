@@ -1,0 +1,4 @@
+[
+  {"tool": "lookup_facility", "input": {"name": "DA11"}, "reasoning": "Look up the facility first."},
+  {"text": "DA11 is operated by Equinix.\n\n```json\n{\"claims\": [{\"claim\": \"Equinix operates DA11\", \"value\": \"Equinix\", \"ref\": \"T1\"}, {\"claim\": \"DA11 latitude\", \"value\": \"32.80\", \"ref\": \"T1\"}]}\n```"}
+]
