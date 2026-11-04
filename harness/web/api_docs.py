@@ -58,7 +58,8 @@ A `text/event-stream` of JSON events (`data: {...}`), in order. The stream ends 
 
 | `type` | When | Carries |
 | --- | --- | --- |
-| `area` | first | `label`, `source`, `geometry` (GeoJSON) of the requested area, or a `note` saying why there is none |
+| `area` | first, for a new run | `label`, `source`, `geometry` (GeoJSON) of the requested area, or a `note` saying why there is none |
+| `rejudge` | first, for a re-judge | nothing else: the run is being judged again, so no `step` events follow |
 | `step` | each model call or tool call, as it ends | `entry`: a plain-English `title` and `detail`, `status`, tokens, the raw span; `chips`: result footprints for the map |
 | `judging` | the run ended; judging starts | `seats`: the judges, with `recused_for` where a reserve sits for a same-family judge |
 | `judge` | each judge's verdict | `key`, `status`, `score` (0–100), `cost_usd`, `latency_s`, `stood_in_for` |

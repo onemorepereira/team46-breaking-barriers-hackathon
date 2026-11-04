@@ -80,7 +80,7 @@ uv run harness run --suite suites/dallas-dc-v1.yaml           # both prompts on 
 uv run harness compare <suite-id>                             # side-by-side table (HTML + CSV)
 uv run harness replay <run-id>                                # rebuild a report from the archive only
 uv run harness check <run-id>                                 # are all decisions recorded?
-uv run harness ui                                             # Team Foundry console at http://127.0.0.1:8787
+uv run harness ui                                             # Team Foundry console at http://127.0.0.1:8787 (API reference: /api/docs)
 uv run harness judge <run-id> [--passes 3]                    # score a run with the judge tribunal
 uv run harness calibrate <run-id>                             # plant known defects; check the panel sees them
 uv run harness agreement --all                                # Krippendorff's alpha across judged runs

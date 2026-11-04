@@ -42,7 +42,7 @@
   const load = (first) => {
     more.disabled = true;
     const url = `/api/runs?limit=${PAGE}${next ? `&before=${encodeURIComponent(next)}` : ""}`;
-    fetch(url).then((r) => r.json()).then(({ runs, next: n, total }) => {
+    fetch(url).then(async (r) => { const b = await r.json(); if (!r.ok) throw new Error(b.detail || r.statusText); return b; }).then(({ runs, next: n, total }) => {
       if (first && !runs.length) { message("No runs yet. Start one from the console.", "text-secondary"); return; }
       if (first) body.replaceChildren();
       body.append(...runs.map(row));

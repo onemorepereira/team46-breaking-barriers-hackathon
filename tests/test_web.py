@@ -136,6 +136,8 @@ def test_pages_assets_and_archive_endpoints_render_offline(tmp_path):
     assert client.get("/reports/..%2Fetc").status_code == 404
     assert client.post("/api/runs", json={"prompt": "  "}).status_code == 400
     assert client.post("/api/runs", json={"prompt": "x", "model": "unknown"}).status_code == 400
+    judge_only = client.post("/api/runs", json={"prompt": "x", "model": "judge-only"})  # agent: false
+    assert judge_only.status_code == 400 and "not an agent model" in judge_only.json()["error"]
 
 
 def test_scripted_run_streams_steps_then_the_full_view(tmp_path, monkeypatch):

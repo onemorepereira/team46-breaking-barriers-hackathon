@@ -161,6 +161,10 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         prompt = body.prompt.strip()
         if not prompt:
             return JSONResponse({"error": "Type a prompt first."}, status_code=400)
+        if body.model and body.model not in agent_models():
+            known = ", ".join(agent_models())
+            return JSONResponse({"error": f"{body.model!r} is not an agent model (agents: {known})."},
+                                status_code=400)  # fmt: skip
         try:
             return {"run_id": live.start_run(cfg, index, prompt, body.model or "")}
         except invoke.RunRefused as e:

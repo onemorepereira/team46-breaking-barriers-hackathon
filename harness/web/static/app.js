@@ -478,7 +478,7 @@
     progress("Reading the area from the prompt…");
     const res = await fetch("/api/runs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ prompt, model: $("model").value }) });
     const body = await res.json();
-    if (!res.ok) { $("btn-run").disabled = false; progress("", false); $("error").hidden = false; $("error").textContent = body.error || "Couldn't start the run."; return; }
+    if (!res.ok) { $("btn-run").disabled = false; progress("", false); $("error").hidden = false; $("error").textContent = body.error || apiError(body) || "Couldn't start the run."; return; }
     const pv = $("prompt-view"); pv.textContent = prompt; pv.hidden = false; show("run-form", false);
     setText("run-title", `Run ${body.run_id.slice(0, 8)}`); setText("run-pretitle", `${$("model").value} · live`);
     follow(body.run_id);
@@ -489,7 +489,7 @@
     const id = lastView.run.id;
     $("btn-rejudge").disabled = true;
     const res = await fetch(`/api/runs/${id}/judge`, { method: "POST" });
-    if (!res.ok) { $("btn-rejudge").disabled = false; $("error").hidden = false; $("error").textContent = (await res.json()).detail || "Couldn't start judging."; return; }
+    if (!res.ok) { $("btn-rejudge").disabled = false; $("error").hidden = false; $("error").textContent = apiError(await res.json()) || "Couldn't start judging."; return; }
     progress("The judge panel is scoring the run…");
     follow(id);
   }
@@ -533,13 +533,19 @@
     }).catch(() => { /* examples are a convenience; the form works without them */ });
   }
 
+  // FastAPI errors: {"detail": "text"} (404, 409, 400) or {"detail": [{"msg": …}, …]} (422 validation).
+  function apiError(body) {
+    const d = body && body.detail;
+    return Array.isArray(d) ? d.map((x) => x.msg).join("; ") : d || null;
+  }
+
   // ---------- boot ----------
   initMap();
   if (!RUN_ID) {
     $("run-form").addEventListener("submit", startRun);
     loadExamples();
   } else {
-    fetch(`/api/runs/${RUN_ID}`).then((r) => r.json()).then(renderView)
+    fetch(`/api/runs/${RUN_ID}`).then(async (r) => { const b = await r.json(); if (!r.ok) throw new Error(apiError(b) || r.statusText); return b; }).then(renderView)
       .catch((e) => { $("error").hidden = false; $("error").textContent = `Couldn't load the run: ${e}`; });
   }
   $("btn-rejudge").addEventListener("click", rejudge);

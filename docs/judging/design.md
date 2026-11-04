@@ -173,11 +173,12 @@ No build step. Static assets are `harness/web/static/` (the logo crops from the 
 | `GET /runs/{id}` | Run page (same template as the console, preloaded) |
 | `GET /api/models` | Model keys for the picker (agent models only) |
 | `POST /api/runs` | Start a run `{prompt, model}` → `{run_id}` |
-| `GET /api/runs` | Run rows: ID, prompt head, model, status, score, cost, tool calls, started |
+| `GET /api/runs` | Run rows, newest first, one page at a time: `?limit` (1–200, default 50), `?before=<next cursor>`, `?model`, `?verdict` → `{runs, next, total}`. Rows are read from `out/<id>/row.json` (`harness/rows.py`), rewritten with each report |
 | `GET /api/runs/{id}` | `run_view` JSON |
-| `GET /api/runs/{id}/events` | SSE: `area`, `start`, `model`, `tool`, `end`, `judging`, `judge`, `done` |
+| `GET /api/runs/{id}/events` | SSE: `area` (or `rejudge`), `step` (one per model or tool call), `judging`, `judge`, `not_scored`, `judge_error`, `done` |
 | `POST /api/runs/{id}/judge` | Re-judge in the background; progress on the events stream |
 | `GET /reports/{id}` | Static `report.html` |
+| `GET /api/docs` | Interactive API reference (OpenAPI; prose and models in `harness/web/api_docs.py`) |
 
 **Layout (Tabler "condensed" layout):**
 - **Header:** the Team Foundry mark and name, nav (Console, Runs), and the model picker.
