@@ -294,7 +294,7 @@ export default function App() {
     [loading, setLoading] = useState(false),
     [modal, setModal] = useState(false),
     [focusedRef, setFocusedRef] = useState<string | null>(null);
-  const stream = useRef<EventSource | null>(null),
+  const stream = useRef<{ close: () => void } | null>(null),
     active = useRef(""),
     busyRef = useRef(false),
     requestId = useRef(0);
@@ -378,58 +378,78 @@ export default function App() {
   }
   function follow(id: string) {
     stream.current?.close();
-    const source = new EventSource(
-      endpoint(`/api/runs/${encodeURIComponent(id)}/events`),
-    );
-    stream.current = source;
-    source.onmessage = (e) => {
-      if (active.current !== id) return;
-      let ev: any;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    let failures = 0;
+    // Short requests survive workshop/CloudFront buffering; the backend reads the same
+    // archived/live events as SSE. Polling does not trigger inference.
+    stream.current = {
+      close: () => {
+        stopped = true;
+        clearTimeout(timer);
+      },
+    };
+    async function poll() {
+      if (stopped || active.current !== id) return;
       try {
-        ev = JSON.parse(e.data);
-      } catch {
-        return;
-      }
-      setEvents((old) => [...old, ev]);
-      if (ev.type === "area")
-        setPhase(ev.label ? `Searching ${ev.label}` : "Resolving search area");
-      if (ev.type === "step") setPhase(ev.entry?.title || "Gathering evidence");
-      if (ev.type === "judging")
-        setPhase("Independent judge panel is reviewing the evidence");
-      if (ev.type === "judge")
-        setPhase(
-          `${ev.key}: ${ev.status === "ok" ? "judgement received" : "judge unavailable"}`,
+        const snapshot = await request<{ events: any[]; done: boolean }>(
+          `/api/runs/${encodeURIComponent(id)}/progress`,
         );
-      if (ev.type === "judge_error" || ev.type === "guidance_unavailable")
-        setError(ev.error || "A judging service was unavailable.");
-      if (ev.type === "done") {
-        source.close();
-        setBusy(false);
-        setPhase(
-          ev.error
-            ? "Run ended with an error"
-            : ev.view?.kpis?.verdict || "Complete",
+        if (stopped || active.current !== id) return;
+        failures = 0;
+        setError("");
+        setEvents(snapshot.events);
+        for (const ev of snapshot.events) {
+          if (ev.type === "area")
+            setPhase(
+              ev.label ? `Searching ${ev.label}` : "Resolving search area",
+            );
+          if (ev.type === "step")
+            setPhase(ev.entry?.title || "Gathering evidence");
+          if (ev.type === "judging")
+            setPhase("Independent judge panel is reviewing the evidence");
+          if (ev.type === "judge")
+            setPhase(
+              `${ev.key}: ${ev.status === "ok" ? "judgement received" : "judge unavailable"}`,
+            );
+          if (ev.type === "judge_error")
+            setError(ev.error || "A judging service was unavailable.");
+          if (ev.type === "done") {
+            stopped = true;
+            setBusy(false);
+            setPhase(
+              ev.error
+                ? "Run ended with an error"
+                : ev.view?.kpis?.verdict || "Complete",
+            );
+            if (ev.error) setError(ev.error);
+            if (ev.view) {
+              setView(ev.view);
+              setPrompt(ev.view.run.prompt);
+              setTab("evaluation");
+            } else
+              request<View>(`/api/runs/${id}`)
+                .then(setView)
+                .catch((e) => setError(e.message));
+          }
+        }
+      } catch (e) {
+        if (stopped || active.current !== id) return;
+        failures++;
+        setError(
+          `Progress connection interrupted; retrying. ${(e as Error).message}`,
         );
-        if (ev.error) setError(ev.error);
-        if (ev.view) {
-          setView(ev.view);
-          setPrompt(ev.view.run.prompt);
-          setTab("evaluation");
-        } else {
-          request<View>(`/api/runs/${id}`)
-            .then(setView)
-            .catch((e) => setError(e.message));
+        if (failures >= 5) {
+          stopped = true;
+          setBusy(false);
+          setError(
+            "Progress is unavailable. The server may still be working; reopen this run from Previous runs.",
+          );
         }
       }
-    };
-    source.onerror = () => {
-      if (active.current !== id) return;
-      setError(
-        "Live connection interrupted. Reconnecting… You can also reopen this run from Previous runs.",
-      );
-      if (source.readyState === EventSource.CLOSED) setBusy(false);
-    };
-    source.onopen = () => setError("");
+      if (!stopped) timer = setTimeout(poll, 2000);
+    }
+    void poll();
   }
   async function start() {
     if (!prompt.trim() || busy) return;

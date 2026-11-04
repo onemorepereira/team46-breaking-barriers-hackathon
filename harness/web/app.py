@@ -441,6 +441,25 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         """Judge with no guidance from now on. Approve any version to switch it back on."""
         return feedback_call(feedback.switch_off, cfg, deploy(), body.by, body.reason)
 
+    @app.get("/api/runs/{run_id}/progress", tags=["Live events"])
+    def run_progress(run_id: str) -> dict[str, Any]:
+        """Short-request progress snapshot for authenticated proxies that buffer SSE.
+
+        Shares the same run state as the event stream; polling never starts a model or tool call.
+        """
+        state = live.RUNS.get(run_id)
+        if state is None:
+            raise HTTPException(404, "no live run with that ID since the console started")
+        events, _ = live.read_new(state, 0)
+        with state.lock:
+            extra = list(state.extra)
+        if state.area_event is not None:
+            events.insert(0, state.area_event)
+        events.extend(extra)
+        if state.done:
+            events.append(state.final or {"type": "done", "status": "unknown"})
+        return {"events": events, "done": state.done}
+
     @app.get("/api/runs/{run_id}/events", tags=["Live events"], summary="Stream a run's events",
              description=EVENTS_DOC, response_class=StreamingResponse,
              responses={200: {"content": {"text/event-stream": {}}}, 404: ERRORS[404]})  # fmt: skip

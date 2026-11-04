@@ -27,7 +27,7 @@ In Aditya's event workshop, keep the private `harness.local.yaml` outside Git an
 ## What works
 
 - Prompt and model selection from the backend's configured models; POST /api/runs starts real work.
-- Live server-sent events show area resolution, actual completed steps and judge replies; no invented progress percentages or scores.
+- Live progress snapshots (every two seconds, using the same event records as SSE) show area resolution, actual completed steps and judge replies; no invented progress percentages or scores.
 - Previous runs load from the real paginated archive; a `?run=<id>` URL opens one directly.
 - MapLibre displays the saved boundary, tool-returned image footprints and deduplicated coordinate claims. Selecting a location links to its saved evidence step. Coordinates are not fabricated from place names.
 - Final answer, imagery chips with recorded dates, complete source-value table, request-condition matrix, independent judge rationales, workflow/output scores, trace integrity and cost estimates come directly from the run view.
@@ -42,5 +42,7 @@ The supplied **LGND GeoAI Evals Inception Report, Draft V1 (Oct 20), pages 2, 5â
 Satellite context uses the backend's Sentinel-2/EOX cached basemap with attribution. Street tiles are fetched directly from OpenStreetMap by the browser, preserving the existing policy of not proxy-caching OSM tiles. The UI's basemap is context, not the evidence used for the agent's decision. Licence restrictions still require review before presenting datasets to third parties.
 
 ## Validation boundaries
+
+The short-request progress endpoint avoids buffering in authenticated workshop proxies; the original SSE endpoint remains available. Reading before the worker creates its trace file returns an empty event list rather than dropping the connection.
 
 CI builds/typechecks the frontend, runs frontend contract tests, checks built assets are current, runs the Python tests and secret scan. Browser QA and event-cloud smoke results are recorded separately below. Passing these checks establishes software integration, not geospatial truth, rubric calibration or domain-expert agreement.

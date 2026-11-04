@@ -46,3 +46,20 @@ def test_compiled_ui_has_no_prototype_findings_or_external_fallback_data():
         "PrototypeSwitcher",
     ):
         assert fake not in js
+
+
+def test_progress_snapshot_uses_existing_events_without_starting_work(tmp_path, monkeypatch):
+    from harness.web import live
+
+    state = live.RunState("ui-test", tmp_path / "missing.jsonl")
+    state.area_event = {"type": "area", "label": "Testville"}
+    state.push({"type": "judge", "key": "test", "status": "ok"})
+    state.done = True
+    state.final = {"type": "done", "view": {"run": {"id": "ui-test"}}}
+    monkeypatch.setitem(live.RUNS, "ui-test", state)
+    client = TestClient(create_app(cfg_for(tmp_path)))
+    result = client.get("/api/runs/ui-test/progress").json()
+    assert result["done"] is True
+    assert [e["type"] for e in result["events"]] == ["area", "judge", "done"]
+    assert result["events"][-1]["view"]["run"]["id"] == "ui-test"
+    assert client.get("/api/runs/not-live/progress").status_code == 404
