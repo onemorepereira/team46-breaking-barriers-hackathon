@@ -4,7 +4,7 @@
 
 ## Overview
 
-Scoring takes three steps. **Measure** what code can decide alone. **Judge** what it can't, using five cross-family LLM judges reading one code-built evidence dossier. **Aggregate** the judges' votes with a median, and report how far they agree. Everything is replayable: the judgement is archived next to the trace, and re-rendering never calls a model.
+Scoring takes three steps. **Measure** what code can decide alone. **Judge** what it can't, using a tribunal of three cross-family LLM judges (five at first; revised 2026-11-04) reading one code-built evidence dossier. **Aggregate** the judges' votes with a median, and report how far they agree. Everything is replayable: the judgement is archived next to the trace, and re-rendering never calls a model.
 
 ```
 archive (spans, run.json, tool_results/)        rubrics/geo-dataset-v1.yaml
@@ -105,7 +105,7 @@ Each `models.<key>` entry gains `family`. Judges are configured models like any 
 **Call:**
 - Converse with system = `prompts/judge/system.md` rendered with the rubric, and user = the dossier.
 - `maxTokens` is 8,000, so reasoning models (Kimi, DeepSeek) don't truncate their JSON; `temperature` is 0 where the model accepts it, retried without it if rejected.
-- Each judge runs in its own thread, with a 120 s read timeout.
+- Each judge runs in its own thread. The Bedrock client uses a 240 s read timeout, a 10 s connect timeout and 3 attempts in adaptive retry mode (`harness/judge.py`). Reasoning models need the long read.
 
 **Parse:**
 - Take the first JSON object (the reply may be fenced) and validate it:
@@ -120,7 +120,7 @@ Each `models.<key>` entry gains `family`. Judges are configured models like any 
 ## Aggregation: `analysis/judging/panel.py`
 
 - **Per judged criterion:**
-  - the median of valid judges per pass: an actual vote with 5 votes, the lower median with 3–4 (conservative). Failed judges are not replaced: failures are often systematic (e.g. timeouts on long reasoning), and a judgement records its seats as they were;
+  - the median of valid judges per pass: an actual vote with an odd count, the lower median with an even one (conservative). A pass needs 3 valid votes (`MIN_VALID`). **Revised 2026-11-04:** a judge that fails is now replaced by the next reserve (`stood_in_for` on its record), so a pass keeps three votes; the failed attempt stays in the judgement;
   - across passes, the mean ± std of the pass medians. This mean is the headline;
   - spread (max − min) and MAD from the median per pass, averaged across passes. Unanimous means spread 0. **Within-one** is computed per pass (the share of criteria whose votes span ≤ 1 point) and then averaged across passes.
 - **Score:** a judged criterion scores median ÷ 2 × 100; a measured one scores share × 100.
@@ -155,7 +155,7 @@ Targets come from the rubric's `calibration` map; a missing target means `skippe
 **Stack:**
 - FastAPI and uvicorn (T99). Jinja2 templates are already a dependency.
 - Tabler 1.7.3 CSS/JS and Tabler Icons 3.50.0 webfont.
-- MapLibre GL 5.24.0 (the last UMD build; 6.x ships ES modules only) and Chart.js 4.6.1, vendored at pinned versions (`static/vendor/VERSIONS.md`).
+- MapLibre GL 5.24.0 (the last UMD build; 6.x ships ES modules only), marked and DOMPurify, vendored at pinned versions (`static/vendor/VERSIONS.md`). Chart.js was planned but dropped in Build (see Build deviations).
 
 No build step. Static assets are `harness/web/static/` (the logo crops from the team's `2.png`, `app.js` and `app.css`). Vendor CSS, JS and the icon font are copied into `static/vendor/` at the pinned versions, so a replayed run renders offline. Only the basemap and chip imagery need the network.
 
@@ -179,6 +179,7 @@ No build step. Static assets are `harness/web/static/` (the logo crops from the 
 | `POST /api/runs/{id}/judge` | Re-judge in the background; progress on the events stream |
 | `GET /reports/{id}` | Static `report.html` |
 | `GET /api/docs` | Interactive API reference (OpenAPI; prose and models in `harness/web/api_docs.py`) |
+| `GET /tiles/base/{source}/{z}/{x}/{y}.jpg`, `GET /tiles/chip/{idx}/{bbox}.jpg` | Cached basemap and result tiles (added 2026-11-04, [tile cache](../tile-cache/design.md)) |
 
 **Layout (Tabler "condensed" layout):**
 - **Header:** the Team Foundry mark and name, nav (Console, Runs), and the model picker.
@@ -194,7 +195,6 @@ No build step. Static assets are `harness/web/static/` (the logo crops from the 
 - **Main grid:**
   - **Left (8 columns), map card:** basemap switcher with Sentinel-2 cloudless 2023 (EOX WMTS), USGS Imagery (The National Map) and NAIP (US, ImageServer `{bbox-epsg-3857}`). The area outline is dashed cyan. Chip footprints are filled cyan inside the area and orange outside. Pins mark coordinate claims. Popups show the tile, label, similarity and step ref. A legend and the attribution are on the map.
   - **Right (4 columns), Scorecard card:**
-    - a Chart.js radar of criterion scores;
     - a per-criterion table with the median, a dot strip of the judges' votes (agreement at a glance) and the measured value;
     - majority failure modes as badges;
     - the gate banner.
@@ -273,7 +273,7 @@ A dossier is about 10–25k tokens. Per pass at 22k in / 3k out: Opus ≈ $0.15,
 
 ## Build deviations (recorded 2026-11-04)
 
-- **No Chart.js.** The scorecard uses a dot strip of the five votes per criterion, plus a score bar. That reads agreement at a glance, where a radar chart distorts comparisons (dataviz review). Chart.js isn't vendored.
+- **No Chart.js.** The scorecard uses a dot strip of the judges' votes per criterion, plus a score bar. That reads agreement at a glance, where a radar chart distorts comparisons (dataviz review). Chart.js isn't vendored.
 - **MapLibre 5.24.0, not 6.16.0.** 6.x ships ES modules only, with no UMD build, and we have no bundler.
 - **marked 18.1.3 + DOMPurify 3.4.17 vendored.** They render the agent's Markdown answer (its tables) and sanitize it before it reaches the DOM. Everything else is inserted as `textContent`.
 - **`harness agreement`** (corpus α over a suite, a list of runs or `--all`) was added next to `harness compare`.

@@ -35,14 +35,14 @@
 **Archive access from tile requests** (design pass 3, the user's call): `tiles.Archives` resolves a run's store once per URI and caches it. For S3 it uses its own client: 2 s connect, 3 s read, `max_attempts: 1`. Any archive read error opens a **breaker for 60 s**, during which tile requests skip the archive and go straight to the provider. The endpoint also skips the archive for a run that is still live (`live.RUNS[run]` not done), since nothing is archived yet. So a slow or unreachable S3 costs at most one 5 s request per minute, and never a stalled tile strip.
 
 **`tiles.get` lookup order:**
-1. A disk entry younger than `max_age_days` is served (origin `cache`), and its mtime is touched for LRU.
+1. A disk entry younger than `max_age_days` (by mtime, the fetch time) is served (origin `cache`), and its **atime** is set to now for LRU; the mtime is kept.
 2. Otherwise, for a chip with `run`, the run's archive. It's resolved as the CLI does it, `index.run_uri(run) or cfg["archive_uri"]`, so a second machine without the index entry still reads the shared archive. A run ID containing `/` or `..` is ignored. If the tile is present, it's copied to disk and served (`archive`). S3 calls use the existing `core.store.s3_config` (5 s connect, 30 s read, 3 attempts in botocore's standard retry mode with backoff), so a slow archive is bounded.
 3. Otherwise upstream: `urllib.request` with a 10 s timeout and User-Agent `TeamFoundryConsole/1 (+https://github.com/onemorepereira/team46-breaking-barriers-hackathon)`. The response is accepted only if its status is 200 and its bytes begin with a JPEG (`FF D8 FF`) or PNG (`89 50 4E 47`) signature; EOX WMS and ArcGIS return XML/JSON errors with HTTP 200. It's written atomically (tmp then `os.replace`) and served (`upstream`).
 4. If upstream fails and an expired disk entry exists, it's served (`stale`). Otherwise `TileUnavailable` → 502.
 
 **Locking and eviction:**
 - A per-key `threading.Lock` (a dict guarded by one lock) stops two requests for one tile from both fetching it.
-- Eviction runs after every 200 writes (and once at startup): walk `out/tile-cache`, and if the total exceeds `cache_max_mb`, delete files oldest-mtime-first down to 90% of the cap.
+- Eviction runs after every 200 writes (and once at startup): walk `out/tile-cache`, and if the total exceeds `cache_max_mb`, delete files least-recently-used first (oldest atime) down to 90% of the cap.
 
 **Validation (AC5):**
 - `source` must be in `BASE_MAXZOOM`, with integer `0 ≤ z ≤ maxzoom` and `0 ≤ x, y < 2^z`.

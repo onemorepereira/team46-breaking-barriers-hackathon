@@ -25,7 +25,7 @@ The console's run form offers four example prompts. Three are in North America o
 - "Development interest" means ADB developing member countries and ADB's themes: energy access, climate resilience, food security, livelihoods and land use **[team]**.
 
 ## Plan
-1. `examples.json` with 15 cards; a test for shape and coverage (AC1, AC6).
+1. `examples.json` with 15 cards (16 as built); a test for shape and coverage (AC1, AC6).
 2. `run.html` and `app.js`: continent tabs and a card grid in place of the chips, with click-to-fill and a selected state (AC2–AC4).
 3. `app.css`: card styling, plus hover and selected states (AC7).
 4. Verify: resolve every area live (AC5), screenshots at desktop and phone width (AC7), one live Asia run (AC8).

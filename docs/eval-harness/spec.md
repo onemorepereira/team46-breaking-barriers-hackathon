@@ -25,7 +25,7 @@ Clay and ADB can't tell whether to trust a dataset an AI agent built (V13). Noth
 
 - **Caption generation (Track 2)** waits until Track 1 works end to end (T34, V180).
 - **The final workflow-scoring method.** It's still open **[team]**. This version reports raw workflow signals and leaves scoring pluggable. **Changed (2026-11-04):** see [docs/judging](../judging/spec.md).
-- **The output score itself.** It's blocked on ADB's rubric (V191). This version ships the report section with no score in it. **Changed (2026-11-04):** scoring is now built against a generalized rubric, with a five-judge panel. See [docs/judging](../judging/spec.md).
+- **The output score itself.** It's blocked on ADB's rubric (V191). This version ships the report section with no score in it. **Changed (2026-11-04):** scoring is now built against a generalized rubric, with a cross-family judge panel (five judges at first, a three-judge tribunal since later on 2026-11-04). See [docs/judging](../judging/spec.md).
 - **Final prompt wording.** The task is decided, but the exact prompts are still open **[team]**. A draft prompt drives the tests.
 - **A UI for launching runs.** A command line plus static report files is enough. The brief's minimal UI is only a "Should Have" (V130). **Changed in Build (user request, 2026-11-04):** a lightweight local `harness ui` was added. You type a prompt, watch the agent's decision spans live, and see the NAIP tiles LGND returned on a map, with its verdicts.
 - **Scores or rankings in the comparison.** The comparison table (AC11) shows raw numbers side by side and doesn't declare a winner **[team]**.

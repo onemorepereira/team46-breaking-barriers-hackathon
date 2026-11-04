@@ -77,8 +77,8 @@ ADB needs to know whether it can trust a dataset an agent built. Today our harne
   | Confidence | When |
   | --- | --- |
   | **High** | Checks pass, every seat's vote is valid, and within-one ≥ 80% |
-  | **Low** | Checks fail, fewer than 4 judges are valid, or within-one < 50% |
-  | **Medium** | Otherwise |
+  | **Low** | Checks fail, a pass is two or more seats short, or within-one < 50% |
+  | **Medium** | Otherwise, for example one seat short (revised 2026-11-04, with the three-judge tribunal) |
 
   The page says plainly that confidence measures judge agreement on the evidence, not ground truth.
 - [ ] **AC8 Repeat stability.** `harness judge --passes N` judges N times. Each criterion then reports its mean ± standard deviation across passes [GRA §4.2]. With one pass, the standard deviation is N/A.
@@ -112,7 +112,7 @@ ADB needs to know whether it can trust a dataset an agent built. Today our harne
   - claims verified;
   - claims in area, with the search footprint as a sub-line;
   - judge agreement.
-- [ ] **AC13 Map.** A MapLibre map with Sentinel-2 cloudless and USGS imagery basemaps, and a layer switcher, draws:
+- [ ] **AC13 Map.** A MapLibre map with Sentinel-2 cloudless and USGS imagery basemaps, and a layer switcher (as built: Sentinel-2, USGS imagery, NAIP and OpenStreetMap streets), draws:
   - the requested area's outline;
   - every LGND result's footprint, colored inside or outside the area;
   - coordinate claims as pins.

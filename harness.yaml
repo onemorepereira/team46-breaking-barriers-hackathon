@@ -63,6 +63,7 @@ tiles:
   cache_max_mb: 1024
   max_age_days: 30
 
+area_mode: enforce              # enforce | observe | off: how the prompt's area applies to LGND searches
 narrative_model: sonnet
 max_runs_per_suite: 8
 max_suite_usd: 50

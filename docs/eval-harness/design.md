@@ -1,7 +1,13 @@
 # Track 1 Evaluation Harness — Design
 
 **Spec:** ./spec.md   **Last updated:** 2026-11-03
-**Status:** Ready for planning (revision 6: pass-5 blocking issues fixed but not re-reviewed; Phoenix and the live swap demo dropped)
+**Status:** Built (revision 6, as designed on 2026-11-03; Phoenix and the live swap demo dropped). This is the original design record, kept as history.
+
+> **Revised 2026-11-04: what changed since this design.** For the current system, read the [developer guide](../developer-guide.md) and the newer records.
+> - **Modules:** `analysis/datasets.py`, `analysis/score.py` and `analysis/compare.py` were never split out. Datasets live in `analysis/signals.py`, comparison in `analysis/report.py` (`compare_rows`, `render_compare`), and scoring in `analysis/judging/` ([judging design](../judging/design.md)). The layer boundaries changed in the [layering spec](../layering/spec.md).
+> - **Config:** the `harness.yaml` and suite examples below show the first plan (`haiku`, `rubric:`/`scorer`, `prompts/dallas-dc.md`). Today: models `sonnet` and `kimi` plus judge-only models, `narrative_model: sonnet`, the `judging:` and `tiles:` blocks, `area_mode`, and prompts in `prompts/tasks/`. Reference: [developer guide §5](../developer-guide.md#5-configuration-reference-harnessyaml).
+> - **Deploy:** there is no `infra/README.md`, `infra/deploy.sh` or `tests/live/smoke.sh`. Deploy with `cd infra && CDK_DOCKER=podman npx aws-cdk deploy`, and set the LGND login with `harness lgnd-login`, not `put-secret-value`.
+> - **IAM:** the runtime role also allows Kimi (`moonshotai.kimi-*`, `infra/app.py`), not Claude only.
 
 Verified facts carry a source; anything else is marked **(unverified, spike S#)**. **Tested** means we ran it against the sandbox (account 892605951158, us-west-2, 2026-11-03).
 

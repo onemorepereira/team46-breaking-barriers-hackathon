@@ -140,14 +140,14 @@ Minors were fixed too: claim-to-area matching by position, the scale max, no dim
 **Gate history:**
 - **Design:** 3 subagent passes, with 5 → 3 → 0 blockers.
 - **Build:** self-checks after each slice.
-- **Verify:** this record, plus an independent verify review (findings handled below).
+- **Verify:** this record, plus an independent verify review (findings handled above).
 
 **Follow-ups** (ordered; see [gaps.md](gaps.md)):
 1. An answer key for outcome correctness: switch the task to solar or wind sites against USPVDB/GRW (V96), and add a measured recall/precision criterion.
 2. Human-expert ratings of 20 runs, to validate the panel the way the paper did (expert α ≈ 0.56).
 3. ADB's rubric, when it arrives: drop it in as YAML, with a `calibration` map.
 4. Judging cost rises with dossier size: the Laos run cost $0.46. Consider tighter `tool_result_chars` on very long tool tables.
-5. Grok 4.7 is the slowest judge (70–125 s). The panel waits for every judge, so Grok sets the time to a score.
+5. ~~Grok 4.7 is the slowest judge (70–125 s).~~ Resolved 2026-11-04: Grok left the panel when it became the three-judge tribunal (see above). The panel still waits for every seat, so the slowest seated judge (now Kimi at times) sets the time to a score.
 
 **Risks:**
 - Absolute scores depend on the panel's strictness (GRA §6). Compare runs judged by the same seats and rubric sha.

@@ -4,6 +4,8 @@ Nov 3, 2026 · @Miguel · updated Nov 4 with what we built
 
 > **Sources.** Each statement cites where it comes from. Most cite the two briefs, [Technical](docs/Clay-Foundry-Technical-Hackathon.md) (T) and [Vision](docs/Clay-Foundry-Vision-Hackathon.md) (V), with line numbers. Both briefs include Clay's suggested edits from [the Nov 3 PDF](<docs/suggested hackathon edits.pdf>). Statements that are not in either brief carry a tag instead: **[team]** for our own decisions, **[event]** for event logistics from the organizers, and **[ext]** for general background.
 
+> **Docs.** New here? Start with the [developer guide](docs/developer-guide.md), for setup, configuration, the CLI and recipes. Before a change, read [contributing](CONTRIBUTING.md). [All documentation](docs/README.md) indexes every spec, design and handoff, and [the factory](docs/factory.md) tracks each effort's purpose and status **[team]**.
+
 ## Mission
 
 Build an open-source sandbox that **observes, summarizes and scores** an AI agent doing a geospatial dataset task[^T8][^V7], so Clay and ADB can tell whether to trust what the agent built[^V13].
@@ -36,14 +38,14 @@ harness CLI ──▶ AgentCore Runtime ──▶ Strands agent ──▶ Bedroc
 
 **[team]**
 
-- **The agent** runs on Bedrock AgentCore Runtime[^T105] and uses the RODA and LGND Geo MCP servers[^T34][^T144] **[team]**. Its task is to find data centers within 50 km of downtown Dallas, TX **[team]**.
+- **The agent** runs on Bedrock AgentCore Runtime[^T105] and uses the RODA and LGND Geo MCP servers[^T34][^T144] **[team]**. Its benchmark task is finding data centers within 50 km of downtown Dallas, TX, and the console runs any prompt, with 16 one-click examples across six continents, mostly in ADB's developing Asian member countries **[team]**.
 - **Every decision is a span.** Hooks in the agent record each model call (full input, output, reasoning, tokens) and each tool call (arguments, full result, latency, retries) as OpenTelemetry `harness.*` spans **[team]**. A processor archives every span to S3 at the moment it ends **[team]**.
 - **Claims are traceable.** Each tool result is stamped with a label like `[ref T3]`. The agent must cite that label for every claim, with one value copied verbatim from one tool result **[team]**. The harness grades each claim as **matched**, **mismatch** or **unsourced** against the full archived result **[team]**.
 - **Reports work offline.** The report, replay and comparison read only the archive, so a recorded run can be re-graded without calling the model again[^T121][^V114] **[team]**.
 - **OpenTelemetry is the only telemetry API.** The deployed backend is AgentCore Observability (CloudWatch); a CI test proves the exporter can be swapped by config alone[^T177][^V164] **[team]**.
 - **A panel scores every run.** A generalized rubric ([`rubrics/geo-dataset-v1.yaml`](rubrics/geo-dataset-v1.yaml)) scores the workflow and the output, matching the brief's two dimensions[^T116][^V110]:
   - two criteria are measured by code: claim provenance and area compliance;
-  - eight are judged by a tribunal of Claude Opus 5.5, DeepSeek V3.2 and Kimi K3, and each criterion's score is the median vote. Reserves (Mistral Large 3, Qwen3 235B) sit for a recused judge or stand in for one that fails.
+  - eight are judged by a tribunal of Claude Opus 5.5, DeepSeek V3.2 and Kimi K3, and each criterion's score is the median vote. Reserves (Mistral Large 3, Qwen3 235B, then Sonnet 5.5) sit for a recused judge or stand in for one that fails.
 
   A judge from the agent's own model family recuses itself. Every judgement carries its confidence (judge agreement plus trace integrity). `harness calibrate` proves the panel lowers the right criterion when we plant a defect **[team]**. See [how a run is scored](docs/judging/guide.md).
 - **The console shows the run.** `harness ui` is a FastAPI app[^T99] built on the Tabler dashboard kit and MapLibre. It shows:
@@ -52,11 +54,11 @@ harness CLI ──▶ AgentCore Runtime ──▶ Strands agent ──▶ Bedroc
   - score, cost, tool calls, tokens, claims verified and judge agreement up front.
 
   It carries the Team Foundry name and logo **[team]**.
-- **Infrastructure is code.** A CDK stack creates the S3 archive, the arm64 agent image, a least-privilege role, the AgentCore runtime, the LGND login secret and an optional budget alert **[team]**. CI runs ruff, mypy, pytest (122 tests) and a gitleaks secret scan **[team]**.
+- **Infrastructure is code.** A CDK stack creates the S3 archive, the arm64 agent image, a least-privilege role, the AgentCore runtime, the LGND login secret and an optional budget alert **[team]**. CI runs ruff (lint and format), mypy, pytest (151 tests) and a gitleaks secret scan **[team]**.
 
 ### Code layout
 
-Each layer may import only the ones listed, and `tests/test_layers.py` enforces it **[team]**:
+Each layer may import only itself and the ones listed, and `tests/test_layers.py` enforces it **[team]**:
 
 | Layer | Holds | May import |
 | --- | --- | --- |
@@ -74,7 +76,7 @@ Needs `uv`, AWS credentials for the sandbox account, and podman or Docker for de
 
 ```sh
 uv sync                                                       # Python 3.12 environment
-uv run pytest                                                 # 122 tests, no AWS needed
+uv run pytest                                                 # 151 tests, no AWS needed
 uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend local      # agent on your machine
 uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend agentcore  # agent on AgentCore
 uv run harness run --suite suites/dallas-dc-v1.yaml           # both prompts on Sonnet 5.5 and Kimi K3
