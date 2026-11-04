@@ -135,6 +135,9 @@ def test_number_matching(value, result, ok):
         ("1950  N Stemmons", "at 1950 n stemmons fwy", True),
         ("DA", "DA11 site", False),  # short text: whole word only
         ("DA", "site DA here", True),
+        # JSON-escaped line breaks in a tool result read as spaces (live run regression)
+        ("filing history, ERCOT large-load", r'"filing history,\nERCOT large-load queue"', True),
+        ('say "hi"', r'{"q": "say \"hi\""}', True),
     ],
 )
 def test_text_matching(value, result, ok):

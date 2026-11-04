@@ -1,0 +1,32 @@
+# harness.yaml — committed config, no secrets (design: Data and contracts).
+region: us-west-2
+backend: local                 # agentcore | local; --backend overrides per run
+archive_uri: file://./archive  # set to s3://<bucket> from the CDK output after slice 3
+local_archive_uri: file://./archive
+local_exporter: console
+runtime_arn: null              # from the CDK output after slice 3
+out_dir: out
+
+models:
+  haiku:
+    id: us.anthropic.claude-haiku-5-5
+    max_tokens: 16000
+    request_fields: {thinking: {type: adaptive, display: summarized}, output_config: {effort: high}}
+  sonnet:
+    id: us.anthropic.claude-sonnet-5-5
+    max_tokens: 16000
+    request_fields: {thinking: {type: adaptive, display: summarized}, output_config: {effort: high}}
+
+narrative_model: haiku
+max_runs_per_suite: 8
+max_suite_usd: 50
+
+# UNVERIFIED conservative CEILINGS (USD per million tokens), not real prices. The AWS Price List API
+# and the public Bedrock pricing page didn't list Claude 5.5 rates on 2026-11-03. Ceilings make the
+# cost guard refuse early, never late. Replace with the figures from https://aws.amazon.com/bedrock/pricing/.
+prices_per_mtok:
+  haiku: {in: 5.0, out: 25.0}
+  sonnet: {in: 15.0, out: 75.0}
+
+rubric: null
+scorer: none

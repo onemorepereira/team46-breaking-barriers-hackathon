@@ -56,6 +56,19 @@ def parse_claims_block(final_output: str) -> list[dict[str, Any]] | None:
     return None
 
 
+JSON_ESCAPES = {"\\n": " ", "\\t": " ", "\\r": " ", '\\"': '"', "\\/": "/"}
+
+
+def unescape_json_text(s: str) -> str:
+    """Tool results are often JSON, so the model reads `\\n` inside a string as a line break.
+
+    Treat common JSON escapes as the characters they stand for (found in Build, live run 2e15c1bf).
+    """
+    for esc, ch in JSON_ESCAPES.items():
+        s = s.replace(esc, ch)
+    return s
+
+
 def normalize_text(s: str) -> str:
     return re.sub(r"\s+", " ", s.strip().lower())
 
@@ -93,7 +106,7 @@ def match_number(value: str, result: str) -> bool:
 
 
 def match_text(value: str, result: str) -> bool:
-    v, r = normalize_text(value), normalize_text(result)
+    v, r = normalize_text(value), normalize_text(unescape_json_text(result))
     if not v:
         return False
     if len(v) < 3:

@@ -251,7 +251,7 @@ The snapshot makes replay deterministic (AC9). Replay uses the prices and rubric
 
 | Value | Rule |
 | --- | --- |
-| Text, 3 or more characters after normalizing (lowercase, collapse whitespace) | Substring of the normalized result |
+| Text, 3 or more characters after normalizing (lowercase, collapse whitespace) | Substring of the normalized result. **Build addition:** JSON escapes in the result (`\n`, `\t`, `\r`, `\"`, `\/`) are read as the characters they stand for, because tool results are often JSON. The first live run produced a false mismatch without this. |
 | Text under 3 characters | Must match a whole word in the result |
 | Number of 1–2 characters (e.g. `"1"`, `"42"`) | Must equal a whole numeric token in the result (`1` matches `… 1 site …`, not `1.2` or `12`). The tolerance rule doesn't apply |
 | Number of 3+ characters with `d` decimals | Matches if any number `x` in the result satisfies `\|x − value\| ≤ 0.5·10^−d`, so `32.80` matches `32.8008` |
