@@ -6,6 +6,7 @@ Start with the [project README](../README.md) for the mission, what we built and
 
 | Doc | For |
 | --- | --- |
+| [Connected evidence workspace](workspace/README.md) | Supplied React UI connected to the live backend: launch, build, evidence, human review and deployment |
 | [Developer guide](developer-guide.md) | Setting up, running, configuring (every `harness.yaml` key), the CLI, extending (prompts, rubrics, judges, tools), testing, troubleshooting |
 | [Contributing](../CONTRIBUTING.md) | Branch and commit rules, the checks CI runs, the rules the tests enforce, the doc conventions |
 | [How a run is scored](judging/guide.md) | The rubric, the judge tribunal, recusal and stand-ins, gates, confidence, agreement, calibration |

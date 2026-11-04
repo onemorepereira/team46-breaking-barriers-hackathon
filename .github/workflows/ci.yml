@@ -22,6 +22,19 @@ jobs:
       - run: uv run pytest
       - name: Infrastructure checks (docs/aws-hardening; needs the infra group and Node for jsii)
         run: uv run --group infra pytest tests/test_infra.py
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install -g pnpm@11.25.0
+      - run: pnpm --dir frontend install --frozen-lockfile --ignore-scripts
+      - run: pnpm --dir frontend test
+      - run: pnpm --dir frontend build
+      - name: Built workspace is up to date (changed, deleted or new untracked files)
+        run: test -z "$(git status --porcelain -- harness/web/static/workspace)" || { git status --porcelain -- harness/web/static/workspace; exit 1; }
   secrets:
     runs-on: ubuntu-latest
     steps:

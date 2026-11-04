@@ -296,10 +296,14 @@ def evaluate_job(cfg: config_mod.Config, index: Index, n: int) -> RunState:
 
 
 def read_new(state: RunState, pos: int) -> tuple[list[dict[str, Any]], int]:
-    with state.live.open("r", encoding="utf-8") as f:
-        f.seek(pos)
-        chunk = f.read()
-        pos = f.tell()
+    try:
+        with state.live.open("r", encoding="utf-8") as f:
+            f.seek(pos)
+            chunk = f.read()
+            pos = f.tell()
+    except FileNotFoundError:
+        # The area resolver can publish before the worker creates its first span file.
+        return [], pos
     events = []
     for line in chunk.splitlines():
         try:

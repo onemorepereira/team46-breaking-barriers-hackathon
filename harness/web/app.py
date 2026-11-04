@@ -14,7 +14,14 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -87,6 +94,19 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def console(request: Request) -> HTMLResponse:
         return page(request, "run.html", run_id=None, active="console")
+
+    @app.get("/workspace", include_in_schema=False)
+    def workspace_redirect() -> RedirectResponse:
+        return RedirectResponse("workspace/")
+
+    @app.get("/workspace/{asset:path}", include_in_schema=False)
+    def workspace(asset: str = "") -> FileResponse:
+        """Built React workspace, served on the API origin; no browser-side credentials."""
+        root = (HERE / "static" / "workspace").resolve()
+        target = (root / (asset or "index.html")).resolve()
+        if not target.is_relative_to(root) or not target.is_file():
+            raise HTTPException(404, "Workspace asset unavailable. Build frontend/ first.")
+        return FileResponse(target, headers={"Cache-Control": "no-cache"} if target.suffix == ".html" else {})
 
     @app.get("/runs", response_class=HTMLResponse, include_in_schema=False)
     def runs_page(request: Request) -> HTMLResponse:
@@ -420,6 +440,36 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
     def guidance_off(body: ByRequest) -> Any:
         """Judge with no guidance from now on. Approve any version to switch it back on."""
         return feedback_call(feedback.switch_off, cfg, deploy(), body.by, body.reason)
+
+    @app.get("/api/runs/{run_id}/progress", tags=["Live events"])
+    def run_progress(run_id: str, cursor: str = Query("", description="`cursor` from the last poll")) -> Any:
+        """Short-request progress for authenticated proxies that buffer SSE: the events since `cursor`
+        (all of them without one), and a new `cursor` for the next poll.
+
+        Shares the same run state as the event stream; polling never starts a model or tool call. `done`
+        is read *before* the events, so a `done: true` reply always carries every event written before
+        the run ended (the same drain guarantee as the event stream).
+        """
+        state = live.RUNS.get(run_id)
+        if state is None:
+            raise HTTPException(404, "no live run with that ID since the console started")
+        try:
+            pos, sent_extra = (int(x) for x in cursor.split(".")) if cursor else (0, 0)
+            if pos < 0 or sent_extra < 0:
+                raise ValueError
+        except ValueError:
+            return JSONResponse({"error": "invalid cursor: pass the `cursor` from the last poll"}, 400)
+        done = state.done  # first: everything below was written before this was observed
+        events, pos = live.read_new(state, pos)
+        with state.lock:
+            extra = state.extra[sent_extra:]
+            sent_extra += len(extra)
+        if not cursor and state.area_event is not None:
+            events.insert(0, state.area_event)
+        events.extend(extra)
+        if done:
+            events.append(state.final or {"type": "done", "status": "unknown"})
+        return {"events": events, "done": done, "cursor": f"{pos}.{sent_extra}"}
 
     @app.get("/api/runs/{run_id}/events", tags=["Live events"], summary="Stream a run's events",
              description=EVENTS_DOC, response_class=StreamingResponse,
