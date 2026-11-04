@@ -1,4 +1,7 @@
-"""CDK app: archive bucket, agent image, role, one AgentCore runtime, budget, tags (design ADR-4)."""
+"""CDK app: archive bucket, agent image, role, one AgentCore runtime, budget, tags (design ADR-4).
+
+Hardening (docs/aws-hardening/spec.md): the role follows AWS's documented AgentCore execution role; the archive
+is versioned and access-logged; runtime logs expire; images are scanned on push."""
 
 from __future__ import annotations
 
@@ -8,8 +11,10 @@ from pathlib import Path
 import aws_cdk as cdk
 from aws_cdk import aws_bedrockagentcore as agentcore
 from aws_cdk import aws_budgets as budgets
+from aws_cdk import aws_ecr as ecr
 from aws_cdk import aws_ecr_assets as ecr_assets
 from aws_cdk import aws_iam as iam
+from aws_cdk import aws_logs as logs
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_secretsmanager as secretsmanager
 from constructs import Construct
@@ -20,6 +25,17 @@ REPO = Path(__file__).resolve().parents[1]
 class HarnessStack(cdk.Stack):
     def __init__(self, scope: Construct, cid: str, **kw: object) -> None:
         super().__init__(scope, cid, **kw)  # type: ignore[arg-type]
+        # AC4: server access logs for the archive (S3 security best practices), kept 90 days
+        access_logs = s3.Bucket(
+            self,
+            "ArchiveAccessLogs",
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            enforce_ssl=True,
+            object_ownership=s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
+            lifecycle_rules=[s3.LifecycleRule(expiration=cdk.Duration.days(90))],
+            removal_policy=cdk.RemovalPolicy.RETAIN,
+        )
         bucket = s3.Bucket(
             self,
             "Archive",
@@ -27,11 +43,32 @@ class HarnessStack(cdk.Stack):
             encryption=s3.BucketEncryption.S3_MANAGED,
             enforce_ssl=True,
             removal_policy=cdk.RemovalPolicy.RETAIN,  # recorded runs survive cdk destroy
+            # AC4: reviews and re-judging overwrite judgement.json; versions keep every earlier copy
+            versioned=True,
+            server_access_logs_bucket=access_logs,
+            server_access_logs_prefix="archive/",
+            lifecycle_rules=[
+                s3.LifecycleRule(
+                    noncurrent_version_expiration=cdk.Duration.days(90),
+                    abort_incomplete_multipart_upload_after=cdk.Duration.days(7),
+                )
+            ],  # current objects never expire: the archive is the evidence
         )
         image = ecr_assets.DockerImageAsset(
             self, "AgentImage", directory=str(REPO), platform=ecr_assets.Platform.LINUX_ARM64
         )
-        role = iam.Role(self, "AgentRole", assumed_by=iam.ServicePrincipal("bedrock-agentcore.amazonaws.com"))
+        # AC1: confused-deputy conditions, as in AWS's AgentCore Runtime trust policy
+        # (https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-permissions.html)
+        role = iam.Role(
+            self,
+            "AgentRole",
+            assumed_by=iam.ServicePrincipal("bedrock-agentcore.amazonaws.com").with_conditions(
+                {
+                    "StringEquals": {"aws:SourceAccount": self.account},
+                    "ArnLike": {"aws:SourceArn": f"arn:aws:bedrock-agentcore:{self.region}:{self.account}:*"},
+                }
+            ),
+        )
         image.repository.grant_pull(role)
         role.add_to_policy(iam.PolicyStatement(actions=["ecr:GetAuthorizationToken"], resources=["*"]))
         role.add_to_policy(
@@ -48,19 +85,51 @@ class HarnessStack(cdk.Stack):
         bucket.grant_put(role, "runs/*")
         bucket.grant_put(role, "suites/*")
         bucket.grant_read(role, "runs/*")
-        role.add_to_policy(  # read-only, so RODA's signed reads of public open-data buckets work
-            iam.PolicyStatement(actions=["s3:GetObject", "s3:ListBucket"], resources=["arn:aws:s3:::*"])
+        # AC3: read-only, so RODA's signed reads of public open-data buckets work, but only for buckets other
+        # accounts own: never another bucket in this account (the archive has its own grants above)
+        role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["s3:GetObject", "s3:ListBucket"],
+                resources=["arn:aws:s3:::*"],
+                conditions={"StringNotEquals": {"aws:ResourceAccount": self.account}},
+            )
+        )
+        # AC2: logs, traces and metrics exactly as AWS's documented AgentCore Runtime execution role
+        runtimes = f"arn:aws:logs:{self.region}:{self.account}:log-group:/aws/bedrock-agentcore/runtimes/*"
+        role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["logs:DescribeLogStreams", "logs:CreateLogGroup"], resources=[runtimes]
+            )
+        )
+        role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["logs:DescribeLogGroups"],
+                resources=[f"arn:aws:logs:{self.region}:{self.account}:log-group:*"],
+            )
+        )
+        role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["logs:CreateLogStream", "logs:PutLogEvents"], resources=[f"{runtimes}:log-stream:*"]
+            )
         )
         role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
-                    "logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents", "logs:DescribeLogStreams",
-                    "logs:DescribeLogGroups", "xray:PutTraceSegments", "xray:PutTelemetryRecords",
-                    "xray:GetSamplingRules", "xray:GetSamplingTargets", "cloudwatch:PutMetricData",
+                    "xray:PutTraceSegments",
+                    "xray:PutTelemetryRecords",
+                    "xray:GetSamplingRules",
+                    "xray:GetSamplingTargets",
                 ],
-                resources=["*"],
+                resources=["*"],  # X-Ray has no resource-level permissions for these (as in AWS's policy)
             )
-        )  # fmt: skip
+        )
+        role.add_to_policy(
+            iam.PolicyStatement(
+                actions=["cloudwatch:PutMetricData"],
+                resources=["*"],
+                conditions={"StringEquals": {"cloudwatch:namespace": "bedrock-agentcore"}},
+            )
+        )
         lgnd_secret = secretsmanager.Secret(
             self, "LgndGeoLogin", description="LGND Geo OAuth refresh token; set by `harness lgnd-login`"
         )
@@ -89,6 +158,30 @@ class HarnessStack(cdk.Stack):
             },
         )
         runtime.node.add_dependency(role)
+        # AC5: the runtime's log group (created by AgentCore) keeps events 30 days, not forever
+        logs.LogRetention(
+            self,
+            "RuntimeLogRetention",
+            log_group_name=f"/aws/bedrock-agentcore/runtimes/{runtime.attr_agent_runtime_id}-DEFAULT",
+            retention=logs.RetentionDays.ONE_MONTH,
+        )
+        # AC6: scan images on push (basic scanning) in the CDK container-asset repository. The registry has one
+        # scanning configuration per account and Region; this stack owns it (it had no rules before).
+        ecr.CfnRegistryScanningConfiguration(
+            self,
+            "ImageScanning",
+            scan_type="BASIC",
+            rules=[
+                ecr.CfnRegistryScanningConfiguration.ScanningRuleProperty(
+                    scan_frequency="SCAN_ON_PUSH",
+                    repository_filters=[
+                        ecr.CfnRegistryScanningConfiguration.RepositoryFilterProperty(
+                            filter="cdk-*-container-assets-*", filter_type="WILDCARD"
+                        )
+                    ],
+                )
+            ],
+        )
         email = self.node.try_get_context("budget_email") or os.environ.get("BUDGET_EMAIL")
         if email:
             budgets.CfnBudget(
@@ -114,8 +207,18 @@ class HarnessStack(cdk.Stack):
         cdk.CfnOutput(self, "LgndSecretArn", value=lgnd_secret.secret_arn)
 
 
-app = cdk.App()
-stack = HarnessStack(app, "Team46EvalHarness", env=cdk.Environment(region="us-west-2"))
-for k, v in {"Project": "team46-eval-harness", "Owner": "team46", "CostCenter": "hackathon-sandbox"}.items():
-    cdk.Tags.of(app).add(k, v)
-app.synth()
+def build(app: cdk.App) -> HarnessStack:
+    stack = HarnessStack(app, "Team46EvalHarness", env=cdk.Environment(region="us-west-2"))
+    for k, v in {
+        "Project": "team46-eval-harness",
+        "Owner": "team46",
+        "CostCenter": "hackathon-sandbox",
+    }.items():
+        cdk.Tags.of(app).add(k, v)
+    return stack
+
+
+if __name__ == "__main__":  # `cdk synth` / `cdk deploy` (cdk.json); tests import build() instead
+    app = cdk.App()
+    build(app)
+    app.synth()

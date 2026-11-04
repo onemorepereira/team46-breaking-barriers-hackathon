@@ -48,6 +48,7 @@ class PanelResult:
     confidence: str
     confidence_reasons: list[str]
     verdict: str  # PASSED-ish label for the page: "scored" | "FAILED" | "not scored"
+    judges_in_doubt: bool = False  # confidence was already below High before any condition downgrade
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -81,9 +82,11 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
                     (
                         f"{measured.conditions_supported}/{measured.conditions_total}"
                         if measured.conditions_total
+                        else "not checked"
+                        if measured.conditions_not_checked
                         else "not applicable"
                         if measured.condition_compliance is None
-                        else "no location evidence"
+                        else "no locations listed"
                     )
                     if c.id == "condition_compliance"
                     else f"{measured.claims_inside}/{measured.claims_located}"
@@ -148,8 +151,8 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
         dims = {d: None for d in dims}  # a dimension isn't scored on measured criteria alone
     # A good process cannot average away a missing required spatial constraint.
     output = dims.get("output")
-    if check_conditions and measured.condition_compliance is not None and output is not None:
-        dims["output"] = min(output, round(measured.condition_compliance * 100, 1))
+    if check_conditions and measured.condition_cap is not None and output is not None:
+        dims["output"] = min(output, round(measured.condition_cap * 100, 1))
     present = [v for v in dims.values() if v is not None]
     overall = round(sum(present) / len(present), 1) if present else None
     status = "scored" if usable else "insufficient"
@@ -176,10 +179,15 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
     mad_all = round(sum(mads) / len(mads), 3) if mads else None
     seated = [sum(1 for j in p.get("judges", []) if not j.get("stood_in_for")) for p in passes]
     conf, reasons = confidence(measured, valid_counts, within, bool(usable), seated)
+    judges_in_doubt = conf != "High"
     if check_conditions and measured.conditions_need_review:
         if conf == "High":
             conf = "Medium"
         reasons.append("Some request conditions lack supporting evidence; review the conditions table")
+    if check_conditions and measured.conditions_not_checked:
+        if conf == "High":
+            conf = "Medium"
+        reasons.append("Request conditions were not checked because no narrative model is configured")
     verdict = "FAILED" if gates else ("scored" if usable else "not scored")
     if check_conditions and measured.conditions_error and not gates:
         overall, status, verdict, conf = None, "insufficient", "not scored", "Low"
@@ -198,6 +206,7 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
         conf,
         reasons,
         verdict,
+        judges_in_doubt,
     )
 
 

@@ -5,4 +5,12 @@
 {% if agreement %}<p>Judge agreement across these runs: Krippendorff's α (ordinal) = <b>{{ "—" if agreement.alpha is none else agreement.alpha }}</b>{% if agreement.ci95 %}, 95% CI {{ agreement.ci95[0] }}–{{ agreement.ci95[1] }}{% endif %} ({{ agreement.runs }} runs, {{ agreement.units }} run × criterion units, {{ agreement.coders }} judges).</p>{% endif %}
 <table><tr>{% for c in columns %}<th>{{ c.replace("_", " ") }}</th>{% endfor %}</tr>
 {% for row in rows %}<tr>{% for c in columns %}<td{% if c == "status" and row[c] != "ok" %} class="bad"{% endif %}>{{ "—" if row[c] is none else row[c] }}</td>{% endfor %}</tr>{% endfor %}</table>
+{% if concepts %}<h2>Per concept</h2>
+<p class="muted">Means over the runs with a value. Reference metrics come from each run's tied reference set (recall only where the reference is complete).</p>
+<table><tr><th>Concept</th><th>Runs</th><th>Score</th><th>Site recall</th><th>Cell precision</th><th>Count ratio</th></tr>
+{% for c in concepts %}<tr><td>{{ c.concept }}</td><td>{{ c.runs }}</td>{% for k in ("score", "site_recall", "cell_precision", "count_ratio") %}<td>{{ "—" if c[k] is none else c[k] }}</td>{% endfor %}</tr>{% endfor %}</table>{% endif %}
+{% if transfers %}<h2>Transfer to a new place</h2>
+<p class="muted">Per concept and model: the mean over home-place runs minus the mean over transfer-place runs (pooled across places; n per side).</p>
+<table><tr><th>Concept</th><th>Model</th><th>n home / transfer</th><th>Score home → transfer</th><th>Score gap</th><th>Recall home → transfer</th><th>Recall gap</th></tr>
+{% for x in transfers %}<tr><td>{{ x.concept }}</td><td>{{ x.model_key }}</td><td>{{ x.n_home }} / {{ x.n_transfer }}</td><td>{{ x.score_home }} → {{ x.score_transfer }}</td><td>{{ "—" if x.score_gap is none else x.score_gap }}</td><td>{{ "—" if x.recall_home is none else x.recall_home }} → {{ "—" if x.recall_transfer is none else x.recall_transfer }}</td><td>{{ "—" if x.recall_gap is none else x.recall_gap }}</td></tr>{% endfor %}</table>{% endif %}
 </body></html>

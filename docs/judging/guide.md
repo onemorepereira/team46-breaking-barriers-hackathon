@@ -135,6 +135,16 @@ The judges must resist the first three and accept the last. The review text is e
 
 **Agreement with people:** `harness agreement --human`, and the Guidance page, report Krippendorff's α between the panel and reviewers, with its CI. Agreement between judges (`harness agreement`) only counts first judgements, never votes a review influenced.
 
+## Against a reference, per concept, and the licences
+These line our results up with the LGND/Ode benchmark for ADB ([what that report means for us](../adb-alignment/lgnd-ode-brief.md), [spec](../adb-alignment/spec.md)). They sit **beside** the score; they're not part of it.
+- **Against the reference.** A run can be tied to a reference set (`references/<id>/`, which has its completeness and licence recorded), and is then scored with the benchmark's rule:
+  - the agent's claimed sites flag 160 m cells;
+  - an asset is found when a flagged cell is one of its cells, and each asset counts once.
+
+  It reports **site recall**, **cell precision**, **count ratio** (claimed sites ÷ reference assets) and **lift** (precision over the base rate). Recall, count ratio and lift are reported only for a *complete* reference. The set is snapshotted into the run's archive, so the numbers replay and never change when a set is rebuilt. The first set is the USGS USPVDB solar facilities in Pecos County, Texas.
+- **Per concept and transfer.** Suite prompts carry a concept, a place and a role (home or transfer). `harness compare` reports per concept, and the drop from a home place to a new one.
+- **Data and licences.** Every run lists the data, boundaries, models and reference it used, each with its licence, and says whether the result is **presentable** to third parties. Every run that uses LGND reads "check before sharing" until LGND confirms the terms of its service.
+
 ## Commands
 
 ```sh
@@ -142,6 +152,7 @@ uv run harness judge <run-id> [--passes 3]   # score an archived run; writes run
 uv run harness calibrate <run-id>            # planted-defect check of the panel
 uv run harness calibrate <run-id> --feedback # do the judges resist wrong reviews and accept right ones?
 uv run harness guidance list                 # this deployment's guidance versions and agreement
+uv run harness reference tie <run-id> <ref>  # score a run against a reference set (recall, precision, count ratio)
 uv run harness agreement --all               # Krippendorff's alpha across every judged run
 uv run harness compare <suite-id>            # suite table with scores, confidence and corpus alpha
 uv run harness ui                            # the console: live runs, scores, map, plain-language trace
@@ -158,4 +169,4 @@ uv run harness ui                            # the console: live runs, scores, m
 
 New runs archive extracted request conditions before judging. Code checks each declared location against the saved boundary and any evidenced distance reference. A missing reference is unverified. Finding only far references does not prove no nearer one exists. Distance is to the recorded reference point, not the area's edge. Identity and other constraints remain judge/human assessments.
 
-The output dimension is capped at measured spatial-condition coverage, so good scores elsewhere cannot hide missing required evidence. Unverified or contradicted spatial conditions lower confidence. Extraction errors leave the overall evaluation not scored. Old archives without conditions remain N/A and are never re-extracted by replay/re-judge. Compare runs only with the same rubric/checker versions.
+The output dimension is capped at the coverage of the weakest spatial condition, so good scores elsewhere cannot hide missing required evidence. A distance request whose run lists no locations scores 0 on output; code can't tell an honest "none found" from no work, so the page asks for a check by hand. Unverified or contradicted spatial conditions lower confidence. Extraction errors, including a damaged saved file, leave the overall evaluation not scored until Re-judge replaces them. If no narrative model is configured, conditions show as not checked, no cap applies and confidence stays below High. A request with no checkable conditions is not an error. Old archives without conditions remain N/A and are never re-extracted by replay/re-judge. Compare runs only with the same rubric/checker versions.

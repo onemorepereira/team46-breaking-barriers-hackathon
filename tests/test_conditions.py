@@ -111,7 +111,7 @@ def test_extraction_is_once_and_failure_is_visible(tmp_path):
     other = lgnd_run(tmp_path / "bad")
     ensure({}, other)
     assert conditions.load(other)["status"] == "not_checked"
-    assert conditions.evaluate(other) is None
+    assert conditions.evaluate(other)["status"] == "not_checked"
     assert not measure.measure(other).conditions_need_review
 
 
@@ -235,7 +235,11 @@ def test_missing_model_does_not_unscore_and_can_be_enabled_later(tmp_path):
     run, result = judged(run)
     assert result.overall is not None
     criterion = next(c for c in result.criteria if c.id == "condition_compliance")
-    assert criterion.score is None and criterion.value == "not applicable"
+    assert criterion.score is None and criterion.value == "not checked"
+    assert result.confidence == "Medium"
+    explanation = run_view(run)["explanation"]
+    assert "not checked" in explanation["summary"]
+    assert any("narrative_model" in c for c in explanation["check_by_hand"])
     ensure(CFG, run, Replies(json.dumps({"conditions": ITEMS})))
     assert conditions.load(run)["conditions"]
 
@@ -351,3 +355,261 @@ def test_two_bad_replies_remain_visible_until_explicit_retry(tmp_path, socket_di
     before = run.store.read_text(f"runs/{run.run_id}/conditions.json")
     run_view(run)
     assert run.store.read_text(f"runs/{run.run_id}/conditions.json") == before
+
+
+# ---------- second review pass ----------
+LABEL = "data center bordering a protected natural area"
+REFERENCE = "protected natural area"
+
+
+def _result_with(run, data):
+    uri = run.tool_results[0].attr("harness.tool.result_uri")
+    run.store.write_text(f"runs/{run.run_id}/{uri}", json.dumps(data))
+
+
+def _claims(*values):
+    claims = [{"claim": f"site {i}", "value": v, "ref": "T1"} for i, v in enumerate(values)]
+    return "Sites.\n```json\n" + json.dumps({"claims": claims}) + "\n```"
+
+
+def _distance_cell(run):
+    return conditions.evaluate(run)["rows"][0]["cells"][2]
+
+
+def _square(lat, lon, half=0.05):
+    ring = [
+        [lon - half, lat - half],
+        [lon + half, lat - half],
+        [lon + half, lat + half],
+        [lon - half, lat + half],
+    ]
+    return [[*ring, ring[0]]]
+
+
+def test_site_cannot_be_its_own_reference_when_its_coordinates_are_rounded(tmp_path):
+    run = lgnd_run(tmp_path, final_output=_claims("32.9001, -96.7003"))
+    save(run)
+    _result_with(run, {"lat": 32.90012, "lon": -96.70034, "name": LABEL})
+    assert _distance_cell(run)["status"] == "unverified"
+
+
+def test_another_claimed_site_cannot_be_the_reference(tmp_path):
+    run = lgnd_run(tmp_path, final_output=_claims("32.5, -96.5", "32.6, -96.5"))
+    save(run)
+    sites = [{"lat": 32.5, "lon": -96.5, "name": LABEL}, {"lat": 32.6, "lon": -96.5, "name": LABEL}]
+    _result_with(run, {"sites": sites})
+    assert all(r["cells"][2]["status"] == "unverified" for r in conditions.evaluate(run)["rows"])
+
+
+def test_real_reference_close_to_a_coarsely_rounded_claim_still_counts(tmp_path):
+    run = lgnd_run(tmp_path, final_output=_claims("32.5, -96.5"))
+    save(run)
+    reference = {"lat": 32.51, "lon": -96.5, "name": REFERENCE}
+    _result_with(run, {"sites": [{"lat": 32.5, "lon": -96.5}], "reference": reference})
+    assert _distance_cell(run)["status"] == "supported"
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        {
+            "type": "Feature",
+            "properties": {"name": REFERENCE},
+            "geometry": {"type": "Polygon", "coordinates": _square(32.6, -96.5)},
+        },
+        {
+            "type": "Feature",
+            "properties": {"name": REFERENCE},
+            "geometry": {"type": "MultiPolygon", "coordinates": [_square(32.6, -96.5)]},
+        },
+        {"name": REFERENCE, "centroid": {"lat": 32.6, "lon": -96.5}},
+        {"name": REFERENCE, "geometry": {"type": "Point", "coordinates": [-96.5, 32.6]}},
+    ],
+)
+def test_polygon_and_nested_centroid_references_count(tmp_path, record):
+    run = lgnd_run(tmp_path, final_output=_claims("32.5, -96.5"))
+    save(run)
+    _result_with(run, {"reference": record, "sites": [{"lat": 32.5, "lon": -96.5}]})
+    assert _distance_cell(run)["status"] == "supported"
+
+
+def test_site_inside_a_large_polygon_reference_is_supported(tmp_path):
+    run = lgnd_run(tmp_path, final_output=_claims("32.5, -96.5"))
+    save(run)
+    record = {"type": "Polygon", "name": REFERENCE, "coordinates": _square(32.5, -96.5, half=2)}
+    _result_with(run, {"reference": record, "sites": [{"lat": 32.5, "lon": -96.5}]})
+    cell = _distance_cell(run)
+    assert cell["status"] == "supported" and "0.00 km" in cell["reason"]
+
+
+def test_malformed_polygon_reference_is_ignored(tmp_path):
+    run = lgnd_run(tmp_path, final_output=_claims("32.5, -96.5"))
+    save(run)
+    record = {"type": "Polygon", "name": REFERENCE, "coordinates": [["x"], 3]}
+    _result_with(run, {"reference": record, "sites": [{"lat": 32.5, "lon": -96.5}]})
+    assert _distance_cell(run)["status"] == "unverified"
+
+
+def test_cap_uses_the_weakest_condition_not_the_pooled_share(tmp_path):
+    run = lgnd_run(tmp_path)
+    save(run)
+    m = measure.measure(run)
+    assert m.condition_compliance == 0.25 and m.condition_cap == 0.0
+    run, result = judged(run)
+    assert result.dimensions["output"] == 0
+    assert next(c for c in result.criteria if c.id == "condition_compliance").score == 25
+
+
+def test_none_found_scores_zero_and_asks_for_a_hand_check(tmp_path):
+    run = lgnd_run(tmp_path, final_output="I searched thoroughly; no sites qualify.")
+    save(run)
+    run, result = judged(run)
+    assert result.dimensions["output"] == 0
+    assert next(c for c in result.criteria if c.id == "condition_compliance").value == "no locations listed"
+    text = run_view(run)["explanation"]
+    assert "listed no locations" in text["summary"]
+    assert text["check_by_hand"][0].startswith("If none found")
+
+
+def test_empty_conditions_are_valid_and_cached(tmp_path):
+    run = lgnd_run(tmp_path)
+    run.__dict__["prompt"] = "Tell me about data centers"
+    fake = Replies(json.dumps({"conditions": []}))
+    ensure(CFG, run, fake)
+    ensure(CFG, run, fake)
+    assert len(fake.calls) == 1
+    assert "error" not in conditions.load(run)
+    run, result = judged(run)
+    assert result.overall is not None and result.verdict == "scored"
+    assert next(c for c in result.criteria if c.id == "condition_compliance").value == "not applicable"
+    assert run_view(run)["conditions"]["rows"] == []
+
+
+@pytest.mark.parametrize("prompt", ["", "   "])
+def test_blank_prompt_is_not_sent_or_failed(tmp_path, prompt):
+    run = lgnd_run(tmp_path)
+    run.__dict__["prompt"] = prompt
+    fake = Replies()
+    ensure(CFG, run, fake)
+    assert not fake.calls and "error" not in conditions.load(run)
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "sites within a 10-mile radius of a park",
+        "sites 10 miles from a river",
+        "sites within 10 mi of a park",
+        "sites closer than 5 km to a lake",
+        "sites under 5 km from a lake",
+        "sites within about 10 kilometres of a park",
+    ],
+)
+def test_proximity_phrasings_are_caught_when_omitted(tmp_path, prompt):
+    run = lgnd_run(tmp_path)
+    run.__dict__["prompt"] = prompt
+    only_target = json.dumps({"conditions": [ITEMS[0]]})
+    ensure(CFG, run, Replies(only_target, only_target))
+    assert conditions.load(run)["error"]
+
+
+@pytest.mark.parametrize(
+    "prompt",
+    [
+        "sites at least 5 km from a school",
+        "sites more than 10 miles from a river",
+        "corridors with 10 km of road",
+    ],
+)
+def test_other_distances_are_not_proximity(tmp_path, prompt):
+    run = lgnd_run(tmp_path)
+    run.__dict__["prompt"] = prompt
+    ensure(CFG, run, Replies(json.dumps({"conditions": [ITEMS[0]]})))
+    assert "error" not in conditions.load(run)
+
+
+def test_every_stated_proximity_limit_must_be_extracted(tmp_path):
+    run = lgnd_run(tmp_path)
+    run.__dict__["prompt"] = "sites within 10 miles of a park and within 5 km of a river"
+    one = json.dumps({"conditions": [ITEMS[2]]})
+    ensure(CFG, run, Replies(one, one))
+    assert conditions.load(run)["error"]
+    restated = lgnd_run(tmp_path / "again")
+    restated.__dict__["prompt"] = "sites within 10 miles of a park. Only sites within 10 miles of a park."
+    ensure(CFG, restated, Replies(one))
+    assert "error" not in conditions.load(restated)
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "{truncated",
+        "[]",
+        '"text"',
+        '{"conditions": "x"}',
+        '{"conditions": [{"kind": "target"}]}',
+        '{"conditions": [{"id": "C1", "kind": "within_distance", "text": "near"}]}',
+    ],
+)
+def test_damaged_file_keeps_the_run_page_open_and_re_judge_replaces_it(tmp_path, text):
+    run = lgnd_run(tmp_path)
+    run.store.write_text(f"runs/{run.run_id}/conditions.json", text)
+    run, result = judged(run)
+    assert result.overall is None and result.verdict == "not scored"
+    view = run_view(run)
+    assert "incomplete" in view["explanation"]["headline"]
+    assert "Re-judge" in " ".join(view["explanation"]["check_by_hand"])
+    assert "Conditions in the request" in dossier.render(dossier.build(run))
+    assert report.render_run(report.analyze(run), "now")
+    ensure(CFG, run, Replies(json.dumps({"conditions": ITEMS})))
+    assert "error" not in conditions.load(run)
+
+
+def test_recovery_step_survives_three_evidence_gaps(tmp_path, monkeypatch):
+    from dataclasses import replace
+    from importlib import import_module
+
+    module = import_module("analysis.judging.explain")
+    run = lgnd_run(tmp_path)
+    save(run, [], error="timeout")
+    run, result = judged(run)
+    measured = replace(measure.measure(run), claims_matched=0)
+    monkeypatch.setattr(module, "_image_checks", lambda run: (1, 1))
+    checks = module.explain(run, result, measured=measured)["check_by_hand"]
+    assert len(checks) == 3
+    assert any("Re-judge" in c for c in checks)
+
+
+def test_disagreement_doubt_depends_on_the_actual_confidence_reasons(tmp_path):
+    from analysis.judging.explain import explain
+
+    run = lgnd_run(tmp_path)
+    save(run)
+    run, result = judged(run, medium=True)
+    assert "judges disagree" in explain(run, result)["summary"]
+    only_gap = lgnd_run(tmp_path / "gap")
+    save(only_gap)
+    only_gap, result = judged(only_gap)
+    assert result.confidence == "Medium"
+    assert "judges disagree" not in explain(only_gap, result)["summary"]
+
+
+def test_doubt_is_explained_under_a_rubric_without_conditions(tmp_path):
+    from analysis.judging.explain import explain
+    from analysis.judging.rubric import parse
+
+    run = lgnd_run(tmp_path)
+    save(run)
+    run, _ = judged(run, medium=True)
+    old = {**RUBRIC.raw, "criteria": [c for c in RUBRIC.raw["criteria"] if c["id"] != "condition_compliance"]}
+    result = panel.aggregate(parse(old), run.judgement["passes"], measure.measure(run))
+    assert result.confidence == "Medium"
+    assert "judges disagree" in explain(run, result)["summary"]
+
+
+def test_report_shows_each_conditions_state(tmp_path):
+    run = lgnd_run(tmp_path)
+    ensure({}, run)
+    assert "were not checked" in report.render_run(report.analyze(run), "now")
+    run.store.write_text(f"runs/{run.run_id}/conditions.json", json.dumps({"conditions": []}))
+    assert "No checkable conditions" in report.render_run(report.analyze(run), "now")

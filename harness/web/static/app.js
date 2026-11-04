@@ -379,6 +379,8 @@
     box.replaceChildren();
     if (!data) return;
     if (data.error) box.append(el("p", {text:"Request conditions could not be extracted. This request is not fully verified."}));
+    if (data.status === "not_checked") { box.append(el("p", {text:"Request conditions were not checked: no model is set to read them."})); return; }
+    if (!data.conditions.length) { if (!data.error) box.append(el("p", {text:"No checkable conditions were found in this request."})); return; }
     const table = el("table", {class:"table table-sm"});
     table.append(el("thead", {}, el("tr", {}, el("th", {text:"Listed location"}),
       ...data.conditions.map(c => el("th", {text:c.text})))));
@@ -548,7 +550,7 @@
     for (const hook of FOUNDRY.onView) hook(v);  // feedback.js: the review card
   }
   // For feedback.js (the review card): re-render after a reconsideration, and update the judge panel live.
-  const FOUNDRY = Object.assign(window.FOUNDRY || (window.FOUNDRY = {}), { onView: [], renderView, renderScorecard, judgeRows, judgeResult, el, icon, apiError });
+  const FOUNDRY = Object.assign(window.FOUNDRY || (window.FOUNDRY = {}), { onView: [], renderView, renderScorecard, judgeRows, judgeResult, el, icon, apiError, map: () => (mapReady ? map : null) });
 
   // ---------- live ----------
   function progress(text, on = true) { show("progress", on); setText("progress-text", text); }

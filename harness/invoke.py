@@ -69,7 +69,13 @@ def worst_case_usd(cfg: Config, model_key: str) -> float:
 
 
 def plan_run(
-    cfg: Config, *, prompt_file: str, model_key: str | None, backend: str, suite_id: str | None = None
+    cfg: Config,
+    *,
+    prompt_file: str,
+    model_key: str | None,
+    backend: str,
+    suite_id: str | None = None,
+    meta: dict[str, Any] | None = None,
 ) -> RunPlan:
     models = cfg["models"] or {}
     if not model_key or model_key not in models:
@@ -101,6 +107,8 @@ def plan_run(
                 "archive_uri": archive_uri, "archive_errors": 0,
                 "snapshot": {"prices_per_mtok": cfg["prices_per_mtok"],
                              "harness_version": _git_sha()}}  # fmt: skip
+    if meta:  # concept, place, task, reference, role from the suite file (docs/adb-alignment AC8)
+        manifest["suite_meta"] = dict(meta)
     return RunPlan(run_id, suite_id, backend, model_key, archive_uri, payload, manifest, usd)
 
 

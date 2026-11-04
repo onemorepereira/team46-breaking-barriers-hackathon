@@ -8,7 +8,8 @@
 - [ ] Open three tabs and let their maps load:
   - Texas parks, `a5670c6b-542d-49dc-80ec-5448c6bd940c` (needs AWS: the run is in S3);
   - Laos, `b2bdb4d6-f79d-4b07-927b-045b0d496ca3` (FAILED, local);
-  - India solar parks, `a9a69e76-f4ae-49a8-b03c-e88682cdb60b` (backup, local).
+  - India solar parks, `a9a69e76-f4ae-49a8-b03c-e88682cdb60b` (backup, local);
+  - optional: California vineyards, `42b0a155-64e5-4539-9686-056dda4bc9dd` (reviewed and reconsidered; needs AWS).
 - [ ] Test one **Judge again** on the India run, about $0.15. That warms Bedrock and proves the credentials.
 - [ ] Open `docs/presentation/deck.html` in a full-screen browser window (press `F`), with the browser zoom at 100%.
 - [ ] Projector check: the deck fits the screen, and the console is readable (zoom it to 110–125% if needed).
@@ -23,6 +24,7 @@
 | 1:15 | Click **Result relevance** in the scorecard | "Every vote comes with a reason, and points at the step it relied on." Click a step ref like `T3`. | Each judge's vote and rationale; the timeline scrolls to that tool call |
 | 1:40 | Switch to the Laos tab | "And when the agent fails to deliver, here it ran out of budget with no answer, the evaluator says FAILED, whatever the judges think." | FAILED |
 | 2:00 | Back to the deck | "So, how does that score work?" Then on to slide 4 | — |
+| *(if ahead of time)* | On slide 3, **If time: a run an expert reviewed** | "Here an expert disagreed. The judges reconsidered, and one kept its vote and corrected the reviewer from the steps." Point at the badge and each judge's response | The "Revised after human review" badge, the original judgement, the judges' responses |
 
 **Say this if the score differs from 85.4** (it will, a little): "It moves a bit every time. That's exactly why we report confidence, not just a number."
 

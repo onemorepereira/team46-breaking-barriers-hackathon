@@ -99,23 +99,27 @@ def _coordinate_pairs(data: Any) -> Iterator[tuple[float, float]]:
                 yield from _coordinate_pairs(nested)
 
 
-def match_coordinate(value: str, result: str) -> bool:
+def coordinate_within(value: str, lat: float, lon: float) -> bool:
+    """Does (lat, lon) equal the claim's 'lat, lon' value, to the precision the claim was written at?"""
     parts = [p.strip() for p in value.split(",")]
     wanted = [float(p) for p in parts]
     tolerance = [0.5 * 10 ** -_decimals(p) + 1e-12 for p in parts]
-    try:
-        data = json.loads(result)
-    except ValueError:
-        data = result
-    return any(
+    return (
         math.isfinite(lat)
         and math.isfinite(lon)
         and -90 <= lat <= 90
         and -180 <= lon <= 180
         and abs(lat - wanted[0]) <= tolerance[0]
         and abs(lon - wanted[1]) <= tolerance[1]
-        for lat, lon in _coordinate_pairs(data)
     )
+
+
+def match_coordinate(value: str, result: str) -> bool:
+    try:
+        data = json.loads(result)
+    except ValueError:
+        data = result
+    return any(coordinate_within(value, lat, lon) for lat, lon in _coordinate_pairs(data))
 
 
 @dataclass
