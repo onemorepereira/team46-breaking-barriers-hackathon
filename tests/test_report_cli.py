@@ -98,6 +98,28 @@ def test_report_has_every_section_and_escapes(tmp_path):
     assert "<script>" not in html and "&lt;script&gt;" in html
 
 
+def test_final_answer_renders_markdown_and_tucks_the_claims_json_away(tmp_path):
+    out = (
+        "## Findings\n\n**Confirmed:**\n\n| Site | Coordinates |\n|---|---|\n| Napa | 38.38, -122.36 |\n\n"
+        "[bad](javascript:alert(1)) <img src=x onerror=alert(1)>\n\n"
+        '```json\n{"claims": [{"claim": "Napa", "value": "38.38, -122.36", "ref": "T1"}]}\n```'
+    )
+    b = RunBuilder(root=tmp_path)
+    b.run_start()
+    b.model("", tool_use={"toolUseId": "tooluse_T1", "name": "q", "input": {}})
+    b.tool("get_dataset_details", {"slug": "osm-dc"}, "Napa 38.38, -122.36")
+    b.model(out)
+    b.run_end()
+    b.write(final_output=out)
+    run = Run.load(FileStore(f"file://{tmp_path}"), "run-0001")
+    html = report.render_run(report.analyze(run), "2026-11-04T00:00:00Z")
+    answer = html[html.index("<h2>Final answer</h2>") :]
+    assert "<h2>Findings</h2>" in answer and "<strong>Confirmed:</strong>" in answer
+    assert "<td>Napa</td>" in answer and "**" not in answer and "|---|" not in answer
+    assert "<img" not in answer and "&lt;img" in answer and 'href="javascript:' not in answer
+    assert "<details>" in answer and '"claim": "Napa"' in answer.replace("&#34;", '"')
+
+
 @pytest.mark.disable_socket
 def test_replay_is_deterministic_and_offline_and_ignores_current_prices(tmp_path, monkeypatch):
     standard_run(tmp_path / "archive")

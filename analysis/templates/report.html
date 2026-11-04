@@ -18,7 +18,7 @@
 {% if r.datasets %}<table><tr><th>Dataset</th><th>Via</th></tr>{% for d in r.datasets %}<tr><td>{{ d.dataset }}</td><td>{{ d.via }}</td></tr>{% endfor %}</table>{% else %}<p class="muted">None.</p>{% endif %}
 
 <h2>Summary</h2>
-{% if r.summ.narrative %}<p>{{ r.summ.narrative }}</p>{% else %}<p class="muted">Narrative unavailable; timeline below is complete.</p>{% endif %}
+{% if r.summ.narrative %}<div class="answer">{{ r.summ.narrative | markdown | safe }}</div>{% else %}<p class="muted">Narrative unavailable; timeline below is complete.</p>{% endif %}
 <p>Tools used: {% for t in r.summ.tools_used %}<code>{{ t }}</code> {% else %}<span class="muted">none</span>{% endfor %}</p>
 <h3>Trouble spots</h3>
 {% if r.summ.trouble_spots %}<table><tr><th>Span</th><th>What happened</th></tr>{% for t in r.summ.trouble_spots %}<tr><td><code>{{ t.span_id }}</code></td><td class="warn">{{ t.reason }}</td></tr>{% endfor %}</table>{% else %}<p class="ok">None.</p>{% endif %}
@@ -60,5 +60,7 @@
 <h2>Trace check (AC2)</h2>
 {% if r.missing %}<p class="bad">{{ r.missing | length }} missing fields</p><ul>{% for x in r.missing %}<li><code>{{ x.line() }}</code></li>{% endfor %}</ul>{% else %}<p class="ok">0 missing fields</p>{% endif %}
 
-<h2>Final answer</h2><pre style="white-space:pre-wrap">{{ r.run.final_output }}</pre>
+<h2>Final answer</h2>
+{% if answer %}<div class="answer">{{ answer | markdown | safe }}</div>{% else %}<p class="muted">No final answer.</p>{% endif %}
+{% for block in claims_json %}<details><summary class="muted">Claims block (JSON), as the agent wrote it</summary><pre class="raw">{{ block }}</pre></details>{% endfor %}
 </body></html>

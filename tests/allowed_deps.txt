@@ -10,3 +10,5 @@ bedrock-agentcore
 # Console web stack (docs/judging/design.md: Foundry console; brief T99 names FastAPI). Not observability.
 fastapi
 uvicorn
+# Renders the agent's Markdown answer in the static report (raw HTML off). Not observability.
+markdown-it-py

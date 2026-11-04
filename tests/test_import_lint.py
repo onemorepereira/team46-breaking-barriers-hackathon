@@ -15,6 +15,7 @@ IMPORT_TO_DIST = {
     "botocore": "boto3",
     "strands": "strands-agents",
     "bedrock_agentcore": "bedrock-agentcore",
+    "markdown_it": "markdown-it-py",
     "opentelemetry": "opentelemetry-sdk",  # namespace package (api, sdk, exporters)
 }
 

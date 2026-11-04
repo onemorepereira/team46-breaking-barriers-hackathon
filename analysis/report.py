@@ -4,16 +4,40 @@ from __future__ import annotations
 
 import csv
 import io
+import json
 from dataclasses import dataclass
 from typing import Any
 
 from jinja2 import Environment, PackageLoader, select_autoescape
+from markdown_it import MarkdownIt
 
 from analysis import check, provenance, signals, summary
 from analysis.judging import measure, panel
 from analysis.trace import Run
 
 _env = Environment(loader=PackageLoader("analysis", "templates"), autoescape=select_autoescape(default=True))
+# The agent's answer is Markdown. CommonMark plus tables, with raw HTML off: any HTML in the text is escaped,
+# and markdown-it refuses javascript: and data: links, so the rendered answer can't inject markup.
+_md = MarkdownIt("commonmark", {"html": False}).enable(["table", "strikethrough"])
+
+
+def markdown(text: str | None) -> str:
+    """HTML for the template's `| markdown | safe`: safe because markdown-it escapes all input HTML."""
+    return _md.render(text or "")
+
+
+def claims_blocks(final_output: str) -> list[str]:
+    """The fenced JSON blocks of the answer, pretty-printed (left raw if they don't parse)."""
+    out = []
+    for block in provenance.FENCE_RE.findall(final_output or ""):
+        try:
+            out.append(json.dumps(json.loads(block), indent=1, ensure_ascii=False))
+        except ValueError:
+            out.append(block)
+    return out
+
+
+_env.filters["markdown"] = markdown
 
 
 @dataclass
@@ -47,7 +71,13 @@ def analyze(run: Run) -> RunReport:
 
 
 def render_run(rep: RunReport, generated_at: str) -> str:
-    return _env.get_template("report.html").render(r=rep, m=rep.run.manifest, generated_at=generated_at)
+    return _env.get_template("report.html").render(
+        r=rep,
+        m=rep.run.manifest,
+        generated_at=generated_at,
+        answer=measure.answer_text(rep.run.final_output),
+        claims_json=claims_blocks(rep.run.final_output),
+    )
 
 
 COMPARE_COLUMNS = [
