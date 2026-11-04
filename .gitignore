@@ -23,3 +23,6 @@ archive/
 # CDK
 infra/cdk.out/
 cdk.context.json
+
+# macOS
+.DS_Store
