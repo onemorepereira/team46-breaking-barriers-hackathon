@@ -100,7 +100,9 @@
     <!-- map + scorecard -->
     <div class="row row-cards mb-3">
       <div class="col-lg-8">
-        <div class="card h-100">
+        <!-- not h-100: a long scorecard (e.g. after a review) must not stretch the map card and push the tile
+             strip, and the result panel docked in the map, apart (docs/judge-feedback) -->
+        <div class="card">
           <div class="card-header">
             <h3 class="card-title"><i class="ti ti-satellite me-2"></i>Where the agent looked</h3>
             <div class="card-actions btn-group btn-group-sm" id="basemaps" role="group" aria-label="Basemap"></div>

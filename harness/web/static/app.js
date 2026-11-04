@@ -390,7 +390,9 @@
               el("span", { class: `vote vote-${vote} me-1` }, vote), el("strong", { text: key }), " ",
               crit.changed ? el("span", { class: "badge bg-orange-lt me-1", text: "changed" }) : null, crit.rationale || "",
               ...(crit.refs || []).map((r) => el("button", { type: "button", class: "badge bg-azure-lt ms-1 ref-link border-0", text: r, "aria-label": `Show step ${r}`, onclick: (ev) => { ev.stopPropagation(); scrollToStep(r, ev); } })),
-              crit.response ? el("div", { class: "text-secondary mt-1" }, icon("message-reply", "me-1"), crit.response) : null));
+              // a judge's reply to a review: inline when its vote changed, else a tooltip (keeps the card short)
+              crit.response && crit.changed ? el("div", { class: "text-secondary mt-1" }, icon("message-reply", "me-1"), crit.response) : null,
+              crit.response && !crit.changed ? el("span", { class: "ms-1 text-secondary", title: `Kept its vote: ${crit.response}`, "aria-label": `Kept its vote: ${crit.response}` }, icon("message-reply")) : null));
           }
           const a = (card.anchors || {})[c.id] || {};
           if (Object.keys(a).length) rationale.append(el("div", { class: "small text-secondary mt-2" }, el("strong", { text: "Anchors: " }),

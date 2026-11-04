@@ -36,7 +36,7 @@ Each folder holds a feature's spec (problem and acceptance criteria), its design
 | Tile cache | [spec](tile-cache/spec.md) · [design](tile-cache/design.md) · [launch](tile-cache/launch.md) · [handoff](tile-cache/handoff.md) | Result tiles archived with each run; basemaps and tiles served from a disk cache |
 | Console polish | [spec](console-polish/spec.md) · [design](console-polish/design.md) · [handoff](console-polish/handoff.md) | Dark theme, a docked result panel, timeline-only step jumps, and the area-narrowing fix behind run `fdacf7cf` |
 | Docs pass | [spec](docs-pass/spec.md) · [handoff](docs-pass/handoff.md) | This index, the developer guide and CONTRIBUTING, plus the accuracy audit |
-| Judge feedback | [spec](judge-feedback/spec.md) | Humans review a judgement; judges reconsider; reviews become evaluated guidance |
+| Judge feedback | [spec](judge-feedback/spec.md) · [design](judge-feedback/design.md) · [launch](judge-feedback/launch.md) · [handoff](judge-feedback/handoff.md) | Humans review a judgement; judges reconsider; reviews become evaluated guidance |
 | Presentation | [README](presentation/README.md) · [deck](presentation/deck.html) · [demo script](presentation/demo.md) · [claims](presentation/claims.md) · [Q&A](presentation/qa.md) · [one-pager](presentation/one-pager.md) · [spec](presentation/spec.md) · [handoff](presentation/handoff.md) | The interactive HTML deck, the judging-only live demo, and their sources |
 
 **Open slices** (specs for the team; status in [the factory](factory.md#slices-open-for-the-team-2026-11-04)): [plain-language evals](plain-verdict/spec.md) · [prompt compliance](prompt-compliance/spec.md) · [visual design](visual-design/spec.md)
