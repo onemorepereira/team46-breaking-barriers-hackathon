@@ -151,7 +151,7 @@ Per-run limits (40 steps, 400k input and 200k output tokens, 600 s wall clock, 6
 2. Add a suite file in `suites/` listing prompts × models.
 3. To offer it in the console, add a card to `harness/web/static/examples.json`, and check that its area resolves (`harness.area.area_for_prompt`).
 
-**Swap the rubric.** Write it in the shape of `rubrics/geo-dataset-v1.yaml`: criteria with anchors for 0, 1 and 2, dimensions, failure modes, gates, and a `calibration:` map. Point `judging.rubric` at it. No code changes; only the two measured criteria are named in code. Then run `harness calibrate` on a known-good run.
+**Swap the rubric.** Write it in the shape of `rubrics/geo-dataset-v1.yaml`: criteria with anchors for 0, 1 and 2, dimensions, failure modes, gates, and a `calibration:` map. Point `judging.rubric` at it. For a step-by-step handoff, see [Clay: change the rubric](clay-rubric.md). The three supported measured checks are named in code; new measurements need implementations. Then run `harness calibrate` on a known-good run.
 
 **Change the judges.** Edit `judging.panel` and `judging.reserves` in `harness.yaml`. Keep the panel odd and one judge per `family`. Add the model under `models` with `agent: false`, and give it a sourced price. See the [judging guide](judging/guide.md) for recusal and stand-ins.
 

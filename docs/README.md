@@ -43,7 +43,7 @@ Each folder holds a feature's spec (problem and acceptance criteria), its design
 
 Local scoring fix under review: [value-matching spec](value-matching/spec.md) · [handoff](value-matching/handoff.md).
 
-[Aditya event-sandbox setup and live verification](adi-sandbox.md).
+[Aditya event-sandbox setup and live verification](adi-sandbox.md) · [Clay: change the rubric](clay-rubric.md).
 
 ## Data and configuration in the repo
 
