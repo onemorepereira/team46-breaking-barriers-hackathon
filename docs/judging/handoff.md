@@ -107,6 +107,12 @@ Grok is out, Kimi and Qwen are reserves. A reserve now also **stands in** for a 
 
 **Mistral swapped for Kimi** (2026-11-04, the user's call): the tribunal is Opus, DeepSeek and Kimi, and the reserves are Mistral, Qwen, then Sonnet. Kimi judges and also runs as an agent; on a Kimi run it recuses and Mistral sits, as Mistral does for Opus on Sonnet runs. That leaves the two most lenient judges (Mistral +0.14, Qwen +0.25) on the bench, and seats the judge closest to its peers (Kimi −0.09). **Live:** `harness judge 3d7ac12a` (Sonnet) seated Mistral for Opus, then DeepSeek and Kimi, and scored 100, High (votes 100 / 100 / 93.8), with judging at $0.09. Kimi took 128 s that time, against 15 s on the earlier pass, so Kimi can now be the slow seat.
 
+**Wrong area, step limit** (2026-11-04, run `c251934d`, Kimi, "signs of forest fires in nothern california"): the area lookup took Nominatim's first hit for "Northern California", a 20 m building in San Francisco (OSM way 257960526). Enforcement then fenced every LGND search into it, every search came back empty, and Kimi spent the 40-step limit working around that: no answer, FAILED, $1.21. Two fixes:
+- **Lookup** (`harness/area.py`): a city, region, country or postal code must match a boundary or a named place (`category` boundary/place, `place_rank` ≤ 27), taken from the first 5 hits. Otherwise the run goes ahead with no area check, and the console says why. "Northern California" has no official boundary, so it now gets no check; "California" still resolves to relation 165475.
+- **Enforcement** (`agent/hooks.py`): a narrower area that the agent sends inside the boundary (circle, bbox or ring, every outline point inside) is kept. Only an area that reaches outside, or no area at all, is replaced. The agent prompt says so. This is agent-side, so the AgentCore runtime needs a redeploy to pick it up.
+
+Re-run `821bd88f` on the same prompt: 5 model calls, 7 tool calls, 38/38 claims verified, **87.5 High** (Opus 75, DeepSeek 87.5, Mistral 87.5 for Kimi), agent $0.49, judging $0.13. Tests: `test_a_building_named_after_a_region_is_not_the_region`, `test_a_narrower_area_inside_the_boundary_is_kept`; 129 pass.
+
 **Agreement across runs:** `harness agreement --all` gives Krippendorff's α (ordinal) = **0.502**, 95% CI 0.12–0.67, over 7 judged runs, 56 run × criterion units and 6 distinct judges. That is moderate agreement, close to the paper's α ≈ 0.56 among human experts. Two things widen the CI:
 - most votes are 2, a ceiling effect that depresses α;
 - there are only 7 runs.

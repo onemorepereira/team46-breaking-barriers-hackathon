@@ -54,3 +54,27 @@ def test_left_alone_when_not_applicable():
         before = dict(ev.tool_use)
         h._enforce_area(ev, "t1")
         assert ev.tool_use == before and "t1" not in h._area_requested
+
+
+def test_a_narrower_area_inside_the_boundary_is_kept():
+    """Live run c251934d: a 30 km circle round Paradise, inside the area, was widened back to the area."""
+    square = {"type": "Polygon", "coordinates": [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]]}
+    h = hooks()
+    h.search_area["geometry"] = square
+    inside = [
+        {"lat": 5, "lon": 5, "radius_km": 30},
+        {"west": 2, "east": 3, "south": 2, "north": 3},
+        {"ring": [{"lat": 1, "lon": 1}, {"lat": 1, "lon": 2}, {"lat": 2, "lon": 2}]},
+    ]
+    for area in inside:
+        ev = event("search_place_find", {"scope": {"index": "s2", "area": area}})
+        h._enforce_area(ev, "t1")
+        assert ev.tool_use["input"]["scope"]["area"] == area and "t1" not in h._area_requested
+    for area in [
+        {"lat": 9.9, "lon": 5, "radius_km": 30},
+        {"west": -1, "east": 3, "south": 2, "north": 3},
+        {"lat": 5, "lon": 5},
+    ]:  # fmt: skip  (reaches outside; a shape we can't read)
+        ev = event("search_place_find", {"scope": {"index": "s2", "area": area}})
+        h._enforce_area(ev, "t2")
+        assert ev.tool_use["input"]["scope"]["area"] == RING and h._area_requested["t2"] == area

@@ -45,7 +45,7 @@ def _seed(cache_dir, key, value):
 
 def test_resolve_city_postal_radius_and_point_only(tmp_path):
     poly = {"type": "Polygon", "coordinates": [SQUARE]}
-    q = {"format": "jsonv2", "polygon_geojson": "1", "limit": "1"}
+    q = {"format": "jsonv2", "polygon_geojson": "1", "limit": "5"}
     _seed(
         tmp_path,
         "nominatim:" + json.dumps({"q": "Richardson, Texas, USA", "countrycodes": "us", **q}, sort_keys=True),
@@ -84,7 +84,7 @@ def test_resolve_city_postal_radius_and_point_only(tmp_path):
 
 
 def test_unknown_place_raises(tmp_path):
-    q = {"format": "jsonv2", "polygon_geojson": "1", "limit": "1"}
+    q = {"format": "jsonv2", "polygon_geojson": "1", "limit": "5"}
     _seed(tmp_path, "nominatim:" + json.dumps({"q": "Nowhereville", **q}, sort_keys=True), [])
     with pytest.raises(geo.AreaError):
         geo.resolve_area(geo.AreaSpec("city", "Nowhereville"), tmp_path)
@@ -137,3 +137,25 @@ def test_candidate_queries_strip_admin_words():
     cands = geo._candidates(geo.AreaSpec("region", "Khammouane Province, Laos", None, "la"))
     assert {"q": "Khammouane, Laos", "countrycodes": "la"} in cands
     assert {"state": "Khammouane", "country": "Laos"} in cands
+
+
+def test_a_building_named_after_a_region_is_not_the_region(tmp_path, monkeypatch):
+    """Live run c251934d: "Northern California" resolved to a 20 m building; every search was fenced in it."""
+    building = {"lat": "37.786", "lon": "-122.429", "osm_type": "way", "osm_id": 257960526,
+                "category": "building", "type": "yes", "place_rank": 30, "addresstype": "building",
+                "name": "Japanese American Association of Northern California",
+                "geojson": {"type": "Polygon", "coordinates": [SQUARE]}}  # fmt: skip
+    monkeypatch.setattr(geo, "_get_json", lambda url: [building])
+    monkeypatch.setattr(geo, "_last_nominatim", 0.0)
+    with pytest.raises(geo.AreaError, match="No official boundary found .* building"):
+        geo.resolve_area(geo.AreaSpec("region", "Northern California, USA", None, "us"), tmp_path)
+
+    state = {"lat": "37", "lon": "-120", "osm_type": "relation", "osm_id": 165475, "category": "boundary",
+             "type": "administrative", "place_rank": 8,
+             "geojson": {"type": "Polygon", "coordinates": [SQUARE]}}  # fmt: skip
+    monkeypatch.setattr(geo, "_get_json", lambda url: [building, state])
+    area = geo.resolve_area(geo.AreaSpec("region", "California, USA", None, "us"), tmp_path)
+    assert "relation 165475" in area.source  # the first hit that is a boundary, not the first hit
+
+    ring = geo.resolve_area(geo.AreaSpec("point_radius", "Japantown SF", None, None, 5), tmp_path)
+    assert ring.geometry["type"] == "Polygon"  # a radius may be centred on any feature

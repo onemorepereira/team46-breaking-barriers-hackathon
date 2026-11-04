@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core import geometry
+
 SERVER = "lgnd"
 MCP_URL = "https://geo.lgnd.ai/mcp"
 RESOURCE = MCP_URL  # OAuth resource indicator
@@ -44,6 +46,27 @@ def reads_area(tool: str, args: dict[str, Any]) -> bool:
     if tool not in AREA_TOOLS:
         return False
     return not (tool == "toolbox_classifier_apply" and (args.get("nodes") or args.get("inside")))
+
+
+def area_outline(area: Any) -> list[tuple[float, float]] | None:
+    """Points (lon, lat) on the outline of an LGND scope area: a ring's vertices, 32 points round a circle,
+    or a bbox's corners and edge midpoints. None for a shape we don't read (it is then never trusted)."""
+    if not isinstance(area, dict):
+        return None
+    try:
+        if isinstance(area.get("ring"), list) and area["ring"]:
+            return [(float(p["lon"]), float(p["lat"])) for p in area["ring"]]
+        if {"lat", "lon", "radius_km"} <= area.keys():
+            lat, lon, r = float(area["lat"]), float(area["lon"]), float(area["radius_km"])
+            ring = geometry.circle(lat, lon, r, n=32)["coordinates"][0]
+            return [(x, y) for x, y in ring]
+        if {"west", "east", "south", "north"} <= area.keys():
+            w, e, s, n = (float(area[k]) for k in ("west", "east", "south", "north"))
+            mx, my = (w + e) / 2, (s + n) / 2
+            return [(w, s), (mx, s), (e, s), (e, my), (e, n), (mx, n), (w, n), (w, my)]
+    except (KeyError, TypeError, ValueError):
+        return None
+    return None
 
 
 def dataset_from_args(tool: str, args: dict[str, Any]) -> str | None:

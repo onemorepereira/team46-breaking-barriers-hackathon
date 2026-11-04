@@ -23,6 +23,7 @@ from strands.hooks import (
 
 from agent.archive import ArchiveWriter
 from agent.telemetry import to_attr
+from core import geometry
 from core.spans import SPAN_CAP_BYTES
 from tools.lgnd import descriptors as lgnd
 
@@ -230,7 +231,9 @@ class HarnessHooks(HookProvider):
             self._tool_started[use_id] = time.monotonic()
 
     def _enforce_area(self, event: BeforeToolCallEvent, use_id: str) -> None:
-        """Enforce mode: LGND searches run inside the prompt's official boundary, whatever the model sent."""
+        """Enforce mode: LGND searches run inside the prompt's official boundary. The model may narrow a
+        search to a smaller area inside it (every outline point inside the boundary); anything else, or no
+        area at all, is replaced by the boundary, and the model's request is recorded."""
         area = self.search_area.get("lgnd_area")
         use = event.tool_use
         name = str(use.get("name"))
@@ -240,6 +243,10 @@ class HarnessHooks(HookProvider):
         if not lgnd.reads_area(name, inp):
             return
         scope = dict(inp.get("scope") or {})
+        boundary = self.search_area.get("geometry")
+        outline = lgnd.area_outline(scope.get("area"))
+        if boundary and outline and all(geometry.contains(boundary, lon, lat) for lon, lat in outline):
+            return  # a narrower search inside the boundary: kept as sent
         self._area_requested[use_id] = scope.get("area")
         scope["area"] = area
         inp["scope"] = scope

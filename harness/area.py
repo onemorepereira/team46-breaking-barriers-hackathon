@@ -123,7 +123,7 @@ def _get_json(url: str) -> Any:
 
 def _nominatim(params: dict[str, str], cache_dir: Path) -> list[dict[str, Any]]:
     global _last_nominatim
-    params = {**params, "format": "jsonv2", "polygon_geojson": "1", "limit": "1"}
+    params = {**params, "format": "jsonv2", "polygon_geojson": "1", "limit": "5"}
     key = "nominatim:" + json.dumps(params, sort_keys=True)
     hit = _cached(cache_dir, key)
     if hit is not None:
@@ -185,6 +185,23 @@ def _zcta(zip5: str, cache_dir: Path) -> dict[str, Any] | None:
     return geom
 
 
+# Kinds that name an area with an official boundary. Their match must be a boundary or a named place: a
+# building or shop whose name contains the words is not the area ("Northern California" once resolved to the
+# Japanese American Association of Northern California, a 20 m building in San Francisco).
+BOUNDED_KINDS = ("city", "region", "country", "postal_code")
+AREA_CATEGORIES = ("boundary", "place")
+MAX_PLACE_RANK = 27  # Nominatim place_rank: 4 country … 16 city … 25 locality; 28+ is a street or building
+
+
+def _is_area(hit: dict[str, Any], kind: str) -> bool:
+    if kind not in BOUNDED_KINDS:
+        return True  # a radius center or an address can be any feature
+    if hit.get("category") is not None and hit["category"] not in AREA_CATEGORIES:
+        return False
+    rank = hit.get("place_rank")
+    return not (isinstance(rank, int) and rank > MAX_PLACE_RANK)
+
+
 def _polygonal(geojson: Any) -> dict[str, Any] | None:
     if isinstance(geojson, dict) and geojson.get("type") in ("Polygon", "MultiPolygon"):
         return geojson
@@ -201,14 +218,23 @@ def resolve_area(spec: AreaSpec, cache_dir: Path) -> Area | None:
             geom = _zcta(zip5, cache_dir)
             if geom:
                 return Area(label, "postal_code", "US Census TIGERweb, 2020 ZCTA", geom, None)
-    hits: list[dict[str, Any]] = []
+    hit: dict[str, Any] | None = None
+    rejected: dict[str, Any] | None = None
     for params in _candidates(spec):
         hits = _nominatim(params, cache_dir)
-        if hits:
+        hit = next((h for h in hits if _is_area(h, spec.kind)), None)
+        if hit:
             break
-    if not hits:
+        rejected = rejected or (hits[0] if hits else None)
+    if hit is None:
+        if rejected:
+            what = str(rejected.get("addresstype") or rejected.get("category") or "feature")
+            raise AreaError(
+                f"No official boundary found for {label!r}; the closest match is "
+                f"{'an' if what[:1] in 'aeiou' else 'a'} {what}, "
+                f"{rejected.get('name') or rejected.get('display_name')!r}, so there is no area check."
+            )
         raise AreaError(f"No location found for {label!r}.")
-    hit = hits[0]
     center = (float(hit["lat"]), float(hit["lon"]))
     source = "OpenStreetMap Nominatim" + (f", {hit['osm_type']} {hit['osm_id']}" if hit.get("osm_id") else "")
     if spec.kind == "point_radius" and spec.radius_km:
