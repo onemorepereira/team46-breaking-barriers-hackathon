@@ -46,6 +46,7 @@ a{color:var(--accent)}
 <header>
   <h1>Harness · live run</h1>
   <textarea id="prompt">Find the data centers within 50 km of downtown Dallas, TX. For each data center you can confirm, give its location exactly as the tool returned it.</textarea>
+  <input id="city" aria-label="City limits" placeholder="City limits, e.g. Richardson, TX" value="Richardson, TX" style="font:inherit;padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);width:210px">
   <select id="model" aria-label="Model"></select>
   <button id="go">Run agent</button>
   <span id="status">Ready. The agent runs locally with RODA and LGND Geo.</span>
@@ -65,19 +66,20 @@ a{color:var(--accent)}
   <section class="wide" id="result" hidden>
     <h2>Result</h2>
     <div id="summary"></div>
-    <table id="claims"><thead><tr><th>Claim</th><th>Value</th><th>Ref</th><th>Status</th></tr></thead><tbody></tbody></table>
+    <table id="claims"><thead><tr><th>Claim</th><th>Value</th><th>Ref</th><th>Status</th><th>In city?</th></tr></thead><tbody></tbody></table>
   </section>
 </main>
 <script>
 const $ = (id) => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-let map, chipLayer, areaLayer, chips = {}, verdicts = {}, showUnscoped = false;
+let map, chipLayer, areaLayer, cityLayer, cityName = "", chips = {}, verdicts = {}, showUnscoped = false;
 
 function initMap() {
   map = L.map("map").setView([32.7767, -96.797], 9);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap contributors" }).addTo(map);
   chipLayer = L.featureGroup().addTo(map);
   areaLayer = L.featureGroup().addTo(map);
+  cityLayer = L.featureGroup().addTo(map);
 }
 function addArea(a, ref) {
   if (a.radius_km) L.circle([a.lat, a.lon], { radius: a.radius_km * 1000, color: "#7a7a7a", weight: 1, dashArray: "4 4", fill: false })
@@ -112,6 +114,10 @@ function addChip(c, unscoped, ref, where) {
   const cap = el("div", "cap");
   cap.append(el("div", null, c.node), el("div", "muted", `${Number(c.lat).toFixed(4)}, ${Number(c.lon).toFixed(4)} · ${c.observed || ""}`),
     el("div", unscoped ? "warn" : "muted", `${ref}: ${where || ""}`));
+  if (c.in_city !== undefined) {
+    cap.append(el("div", c.in_city ? "ok" : "bad", c.in_city ? `inside ${cityName} city limits` : `outside ${cityName} city limits`));
+    if (!c.in_city) img.style.opacity = "0.45";
+  }
   const v = el("div", "reason"); cap.append(v);
   card.append(img, cap);
   card.onclick = () => map.fitBounds(rect.getBounds(), { maxZoom: 17 });
@@ -136,7 +142,13 @@ function card(head, body) {
 function hd(...parts) { const h = el("div", "hd"); h.append(...parts); return h; }
 
 function onEvent(ev) {
-  if (ev.type === "start") {
+  if (ev.type === "boundary") {
+    cityName = ev.city;
+    const layer = L.geoJSON(ev.feature, { style: { color: "#137333", weight: 3, fill: true, fillOpacity: 0.05 } }).addTo(cityLayer);
+    layer.bindTooltip(`${ev.city} city limits (US Census)`);
+    map.fitBounds(layer.getBounds().pad(0.3));
+    card(hd(el("b", null, `City limits: ${ev.city}`), el("span", "tag", "US Census TIGERweb")));
+  } else if (ev.type === "start") {
     card(hd(el("b", null, "Run started"), el("span", "tag", Object.entries(ev.servers).map(([k, n]) => `${k}: ${n} tools`).join(" · "))));
   } else if (ev.type === "model") {
     const body = [];
@@ -173,20 +185,29 @@ function finish(ev) {
   if (ev.report) { const a = el("a", null, " Open full report"); a.href = ev.report; a.target = "_blank"; line.append(" · ", a); }
   s.append(line);
   if (ev.block_missing) s.append(el("p", "warn", "The final answer had no claims block."));
+  if (ev.city_check) {
+    const cc = ev.city_check, p = el("p");
+    p.append(el("b", null, `${cc.city} city limits check: `),
+      el("span", cc.chips_inside === cc.chips_total ? "ok" : "warn", `${cc.chips_inside} of ${cc.chips_total} chips inside`), " · ",
+      el("span", cc.claims_inside === cc.claims_located ? "ok" : "warn", `${cc.claims_inside} of ${cc.claims_located} located claims inside`),
+      el("span", "muted", ` (boundary: ${cc.source}, GEOID ${cc.geoid})`));
+    s.append(p);
+  }
   const tb = $("claims").querySelector("tbody"); tb.textContent = "";
   (ev.claims || []).forEach(c => {
     const tr = el("tr");
     tr.append(el("td", null, c.claim), el("td", null, c.value), el("td", null, c.ref || "—"),
-      el("td", c.status === "matched" ? "ok" : c.status === "mismatch" ? "warn" : "bad", c.status));
+      el("td", c.status === "matched" ? "ok" : c.status === "mismatch" ? "warn" : "bad", c.status),
+      el("td", c.in_city === undefined ? "muted" : c.in_city ? "ok" : "bad", c.in_city === undefined ? "—" : c.in_city ? "inside" : "outside"));
     tb.append(tr);
   });
 }
 async function run() {
   $("go").disabled = true; $("feed").textContent = ""; $("tiles").textContent = ""; $("result").hidden = true;
-  chipLayer.clearLayers(); areaLayer.clearLayers(); chips = {}; verdicts = {}; showUnscoped = false; $("unscopedNote").hidden = true;
+  chipLayer.clearLayers(); areaLayer.clearLayers(); cityLayer.clearLayers(); cityName = ""; chips = {}; verdicts = {}; showUnscoped = false; $("unscopedNote").hidden = true;
   $("status").textContent = "Starting…";
   const resp = await fetch("/api/run", { method: "POST", headers: { "content-type": "application/json" },
-    body: JSON.stringify({ prompt: $("prompt").value, model: $("model").value }) });
+    body: JSON.stringify({ prompt: $("prompt").value, model: $("model").value, city: $("city").value }) });
   const data = await resp.json();
   if (!resp.ok) { $("status").textContent = data.error || "Could not start the run."; $("go").disabled = false; return; }
   $("status").textContent = `Running ${data.run_id}…`;

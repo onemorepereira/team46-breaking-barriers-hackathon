@@ -20,18 +20,32 @@ from analysis import report
 from analysis.store import open_store
 from analysis.trace import Run
 from harness import config as config_mod
-from harness import invoke
+from harness import geo, invoke
 from harness.manifest import Index
 
 PAGE = Path(__file__).with_name("ui.html")
 
 
 class RunState:
-    def __init__(self, run_id: str, live: Path) -> None:
+    def __init__(self, run_id: str, live: Path, city: dict[str, Any] | None = None) -> None:
         self.run_id = run_id
         self.live = live
         self.done = False
         self.final: dict[str, Any] | None = None
+        self.city = city  # {"label", "feature"} when a city-limits check was requested
+        self.chip_checks: dict[str, bool] = {}
+
+    def annotate(self, ev: dict[str, Any]) -> None:
+        """Mark each chip inside/outside the official city limits (ground truth, not the agent's view)."""
+        if not self.city:
+            return
+        geom = self.city["feature"]["geometry"]
+        for c in ev.get("chips", []):
+            try:
+                c["in_city"] = geo.contains(geom, float(c["lon"]), float(c["lat"]))
+            except (TypeError, ValueError, KeyError):
+                continue
+            self.chip_checks[str(c["node"])] = bool(c["in_city"])
 
 
 RUNS: dict[str, RunState] = {}
@@ -127,7 +141,12 @@ def span_event(span: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str) -> str:
+def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str, city: str = "") -> str:
+    city_state = None
+    if city.strip():
+        name, st = geo.parse_city(city)
+        feature = geo.fetch_boundary(name, st, Path(cfg["out_dir"]) / "boundaries")
+        city_state = {"label": f"{name}, {st}", "feature": feature}
     out = Path(cfg["out_dir"]) / "ui"
     out.mkdir(parents=True, exist_ok=True)
     prompt_file = out / f"prompt-{uuid.uuid4().hex[:8]}.md"
@@ -136,7 +155,7 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str) -> 
     live = Path(cfg["out_dir"]) / plan.run_id / "live.jsonl"
     live.parent.mkdir(parents=True, exist_ok=True)
     live.touch()
-    state = RunState(plan.run_id, live)
+    state = RunState(plan.run_id, live, city_state)
     RUNS[plan.run_id] = state
 
     def work() -> None:
@@ -148,14 +167,38 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str) -> 
             run = Run.load(open_store(plan.archive_uri), plan.run_id)
             write_report(cfg, run)
             rep = report.analyze(run)
+            claims: list[dict[str, Any]] = [
+                {"claim": c.claim, "value": c.value, "ref": c.ref, "status": c.status}
+                for c in rep.prov.claims
+            ]
+            city_check = None
+            if state.city:
+                geom = state.city["feature"]["geometry"]
+                for c in claims:
+                    pair = geo.coordinate_pair(c["value"])
+                    if pair:
+                        c["in_city"] = geo.contains(geom, pair[1], pair[0])
+                located = [c for c in claims if "in_city" in c]
+                city_check = {
+                    "city": state.city["label"],
+                    "geoid": state.city["feature"].get("properties", {}).get("GEOID"),
+                    "source": "US Census TIGERweb, Incorporated Places",
+                    "chips_inside": sum(state.chip_checks.values()),
+                    "chips_total": len(state.chip_checks),
+                    "claims_inside": sum(1 for c in located if c["in_city"]),
+                    "claims_located": len(located),
+                    "chips": state.chip_checks,
+                    "claims": located,
+                }
+                (Path(cfg["out_dir"]) / plan.run_id / "city_check.json").write_text(
+                    json.dumps(city_check, indent=1), encoding="utf-8"
+                )
             state.final = {
                 "type": "done",
                 "status": outcome.status,
                 "error": outcome.error,
-                "claims": [
-                    {"claim": c.claim, "value": c.value, "ref": c.ref, "status": c.status}
-                    for c in rep.prov.claims
-                ],
+                "claims": claims,
+                "city_check": city_check,
                 "block_missing": rep.prov.claims_block_missing,
                 "signals": rep.sig.as_dict(),
                 "missing_fields": len(rep.missing),
@@ -219,9 +262,12 @@ def make_handler(cfg: config_mod.Config, index: Index) -> type[BaseHTTPRequestHa
                 if not prompt:
                     self._json(400, {"error": "Type a prompt first."})
                     return
-                self._json(200, {"run_id": start_run(cfg, index, prompt, model)})
-            except invoke.RunRefused as e:
+                city = str(body.get("city", ""))
+                self._json(200, {"run_id": start_run(cfg, index, prompt, model, city)})
+            except (invoke.RunRefused, geo.BoundaryError) as e:
                 self._json(400, {"error": str(e)})
+            except OSError as e:
+                self._json(502, {"error": f"Couldn't fetch the city boundary from Census TIGERweb: {e}"})
 
         def _events(self, run_id: str) -> None:
             state = RUNS.get(run_id)
@@ -234,6 +280,13 @@ def make_handler(cfg: config_mod.Config, index: Index) -> type[BaseHTTPRequestHa
             self.end_headers()
             pos = 0
             try:
+                if state.city:
+                    boundary = {
+                        "type": "boundary",
+                        "city": state.city["label"],
+                        "feature": state.city["feature"],
+                    }
+                    self.wfile.write(f"data: {json.dumps(boundary)}\n\n".encode())
                 while True:
                     with state.live.open("r", encoding="utf-8") as f:
                         f.seek(pos)
@@ -245,6 +298,7 @@ def make_handler(cfg: config_mod.Config, index: Index) -> type[BaseHTTPRequestHa
                         except json.JSONDecodeError:
                             continue
                         if ev:
+                            state.annotate(ev)
                             self.wfile.write(f"data: {json.dumps(ev)}\n\n".encode())
                     self.wfile.flush()
                     if state.done and not chunk:
