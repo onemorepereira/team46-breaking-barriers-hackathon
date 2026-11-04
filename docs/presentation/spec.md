@@ -1,6 +1,6 @@
 # Slice: Presentation and Demo Materials
 
-**Status:** Open · **Owner:** unassigned · **Size:** about a day · **Branch:** `slice/presentation` from `main` · **Deck freeze:** 2 hours before the presentation slot
+**Status:** In progress · **Owner:** Miguel · **Size:** about a day · **Branch:** `slice/presentation` from `main` · **Deck freeze:** 2 hours before the presentation slot
 **Read first:** the [README](../../README.md) (mission, what we built, verified results, and "How we win", which lists the four judging criteria), [the factory](../factory.md) (every effort and its status), the [factory rules for slices](../factory.md#how-to-take-a-slice).
 
 ## Problem
@@ -24,7 +24,13 @@ Tomorrow we present to the judges and to Clay and ADB. The work is spread across
 Runtime data is never committed, so the demo runs exist only on Miguel's machine and in his S3 bucket. **The demo runs from Miguel's laptop.** The slice owner writes the script against the run IDs above, using screenshots Miguel shares (or runs of their own made in their sandbox), and rehearses on Miguel's laptop.
 
 ## Acceptance criteria
-- [ ] **AC1 A deck of 12 slides or fewer**, in any tool (Google Slides, Keynote, Canva, or Markdown slides), with a PDF export at `docs/presentation/deck.pdf` and the source or a share link in `docs/presentation/README.md`. The arc:
+- [ ] **AC1 An interactive HTML deck of about 8 slides** (decided 2026-11-04), `docs/presentation/deck.html`:
+  - **one self-contained file:** no framework or CDN, so it opens from disk; arrow keys or a click advance it;
+  - **a presenter view:** `N` shows notes and a slide timer;
+  - **a print style:** prints to `docs/presentation/deck.pdf` for the judges and as a backup;
+  - **two interactive moments only:** a click-through "how the score works" (code checks, then the three judges, then median and confidence), and a "Judge this run live" link into the console for the demo.
+
+  The arc:
   1. the problem: can ADB trust a dataset an AI agent built?;
   2. what we built (one architecture slide naming Bedrock, AgentCore, Strands, MCP, OpenTelemetry, S3, the judge tribunal and the console);
   3. the live demo;
@@ -33,7 +39,15 @@ Runtime data is never committed, so the demo runs exist only on Miguel's machine
 
   Each of the four judging criteria is answered visibly on at least one slide.
 - [ ] **AC2 Every claim is sourced.** `docs/presentation/claims.md` lists each number or factual claim in the deck with the repo file and line it comes from (e.g. "α = 0.50, docs/judging/handoff.md"). Anything without a source is cut or marked as our opinion. A teammate checks the list against the files.
-- [ ] **AC3 A demo script that can't fail.** `docs/presentation/demo.md` is a timed 5-minute walkthrough with exact clicks, prompts (from the example cards) and what the audience should see at each step. It includes:
+- [ ] **AC3 A demo script that can't fail.** The demo **judges an already-built run; it doesn't build one** (decided 2026-11-04). `docs/presentation/demo.md` is a timed walkthrough of about 2 minutes:
+  1. open the Texas parks run (`a5670c6b`), whose judges disagreed (43.8, 81.2, 93.8);
+  2. click **Judge again**, and point out the recusal ("Mistral seated for Kimi");
+  3. while they think, show the code-measured checks (15/15 claims verified, 8/8 inside Texas, on the map);
+  4. the verdicts land: score and confidence;
+  5. open one criterion: each judge's vote, reason and step reference, then click a reference to jump to the evidence;
+  6. contrast it with the FAILED Laos run (`b2bdb4d6`).
+
+  Say on stage that the re-judged score moves a little from 85.4 each time, and that the confidence label exists for exactly that. Calibration is shown as a static table on a slide, not run live. The script also includes:
   - **a pre-flight checklist**: fresh AWS credentials sourced, `harness ui` running, LGND login valid, a test run done within the hour, the browser zoomed for the projector;
   - **a fallback path**: if the network or a model fails, open the local-archive runs (IDs above) and replay them offline. The S3 run needs AWS credentials;
   - **a timing**: rehearse it at least once, end to end, and record how long it took.

@@ -25,7 +25,7 @@ Four self-contained slices, one per person. Each spec says what exists, the test
 | **Evals in plain language** | A plain summary on every run ("what was found, how much to trust it, what to check by hand"), built from the archive with no new model calls | about half a day | Open | — | [spec](plain-verdict/spec.md) |
 | **Prompt compliance** | Check each result against **every** condition in the prompt (e.g. "within 10 miles of a protected area, inside ZIP 75082") and show evidence or its absence, per claim | about a day (splits in two) | Open | — | [spec](prompt-compliance/spec.md) |
 | **Visual design** | Make the console read as a designed product on a projector: type, spacing, hierarchy, a matching report; visual only, behavior unchanged | about a day | Open | — | [spec](visual-design/spec.md) |
-| **Presentation** | A deck of 12 slides or fewer, a 5-minute demo script that can't fail, a one-pager for ADB, and Q&A prep; every number sourced to the repo | about a day | Open | — | [spec](presentation/spec.md) |
+| **Presentation** | An interactive HTML deck (8 slides), a live demo of **judging** an already-built run, a one-pager for ADB, and Q&A prep; every number sourced to the repo | about a day | In progress | Miguel | [spec](presentation/spec.md) |
 
 **Before anyone starts:** `design/eval-harness` must be merged to `main` (Miguel). Until then, `main` holds only the README and the briefs.
 
