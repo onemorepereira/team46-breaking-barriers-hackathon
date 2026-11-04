@@ -48,6 +48,7 @@ export default function EvidenceMap({
     map = useRef<any>(null),
     markers = useRef<any[]>([]),
     fit = useRef<() => void>(() => {}),
+    lastInspection = useRef({ open: false, runId: "" }),
     onSelectRef = useRef(onSelect),
     tileFocus = useRef<HTMLButtonElement>(null);
   onSelectRef.current = onSelect;
@@ -354,11 +355,15 @@ export default function EvidenceMap({
         else if (ring?.length) center = ring[0];
       }
       if (center) m.easeTo({ center, padding, duration });
-    } else
+    } else if (
+      lastInspection.current.open &&
+      lastInspection.current.runId === view?.run.id
+    )
       m.easeTo({
         padding: { top: 40, left: 40, right: 40, bottom: 50 },
         duration,
       });
+    lastInspection.current = { open: inspecting, runId: view?.run.id || "" };
   }, [selected, selectedChip, ready, view]);
   useEffect(() => {
     if (
