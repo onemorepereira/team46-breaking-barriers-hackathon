@@ -100,10 +100,16 @@ def main() -> int:
                     config["lgnd_secret_id"] = arn
                     p.write_text(yaml.safe_dump(config, sort_keys=False))
                     result["ok"] = True
-                    body = "<h1>LGND connected</h1><p>Login saved in your event sandbox. You can close this tab.</p>"
+                    body = (
+                        "<h1>LGND connected</h1>"
+                        "<p>Login saved in your event sandbox. You can close this tab.</p>"
+                    )
                 except Exception as e:
                     print("LGND login failed:", type(e).__name__, flush=True)
-                    body = "<h1>LGND login failed</h1><p>Check the workshop terminal. No credentials were displayed.</p>"
+                    body = (
+                        "<h1>LGND login failed</h1>"
+                        "<p>Check the workshop terminal. No credentials were displayed.</p>"
+                    )
                 finished.set()
             else:
                 self.send_error(404)
