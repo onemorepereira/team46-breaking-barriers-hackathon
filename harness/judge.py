@@ -1,4 +1,4 @@
-"""The judge panel (spec AC4, AC8): five cross-family judges read one dossier and score it against the rubric.
+"""The judge panel (spec AC4, AC8): cross-family judges read one dossier and score it against the rubric.
 
 Pure parts (dossier, aggregation, agreement) live in analysis.judging; this module only seats the panel, calls
 Bedrock and parses replies. The result is archived as runs/<id>/judgement.json, so replay never calls a model.
@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from analysis.judging import dossier as dossier_mod
+from analysis.judging import feedback as fb
 from analysis.judging import measure, panel
 from analysis.judging.rubric import Rubric
 from analysis.judging.rubric import load as load_rubric
@@ -106,10 +107,16 @@ def spare_seats(cfg: Config, agent_key: str | None, panel_seats: list[Seat],
     return out
 
 
-def system_prompt(r: Rubric) -> str:
+def system_prompt(r: Rubric, guidance: dict[str, Any] | None = None) -> str:
+    """The judge's system prompt. With guidance, each criterion's lessons follow its anchors (AC12); without,
+    the prompt is byte-identical to the one before human feedback existed."""
+    lessons = (guidance or {}).get("lessons") or []
     blocks = []
     for c in r.judged:
         anchors = "\n".join(f"  {s}: {c.anchors[s]}" for s in r.scale)
+        extra = fb.lessons_for(lessons, c.id)
+        if extra:
+            anchors = "\n".join([anchors, fb.GUIDANCE_HEAD, *extra])
         blocks.append(f"- {c.id} ({c.dimension}): {c.question}\n{anchors}")
     modes = "\n".join(f"- {k}: {v}" for k, v in r.failure_modes.items())
     return prompts.load(
@@ -199,9 +206,13 @@ def _cost(cfg: Config, key: str, usage: dict[str, int]) -> float | None:
     )
 
 
+Parse = Callable[[str, Rubric, set[str]], dict[str, Any]]
+
+
 def judge_once(cfg: Config, client: Any, seat: Seat, system: str, dossier_text: str, r: Rubric,
-               known_refs: set[str]) -> dict[str, Any]:  # fmt: skip
+               known_refs: set[str], parse: Parse | None = None) -> dict[str, Any]:  # fmt: skip
     """One judge, one pass: call, validate, retry once with the parse error, record usage and cost."""
+    parse = parse or parse_reply
     t0 = time.monotonic()
     usage = {"input_tokens": 0, "output_tokens": 0}
     messages: list[dict[str, Any]] = [{"role": "user", "content": [{"text": dossier_text}]}]
@@ -211,7 +222,7 @@ def judge_once(cfg: Config, client: Any, seat: Seat, system: str, dossier_text: 
             text, u = _converse(client, seat.model_id, system, messages)
             usage = {k: usage[k] + u[k] for k in usage}
             try:
-                out.update(parse_reply(text, r, known_refs), status="ok", attempts=attempt + 1)
+                out.update(parse(text, r, known_refs), status="ok", attempts=attempt + 1)
                 break
             except JudgeError as e:
                 out.update(error=f"parse: {e}", raw_reply=text[-2000:])
@@ -231,10 +242,11 @@ def judge_once(cfg: Config, client: Any, seat: Seat, system: str, dossier_text: 
 
 def run_panel(cfg: Config, r: Rubric, d: dossier_mod.Dossier, panel_seats: list[Seat], passes: int = 1,
               client: Any = None, on_event: Event | None = None,
-              spares: list[Seat] | None = None) -> list[dict[str, Any]]:  # fmt: skip
+              spares: list[Seat] | None = None,
+              guidance: dict[str, Any] | None = None) -> list[dict[str, Any]]:  # fmt: skip
     """Each pass: the seated judges in parallel, then a spare for each judge that failed (in order)."""
     client = client or _bedrock(cfg)
-    system, text = system_prompt(r), dossier_mod.render(d)
+    system, text = system_prompt(r, guidance), dossier_mod.render(d)
     results: list[dict[str, Any]] = []
     for n in range(passes):
         with ThreadPoolExecutor(max_workers=len(panel_seats)) as pool:
@@ -277,6 +289,7 @@ def judge_run(cfg: Config, run: Run, store: Store, passes: int | None = None, cl
     cause = measure.infrastructure_failure(run)
     if cause:
         record = not_scored(run, cause)
+        keep_previous(store, run.run_id)
         store.write_text(f"runs/{run.run_id}/judgement.json", json.dumps(record, indent=1))
         if on_event:
             on_event({"type": "not_scored", "cause": cause})
@@ -285,14 +298,50 @@ def judge_run(cfg: Config, run: Run, store: Store, passes: int | None = None, cl
     r = load_rubric(j["rubric"])
     passes = int(passes or j.get("passes") or 1)
     d = dossier_mod.build(run)
+    guidance, guidance_error = active_guidance_or_error(cfg, r)
+    if guidance_error and on_event:
+        on_event({"type": "guidance_unavailable", "error": guidance_error})
     panel_seats = seats(cfg, run.manifest.get("model_key"), run.manifest.get("model_id"))
     if on_event:
-        on_event({"type": "judging", "seats": [asdict(s) for s in panel_seats], "passes": passes})
+        on_event({"type": "judging", "seats": [asdict(s) for s in panel_seats], "passes": passes,
+                  "guidance": guidance and guidance["version"]})  # fmt: skip
     spares = spare_seats(cfg, run.manifest.get("model_key"), panel_seats, run.manifest.get("model_id"))
-    pass_results = run_panel(cfg, r, d, panel_seats, passes, client, on_event, spares)
-    judgement = assemble(r, run, pass_results, panel_seats)
+    pass_results = run_panel(cfg, r, d, panel_seats, passes, client, on_event, spares, guidance)
+    judgement = assemble(r, run, pass_results, panel_seats, guidance)
+    if guidance_error:
+        judgement["guidance_error"] = guidance_error
+    keep_previous(store, run.run_id)
     store.write_text(f"runs/{run.run_id}/judgement.json", json.dumps(judgement, indent=1))
     return judgement
+
+
+def keep_previous(store: Store, run_id: str) -> None:
+    """Copy the current judgement to runs/<id>/judgements/<judged_at>.json before it's replaced (AC6)."""
+    text = store.read_text(f"runs/{run_id}/judgement.json")
+    if not text:
+        return
+    try:
+        at = json.loads(text).get("judged_at") or "unknown"
+    except json.JSONDecodeError:
+        at = "unreadable"
+    store.write_text(f"runs/{run_id}/judgements/{at}.json", text)
+
+
+def active_guidance(cfg: Config, r: Rubric) -> dict[str, Any] | None:
+    """The deployment's active guidance for this rubric, or None (off, none approved, or unreachable)."""
+    return active_guidance_or_error(cfg, r)[0]
+
+
+def active_guidance_or_error(cfg: Config, r: Rubric) -> tuple[dict[str, Any] | None, str | None]:
+    if not (cfg.get("judging") or {}).get("guidance", True):
+        return None, None
+    from harness import feedback  # the deployment store lives there; imported late to avoid a cycle
+
+    try:
+        return feedback.active_version(cfg, r), None
+    except Exception as e:  # noqa: BLE001 - judge without guidance, loudly (design: Failure modes)
+        log.warning("guidance unavailable: %s", e)
+        return None, f"{type(e).__name__}: {str(e)[:200]}"
 
 
 def not_scored(run: Run, cause: str) -> dict[str, Any]:
@@ -307,7 +356,11 @@ def not_scored(run: Run, cause: str) -> dict[str, Any]:
 
 
 def assemble(
-    r: Rubric, run: Run, pass_results: list[dict[str, Any]], panel_seats: list[Seat]
+    r: Rubric,
+    run: Run,
+    pass_results: list[dict[str, Any]],
+    panel_seats: list[Seat],
+    guidance: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     m = measure.measure(run)
     result = panel.aggregate(r, pass_results, m)
@@ -322,7 +375,15 @@ def assemble(
         "panel": result.as_dict(),
         "value_matcher_version": VALUE_MATCHER_VERSION,
         "judging_cost_usd": round(cost, 6),
+        "guidance": guidance_ref(guidance),
     }
+
+
+def guidance_ref(guidance: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not guidance:
+        return None
+    return {"version": guidance["version"], "sha256": fb.guidance_sha(guidance),
+            "snapshot": guidance.get("lessons") or []}  # fmt: skip
 
 
 rescore = panel.rescore  # replay: re-aggregate an archived judgement, no model calls

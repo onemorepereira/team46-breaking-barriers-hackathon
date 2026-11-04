@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from analysis import provenance, signals, summary, timeline
-from analysis.judging import measure, panel, rubric
+from analysis.judging import measure, rubric
 from analysis.judging.explain import explain
 from analysis.trace import Run
 from core import geometry
@@ -61,15 +61,14 @@ def map_layers(m: measure.Measured, run_id: str | None = None, serve_tiles: bool
 
 
 def scorecard(
-    run: Run, result: panel.PanelResult | None = None, rubric_path: str | None = None
+    run: Run, deploy_store: Any = None, reconsider: bool = True, rubric_path: str | None = None
 ) -> dict[str, Any] | None:
     jd = run.judgement
     if not jd:
         return None
-    result = result or judge.rescore(jd, run)
-    data = result.as_dict()
+    result = judge.rescore(jd, run).as_dict()
     names = rubric.display_names(rubric.parse(jd["rubric"]["snapshot"]), rubric_path)
-    for c in data["criteria"]:
+    for c in result["criteria"]:
         c["plain"] = names[c["id"]]
     anchors = {c["id"]: c.get("anchors", {}) for c in jd["rubric"]["snapshot"].get("criteria", [])}
     top = max(jd["rubric"]["snapshot"].get("scale") or [2])
@@ -96,13 +95,15 @@ def scorecard(
                         "score": s,
                         "rationale": (j.get("rationales") or {}).get(cid, ""),
                         "refs": (j.get("refs") or {}).get(cid, []),
+                        "changed": (j.get("changed") or {}).get(cid),
+                        "response": (j.get("responses") or {}).get(cid),
                     }
                     for cid, s in scores.items()
                 ],
             }
         )
     return {
-        **data,
+        **result,
         "judges": judges,
         "anchors": anchors,
         "rubric": {k: jd["rubric"][k] for k in ("id", "version")},
@@ -110,16 +111,64 @@ def scorecard(
         "judged_at": jd.get("judged_at"),
         "judging_cost_usd": jd.get("judging_cost_usd"),
         "seats": jd.get("seats", []),
+        **review_layer(run, jd, result, deploy_store, reconsider),
     }
 
 
-def run_view(run: Run, serve_tiles: bool = True, rubric_path: str | None = None) -> dict[str, Any]:
+def review_layer(
+    run: Run, jd: dict[str, Any], result: dict[str, Any], deploy_store: Any, reconsider: bool = True
+) -> dict[str, Any]:
+    """Human feedback on the scorecard (docs/judge-feedback AC4): the revision, each criterion's original
+    median and human score, the run's reviews, and the guidance the judgement used."""
+    from analysis.judging import feedback as fb
+    from analysis.judging.rubric import parse
+    from harness import feedback
+
+    out: dict[str, Any] = {
+        "revision": jd.get("revision"),
+        "guidance": None,
+        "guidance_error": jd.get("guidance_error"),
+        "reviews": [],
+        "reconsider_enabled": reconsider,
+    }
+    g = jd.get("guidance")
+    if g:
+        out["guidance"] = {"version": g.get("version"), "lessons": g.get("snapshot") or []}
+    r = parse(jd["rubric"]["snapshot"])
+    original: dict[str, float] = {}
+    if jd.get("revision"):
+        prev = feedback.previous_judgement(run.store, run.run_id, str(jd["revision"].get("previous") or ""))
+        original = fb.panel_medians(prev, r) if prev else {}
+    reviews: list[dict[str, Any]] = []
+    if deploy_store is not None:
+        try:
+            reviews = feedback.run_reviews(deploy_store, run)
+        except Exception:  # noqa: BLE001 - the scorecard stands without reviews
+            reviews = []
+    human = fb.human_scores(reviews).get(run.run_id, {}) if reviews else {}
+    for c in result.get("criteria", []):
+        if c.get("kind") != "judged":
+            continue
+        c["original_median"] = original.get(c["id"]) if jd.get("revision") else None
+        h = human.get(c["id"])
+        c["human"] = h["human"] if h else None
+        c["human_reviewers"] = h["reviewers"] if h else []
+    out["reviews"] = reviews
+    return out
+
+
+def run_view(
+    run: Run,
+    serve_tiles: bool = True,
+    deploy_store: Any = None,
+    reconsider: bool = True,
+    rubric_path: str | None = None,
+) -> dict[str, Any]:
     prov = provenance.grade(run)
     m = measure.measure(run, prov)
     sig = signals.compute(run)
     summ = summary.build(run, prov)
-    result = judge.rescore(run.judgement, run) if run.judgement else None
-    card = scorecard(run, result, rubric_path)
+    card = scorecard(run, deploy_store, reconsider, rubric_path)
     entries = [e.as_dict() for e in timeline.entries(run.spans)]
     by_ref: dict[str, list[float]] = {}
     for x in m.located:
@@ -191,7 +240,7 @@ def run_view(run: Run, serve_tiles: bool = True, rubric_path: str | None = None)
         "timeline": entries,
         "map": map_layers(m, run.run_id, serve_tiles),
         "scorecard": card,
-        "explanation": explain(run, result, measured=m),
+        "explanation": explain(run, judge.rescore(run.judgement, run) if run.judgement else None, measured=m),
         "source_check_note": provenance.matcher_update_note(run.judgement),
         "claims": claims,
         "final_answer": measure.answer_text(run.final_output),

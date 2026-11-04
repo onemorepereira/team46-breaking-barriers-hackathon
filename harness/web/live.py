@@ -139,14 +139,14 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str,
                     judge_into(cfg, state, run, store)
                 run = Run.load(store, plan.run_id)
             write_report(cfg, run, archive_tiles=False)
-            state.final = {
-                "type": "done",
-                "status": outcome.status,
-                "error": outcome.error,
-                "view": run_view(
-                    run, serve_tiles=state.serve_tiles, rubric_path=(cfg.get("judging") or {}).get("rubric")
-                ),
-            }
+            view = run_view(
+                run,
+                serve_tiles=state.serve_tiles,
+                deploy_store=_deploy_or_none(cfg),
+                reconsider=_reconsider(cfg),
+                rubric_path=(cfg.get("judging") or {}).get("rubric"),
+            )
+            state.final = {"type": "done", "status": outcome.status, "error": outcome.error, "view": view}
             finished = run
         except Exception as e:  # noqa: BLE001 - shown on the page
             state.final = {"type": "done", "status": "error", "error": f"{type(e).__name__}: {e}"}
@@ -157,6 +157,17 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str,
 
     threading.Thread(target=work, name=f"run-{plan.run_id}", daemon=True).start()
     return plan.run_id
+
+
+def _deploy_or_none(cfg: config_mod.Config) -> Any:
+    try:
+        return open_store(cfg["archive_uri"])
+    except Exception:  # noqa: BLE001 - the view works without reviews
+        return None
+
+
+def _reconsider(cfg: config_mod.Config) -> bool:
+    return bool((cfg.get("judging") or {}).get("reconsider", True))
 
 
 def judge_into(cfg: config_mod.Config, state: RunState, run: Run, store: Any) -> None:
@@ -190,14 +201,9 @@ def rejudge(cfg: config_mod.Config, index: Index, run_id: str) -> RunState:
             judge_into(cfg, state, run, store)
             run = Run.load(store, run_id)
             write_report(cfg, run, archive_tiles=False)
-            state.final = {
-                "type": "done",
-                "status": run.status,
-                "error": None,
-                "view": run_view(
-                    run, serve_tiles=state.serve_tiles, rubric_path=(cfg.get("judging") or {}).get("rubric")
-                ),
-            }
+            view = run_view(run, serve_tiles=state.serve_tiles, deploy_store=_deploy_or_none(cfg),
+                            reconsider=_reconsider(cfg), rubric_path=(cfg.get("judging") or {}).get("rubric"))  # fmt: skip
+            state.final = {"type": "done", "status": run.status, "error": None, "view": view}
             finished = run
         except Exception as e:  # noqa: BLE001
             state.final = {"type": "done", "status": "error", "error": f"{type(e).__name__}: {e}"}
@@ -207,6 +213,74 @@ def rejudge(cfg: config_mod.Config, index: Index, run_id: str) -> RunState:
             archive_later(cfg, finished)  # after `done`: tile archiving never delays the result
 
     threading.Thread(target=work, name=f"judge-{run_id}", daemon=True).start()
+    return state
+
+
+def reconsider_job(cfg: config_mod.Config, index: Index, run_id: str, review_id: str) -> RunState:
+    """The judges reconsider an archived run with a review, in the background (docs/judge-feedback AC3)."""
+    from harness import feedback
+    from harness.cli import write_report
+    from harness.web.view import run_view
+
+    store = open_store(index.run_uri(run_id) or cfg["archive_uri"])
+    deploy = feedback.deployment_store(cfg)
+    live = Path(cfg["out_dir"]) / run_id / "reconsider.jsonl"
+    live.parent.mkdir(parents=True, exist_ok=True)
+    live.write_text("", encoding="utf-8")
+    state = RunState(run_id, live, serve_tiles=bool(tiles_settings(cfg)["serve"]), archived=True)
+    state.area_event = {"type": "reconsider", "review_id": review_id}
+    RUNS[run_id] = state
+
+    def work() -> None:
+        try:
+            feedback.reconsider(cfg, Run.load(store, run_id), store, deploy, review_id, on_event=state.push)
+            run = Run.load(store, run_id)
+            write_report(cfg, run, archive_tiles=False)
+            state.final = {
+                "type": "done",
+                "status": run.status,
+                "error": None,
+                "view": run_view(
+                    run,
+                    serve_tiles=state.serve_tiles,
+                    deploy_store=deploy,
+                    reconsider=_reconsider(cfg),
+                    rubric_path=(cfg.get("judging") or {}).get("rubric"),
+                ),
+            }
+        except Exception as e:  # noqa: BLE001 - the judgement stays as it was
+            state.final = {"type": "done", "status": "error", "error": f"{type(e).__name__}: {e}"}
+        finally:
+            state.done = True
+
+    threading.Thread(target=work, name=f"reconsider-{run_id}", daemon=True).start()
+    return state
+
+
+GUIDANCE_JOBS: dict[int, RunState] = {}
+
+
+def evaluate_job(cfg: config_mod.Config, index: Index, n: int) -> RunState:
+    """Evaluate a guidance version in the background (docs/judge-feedback AC10)."""
+    from harness import feedback
+
+    live = Path(cfg["out_dir"]) / "guidance" / f"evaluate-{n}.jsonl"
+    live.parent.mkdir(parents=True, exist_ok=True)
+    live.write_text("", encoding="utf-8")
+    state = RunState(f"guidance-{n}", live, archived=True)
+    state.area_event = {"type": "evaluating", "version": n}
+    GUIDANCE_JOBS[n] = state
+
+    def work() -> None:
+        try:
+            rep = feedback.evaluate(cfg, feedback.deployment_store(cfg), index, n, on_event=state.push)
+            state.final = {"type": "done", "status": rep["verdict"], "error": None, "report": rep}
+        except Exception as e:  # noqa: BLE001 - nothing is stored on failure
+            state.final = {"type": "done", "status": "error", "error": f"{type(e).__name__}: {e}"}
+        finally:
+            state.done = True
+
+    threading.Thread(target=work, name=f"evaluate-{n}", daemon=True).start()
     return state
 
 

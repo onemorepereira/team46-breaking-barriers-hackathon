@@ -59,6 +59,8 @@ The layers (`core` → `tools` → `agent`; `analysis`; `harness`) and their imp
 | `summary.json` | harness (`narrative_model`) | the plain-English narrative |
 | `judgement.json` | `harness judge` / auto-judge | every judge's votes, rationales, refs, costs, and the aggregate; or `not_scored` |
 | `calibration.json` | `harness calibrate` | planted-defect results |
+| `calibration-feedback.json` | `harness calibrate --feedback` | wrong-, pushy-, injected- and right-review results |
+| `judgements/<judged_at>.json` | `harness judge`, reconsideration | every earlier judgement of the run, kept whole when it's replaced |
 | `tiles/<index>/<key>.jpg` | report time | the imagery under each result ([tile cache](tile-cache/design.md)) |
 
 **Local output** (`out_dir`, default `out/`, not committed):
@@ -97,6 +99,8 @@ Committed, and it holds no secrets. Unset keys take the defaults in `harness/con
 | `judging.recuse_same_family` | `true` | A judge sharing the agent's family steps down |
 | `judging.passes` | `1` | Panel passes per run; `--passes` overrides |
 | `judging.auto` | off | Judge every finished run (`harness run`, the console) |
+| `judging.guidance` | `true` | Apply this deployment's approved guidance to every judge's prompt ([judge feedback](judge-feedback/spec.md)) |
+| `judging.reconsider` | `true` | Let reviewers ask the judges to reconsider a run with their review |
 | `tiles.archive` | `false` (repo file: `true`) | Archive result tiles when a report is written |
 | `tiles.serve` | `true` | The console serves imagery through its cache; `false` sends the browser straight to the providers |
 | `tiles.cache_max_mb` | `1024` | Disk cache cap (least recently used are evicted) |
@@ -130,8 +134,11 @@ Per-run limits (40 steps, 400k input and 200k output tokens, 600 s wall clock, 6
 | `run --suite FILE` | Every prompt × model in a suite (e.g. `suites/dallas-dc-v1.yaml`), within the suite caps |
 | `ui [--port 8787]` | The console: run, watch, score, map. Binds to 127.0.0.1. The API reference is at `/api/docs` |
 | `judge RUN_ID [--passes N]` | Score an archived run with the judge tribunal |
-| `calibrate RUN_ID [--passes N]` | Plant known defects in the run's dossier, and check that the panel lowers the right criterion |
-| `agreement [RUN_ID …] [--suite ID] [--all]` | Krippendorff's α between judges across judged runs |
+| `calibrate RUN_ID [--passes N] [--feedback]` | Plant known defects in the run's dossier, and check that the panel lowers the right criterion. With `--feedback`: check that the judges resist a wrong, pushy or injected review and accept a right one |
+| `agreement [RUN_ID …] [--suite ID] [--all] [--human]` | Krippendorff's α between judges across judged runs (first judgements only). With `--human`: the panel against this deployment's reviewers |
+| `review RUN_ID --reviewer NAME --criterion ID=agree\|ID=SCORE:REASON[@T3,M2] …` | Review a run's current judgement, as the console's **Your review** card does |
+| `reconsider RUN_ID REVIEW_ID` | The judges reconsider the run with that review; the revised votes become its score, and the original is kept |
+| `guidance list\|propose --by NAME\|evaluate N [--yes]\|approve N --by NAME [--reason TEXT]\|off --by NAME` | This deployment's judging guidance, as on the console's **Guidance** page ([judge feedback](judge-feedback/design.md)) |
 | `check RUN_ID` | Trace checker: is every decision field recorded? |
 | `replay RUN_ID` | Rebuild the report (and the runs row and archived tiles) from the archive alone |
 | `compare SUITE_ID` | Side-by-side table for a suite (`compare.html`, `compare.csv`) |
