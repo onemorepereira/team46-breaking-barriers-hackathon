@@ -94,3 +94,62 @@ def test_refuses_without_prices(tmp_path):
     )  # fmt: skip
     assert r.returncode == 2 and "prices_per_mtok.scripted is not set" in r.stdout
     assert not (tmp_path / "archive").exists()
+
+
+def suite_file(tmp_path, prompts, models):
+    p = tmp_path / "suite.yaml"
+    p.write_text(json.dumps({"suite": "t-suite", "prompts": prompts, "models": models, "backend": "local"}))
+    return p
+
+
+def test_suite_runs_prompt_major_and_compares(tmp_path):
+    cfg = config(tmp_path)
+    data = json.loads(cfg.read_text())
+    data["models"]["scripted2"] = {"id": "scripted", "max_tokens": 1000, "request_fields": {}}
+    data["prices_per_mtok"]["scripted2"] = {"in": 1.0, "out": 5.0}
+    cfg.write_text(json.dumps(data))
+    suite = suite_file(
+        tmp_path, ["prompts/dallas-dc.md", "prompts/dallas-dc-strict.md"], ["scripted", "scripted2"]
+    )
+    env = {**os.environ, "HARNESS_TEST_SCRIPT": str(SCRIPT)}
+    cmd = [sys.executable, "-m", "harness.cli", "--config", str(cfg), "run", "--suite", str(suite)]
+    r = subprocess.run(cmd, cwd=REPO, env=env, capture_output=True, text=True, timeout=300)
+    assert r.returncode == 0, r.stdout + r.stderr
+    suite_id = r.stdout.splitlines()[0].split()[1].rstrip(":")
+    assert "done: 4/4 runs → harness compare" in r.stdout
+    manifest = json.loads((tmp_path / f"archive/suites/{suite_id}/suite.json").read_text())
+    assert len(manifest["run_ids"]) == 4
+    runs = [
+        json.loads((tmp_path / f"archive/runs/{rid}/run.json").read_text()) for rid in manifest["run_ids"]
+    ]
+    assert [(x["prompt_file"], x["model_key"]) for x in runs] == [
+        ("prompts/dallas-dc.md", "scripted"), ("prompts/dallas-dc.md", "scripted2"),
+        ("prompts/dallas-dc-strict.md", "scripted"), ("prompts/dallas-dc-strict.md", "scripted2"),
+    ]  # fmt: skip
+    c = subprocess.run([sys.executable, "-m", "harness.cli", "--config", str(cfg), "compare", suite_id],
+                       cwd=REPO, capture_output=True, text=True, timeout=60)  # fmt: skip
+    assert c.returncode == 0 and "(4 rows)" in c.stdout
+
+
+def test_suite_refusals(tmp_path):
+    cfg = config(tmp_path)
+    data = json.loads(cfg.read_text())
+    data["max_runs_per_suite"] = 1
+    cfg.write_text(json.dumps(data))
+    env = {**os.environ, "HARNESS_TEST_SCRIPT": str(SCRIPT)}
+
+    def run(suite):
+        cmd = [sys.executable, "-m", "harness.cli", "--config", str(cfg), "run", "--suite", str(suite)]
+        return subprocess.run(cmd, cwd=REPO, env=env, capture_output=True, text=True, timeout=60)
+
+    too_many = run(
+        suite_file(tmp_path, ["prompts/dallas-dc.md", "prompts/dallas-dc-strict.md"], ["scripted"])
+    )
+    assert too_many.returncode == 2 and "suite has 2 runs; max_runs_per_suite is 1" in too_many.stdout
+    bad_model = run(suite_file(tmp_path, ["prompts/dallas-dc.md"], ["opus"]))
+    assert "unknown model key 'opus' (known: scripted)" in bad_model.stdout
+    data["max_runs_per_suite"], data["max_suite_usd"] = 8, 0.5
+    cfg.write_text(json.dumps(data))
+    costly = run(suite_file(tmp_path, ["prompts/dallas-dc.md"], ["scripted"]))
+    assert "exceeds max_suite_usd $0" in costly.stdout and costly.returncode == 2
+    assert not (tmp_path / "archive/runs").exists()

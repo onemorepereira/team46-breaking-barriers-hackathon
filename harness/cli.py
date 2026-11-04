@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import sys
@@ -78,8 +79,43 @@ def cmd_compare(cfg: config_mod.Config, index: Index, args: argparse.Namespace) 
     return 0
 
 
+def _run_one(cfg: config_mod.Config, index: Index, plan: invoke.RunPlan) -> tuple[invoke.Outcome, str]:
+    outcome = invoke.execute(cfg, index, plan)
+    store = open_store(plan.archive_uri)
+    run = Run.load(store, plan.run_id)
+    narrative_key = cfg.get("narrative_model")
+    if narrative_key and not os.environ.get("HARNESS_TEST_SCRIPT") and run.all_spans:
+        from harness import narrative
+
+        model_id = cfg["models"][narrative_key]["id"]
+        if narrative.write_summary(run, store, model_id, cfg["region"]) is None:
+            print(
+                f"run {plan.run_id}: narrative unavailable (the report has the full timeline)",
+                file=sys.stderr,
+            )
+        run = Run.load(store, plan.run_id)
+    path = write_report(cfg, run)
+    rep = report.analyze(run)
+    c = rep.prov.counts()
+    if outcome.status in ("ok", "limit_exceeded"):
+        line = (
+            f"run {plan.run_id} done: {rep.sig.steps} steps, {rep.sig.errors} errors, "
+            f"claims {c['matched']} matched / {c['mismatch']} mismatch / {c['unsourced']} unsourced → {path}"
+        )
+        if outcome.status != "ok":
+            line += f" (status {outcome.status}: {outcome.error})"
+    else:
+        line = (
+            f"run {plan.run_id} failed: {outcome.error}. Partial trace archived; "
+            f"run 'harness replay {plan.run_id}' to see what happened."
+        )
+    return outcome, line
+
+
 def cmd_run(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
     backend = args.backend or cfg["backend"]
+    if args.suite:
+        return cmd_suite(cfg, index, args, backend)
     model_key = args.model or next(iter(cfg["models"]), None)
     try:
         plan = invoke.plan_run(cfg, prompt_file=args.prompt, model_key=model_key, backend=backend)
@@ -87,23 +123,79 @@ def cmd_run(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> i
         print(str(e))
         return 2
     print(f"worst case for this run: ${plan.worst_case_usd:.2f}")
-    outcome = invoke.execute(cfg, index, plan)
-    run = Run.load(open_store(plan.archive_uri), plan.run_id)
-    path = write_report(cfg, run)
-    rep = report.analyze(run)
-    c = rep.prov.counts()
-    if outcome.status in ("ok", "limit_exceeded"):
+    outcome, line = _run_one(cfg, index, plan)
+    print(line)
+    return 0 if outcome.status in ("ok", "limit_exceeded") else 1
+
+
+def cmd_suite(cfg: config_mod.Config, index: Index, args: argparse.Namespace, backend: str) -> int:
+    import yaml
+
+    spec = yaml.safe_load(Path(args.suite).read_text(encoding="utf-8")) or {}
+    name, prompts, models = spec.get("suite"), spec.get("prompts") or [], spec.get("models") or []
+    backend = args.backend or spec.get("backend") or backend
+    if not name or not prompts or not models:
+        print(f"suite file {args.suite}: needs suite, prompts and models.")
+        return 2
+    known = cfg["models"] or {}
+    for m in models:
+        if m not in known:
+            print(f"suite {name}: unknown model key {m!r} (known: {', '.join(known)}).")
+            return 2
+    for pf in prompts:
+        if not Path(pf).is_file():
+            print(f"suite {name}: prompt file {pf} not found.")
+            return 2
+    total = len(prompts) * len(models)
+    if total > int(cfg["max_runs_per_suite"]):
         print(
-            f"run {plan.run_id} done: {rep.sig.steps} steps, {rep.sig.errors} errors, "
-            f"claims {c['matched']} matched / {c['mismatch']} mismatch / {c['unsourced']} unsourced → {path}"
-            + (f" (status {outcome.status}: {outcome.error})" if outcome.status != "ok" else "")
+            f"suite has {total} runs; max_runs_per_suite is {cfg['max_runs_per_suite']}. "
+            "Shrink the suite or raise the limit in harness.yaml."
         )
-        return 0
-    print(
-        f"run {plan.run_id} failed: {outcome.error}. Partial trace archived; "
-        f"run 'harness replay {plan.run_id}' to see what happened."
-    )
-    return 1
+        return 2
+    try:
+        worst = sum(invoke.worst_case_usd(cfg, m) for _ in prompts for m in models)
+    except invoke.RunRefused as e:
+        print(str(e))
+        return 2
+    if worst > float(cfg["max_suite_usd"]):
+        print(
+            f"suite worst case ${worst:.2f} exceeds max_suite_usd ${float(cfg['max_suite_usd']):.0f}. "
+            "Shrink the suite or raise max_suite_usd in harness.yaml."
+        )
+        return 2
+    suite_id = f"{name}-{datetime.now(UTC).strftime('%Y%m%dT%H%M')}"
+    archive_uri = cfg["local_archive_uri"] if backend == "local" else cfg["archive_uri"]
+    store = open_store(archive_uri)
+    sha = hashlib.sha256(Path(args.suite).read_bytes()).hexdigest()
+    manifest: dict[str, object] = {
+        "schema_version": 1,
+        "suite_id": suite_id,
+        "suite_file_sha256": sha,
+        "run_ids": [],
+    }
+    store.write_text(f"suites/{suite_id}/suite.json", json.dumps(manifest, indent=1))
+    index.record_suite(suite_id, archive_uri)
+    print(f"suite {suite_id}: {total} runs, worst case ${worst:.2f}")
+    ok, failed = 0, []
+    for pf in prompts:  # prompt-major order
+        for m in models:
+            plan = invoke.plan_run(cfg, prompt_file=pf, model_key=m, backend=backend, suite_id=suite_id)
+            outcome, line = _run_one(cfg, index, plan)
+            print(line)
+            run_ids = manifest["run_ids"]
+            assert isinstance(run_ids, list)
+            run_ids.append(plan.run_id)
+            store.write_text(f"suites/{suite_id}/suite.json", json.dumps(manifest, indent=1))
+            if outcome.status in ("ok", "limit_exceeded"):
+                ok += 1
+            else:
+                failed.append(f"run {plan.run_id}: {outcome.error}")
+    if failed:
+        print(f"suite {suite_id} done: {ok}/{total} runs ok, {len(failed)} failed ({'; '.join(failed)})")
+    else:
+        print(f"suite {suite_id} done: {total}/{total} runs → harness compare {suite_id}")
+    return 0 if not failed else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -111,7 +203,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--config", default=None, help="path to harness.yaml (default: ./harness.yaml)")
     sub = p.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="run the agent on a prompt and report it")
-    run.add_argument("--prompt", required=True, help="prompt file, e.g. prompts/dallas-dc.md")
+    what = run.add_mutually_exclusive_group(required=True)
+    what.add_argument("--prompt", help="prompt file, e.g. prompts/dallas-dc.md")
+    what.add_argument("--suite", help="suite file, e.g. suites/dallas-dc-v1.yaml")
     run.add_argument("--model", default=None, help="model key from harness.yaml models")
     run.add_argument("--backend", choices=["agentcore", "local"], default=None)
     c = sub.add_parser("check", help="run the AC2 trace checker on an archived run")
