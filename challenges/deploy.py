@@ -210,6 +210,11 @@ def kb():
             state["kb_id"] = result["knowledgeBase"]["knowledgeBaseId"]
         save()
     note("Knowledge Base " + state["kb_id"])
+    deadline = time.monotonic() + 120
+    while br.get_knowledge_base(knowledgeBaseId=state["kb_id"])["knowledgeBase"]["status"] == "CREATING":
+        if time.monotonic() > deadline:
+            raise RuntimeError("Knowledge Base is still creating; rerun kb stage")
+        time.sleep(4)
     if not state.get("data_source"):
         sources = br.list_data_sources(knowledgeBaseId=state["kb_id"])["dataSourceSummaries"]
         ds = next((x for x in sources if x["name"] == "clay-team-documents"), None)
@@ -301,7 +306,7 @@ def gateway():
     tools = [
         {
             "name": "retrieve_clay_guidance",
-            "description": "Retrieve Clay/team documents from the real Bedrock Knowledge Base with source citations.",
+            "description": "Retrieve Clay/team Knowledge Base documents with citations.",
             "inputSchema": {
                 "type": "object",
                 "properties": {"query": {"type": "string"}},
@@ -384,8 +389,70 @@ def auth():
     note("Cognito OAuth client-credentials issuer ready; secret stays private in out/.")
 
 
+def runtime():
+    c = session.client("bedrock-agentcore-control")
+    s3 = session.client("s3")
+    original = c.get_agent_runtime(agentRuntimeId="clay_agent_eval-hQEaIrFtgq")
+    old = original["agentRuntimeArtifact"]["codeConfiguration"]["code"]["s3"]
+    package = io.BytesIO(s3.get_object(Bucket=old["bucket"], Key=old["prefix"])["Body"].read())
+    with zipfile.ZipFile(package, "a", zipfile.ZIP_DEFLATED) as z:
+        z.write("challenges/runtime_app.py", "challenge_main.py")
+    key = "package/team46-tiered.zip"
+    s3.put_object(Bucket=state["bucket"], Key=key, Body=package.getvalue())
+    rr = role(
+        PREFIX + "-runtime-role",
+        "bedrock-agentcore.amazonaws.com",
+        [
+            allow(["s3:GetObject"], f"arn:aws:s3:::{state['bucket']}/package/*"),
+            allow(["s3:ListBucket"], f"arn:aws:s3:::{state['bucket']}"),
+            allow(
+                ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+                f"arn:aws:bedrock:{REGION}::foundation-model/moonshotai.kimi-k2.5",
+            ),
+            allow(["bedrock-agentcore:InvokeGateway"], state["gateway_arn"]),
+            allow(
+                ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"],
+                f"arn:aws:logs:{REGION}:{ACCOUNT}:log-group:/aws/bedrock-agentcore/runtimes/team46_tiered*",
+            ),
+        ],
+    )
+    if not state.get("runtime_id"):
+        r = retry(
+            lambda: c.create_agent_runtime(
+                agentRuntimeName="team46_tiered",
+                agentRuntimeArtifact={
+                    "codeConfiguration": {
+                        "code": {"s3": {"bucket": state["bucket"], "prefix": key}},
+                        "runtime": "PYTHON_3_12",
+                        "entryPoint": ["challenge_main.py"],
+                    }
+                },
+                roleArn=rr,
+                networkConfiguration={"networkMode": "PUBLIC"},
+                authorizerConfiguration={
+                    "customJWTAuthorizer": {
+                        "discoveryUrl": state["discovery_url"],
+                        "allowedClients": [state["client_id"]],
+                        "allowedScopes": ["team46/invoke"],
+                    }
+                },
+                protocolConfiguration={"serverProtocol": "HTTP", "port": 8080, "path": "/invocations"},
+                environmentVariables={
+                    "GATEWAY_URL": state["gateway_url"],
+                    "MODEL_ID": "moonshotai.kimi-k2.5",
+                },
+                lifecycleConfiguration={"idleRuntimeSessionTimeout": 300, "maxLifetime": 1800},
+            ),
+            90,
+        )
+        state["runtime_id"] = r["agentRuntimeId"]
+        state["runtime_arn"] = r["agentRuntimeArn"]
+        save()
+    note("JWT-authenticated Runtime provisioning: " + state["runtime_id"])
+
+
 if __name__ == "__main__":
     p = argparse.ArgumentParser()
-    p.add_argument("stage", choices=["kb", "gateway", "auth"])
+    p.add_argument("stage", choices=["kb", "gateway", "auth", "runtime"])
     args = p.parse_args()
-    {"kb": kb, "gateway": gateway, "auth": auth}[args.stage]()
+    {"kb": kb, "gateway": gateway, "auth": auth, "runtime": runtime}[args.stage]()
