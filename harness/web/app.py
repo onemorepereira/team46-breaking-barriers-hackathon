@@ -14,7 +14,14 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -87,6 +94,19 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def console(request: Request) -> HTMLResponse:
         return page(request, "run.html", run_id=None, active="console")
+
+    @app.get("/workspace", include_in_schema=False)
+    def workspace_redirect() -> RedirectResponse:
+        return RedirectResponse("workspace/")
+
+    @app.get("/workspace/{asset:path}", include_in_schema=False)
+    def workspace(asset: str = "") -> FileResponse:
+        """Built React workspace, served on the API origin; no browser-side credentials."""
+        root = (HERE / "static" / "workspace").resolve()
+        target = (root / (asset or "index.html")).resolve()
+        if not target.is_relative_to(root) or not target.is_file():
+            raise HTTPException(404, "Workspace asset unavailable. Build frontend/ first.")
+        return FileResponse(target, headers={"Cache-Control": "no-cache"} if target.suffix == ".html" else {})
 
     @app.get("/runs", response_class=HTMLResponse, include_in_schema=False)
     def runs_page(request: Request) -> HTMLResponse:

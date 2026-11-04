@@ -26,3 +26,7 @@ cdk.context.json
 
 # macOS
 .DS_Store
+
+# Frontend dependencies and local tooling
+node_modules/
+frontend/dist/
