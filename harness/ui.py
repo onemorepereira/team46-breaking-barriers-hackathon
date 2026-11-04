@@ -129,11 +129,14 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str) -> 
 
         env = {"HARNESS_EXPORTER": "console", "HARNESS_CONSOLE_PATH": str(live.resolve())}
         if not os.environ.get("HARNESS_TEST_SCRIPT"):
-            state.area, state.area_event = geo.area_for_prompt(cfg, prompt)
+            area, event = geo.area_for_prompt(cfg, prompt)
             mode = str(cfg.get("area_mode") or "enforce")
-            invoke.attach_area(plan, geo.payload_area(state.area, mode))
-            if state.area_event is not None:
-                state.area_event["mode"] = mode
+            invoke.attach_area(plan, geo.payload_area(area, mode))
+            state.area = area
+            state.area_event = {
+                **event,
+                "mode": mode,
+            }  # publish only when complete: the stream sends it at once
         else:
             state.area_event = {"type": "area", "label": None, "note": "Scripted test run: no area check."}
         try:

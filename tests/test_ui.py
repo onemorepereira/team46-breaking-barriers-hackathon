@@ -165,3 +165,15 @@ def test_tile_source_by_index():
     assert "maps.eox.at" in tile_url("s2", [102.6, 18.4, 102.7, 18.5]) and "s2cloudless" in tile_url(
         "s2", [0, 0, 1, 1]
     )
+
+
+def test_single_place_result_becomes_a_chip():
+    one = {
+        "node": "s2/obs:1",
+        "observed": "2026-04-10",
+        "lat": 18.0,
+        "lon": 102.6,
+        "bbox": [102.59, 17.99, 102.6, 18.0],
+    }
+    chip = extras(json.dumps(one))["chips"][0]
+    assert chip["node"] == "s2/obs:1" and chip["index"] == "s2" and chip["bbox"] == one["bbox"]

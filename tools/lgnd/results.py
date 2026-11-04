@@ -37,12 +37,24 @@ def _bbox_around(lat: float, lon: float, cell_km: float) -> list[float]:
 def chips_of(data: dict[str, Any]) -> list[dict[str, Any]]:
     """Every located place in an LGND result, as {node, lat, lon, bbox, index, ...}.
 
-    Three table shapes carry places (2026-11-04 schemas and live outputs):
+    Places come as one top-level place (search_chip_lat_lon) or in three table shapes (2026-11-04 outputs):
     - `matches` (search tools): rows with lat, lon, bbox, chip_id, observed, similarity.
     - `results` (toolbox_classifier_apply): rows with lat, lon, bbox, label, margin, fit.
     - `cells` (discover_area_view and friends): rows with lat, lon; the box comes from the top-level cell_km.
     """
     chips: list[dict[str, Any]] = []
+    if isinstance(data.get("lat"), int | float) and isinstance(data.get("bbox"), list) and data.get("node"):
+        # search_chip_lat_lon: one place at the top level
+        top = {k: data[k] for k in ("node", "observed") if data.get(k) is not None}
+        chips.append(
+            {
+                **top,
+                "lat": data["lat"],
+                "lon": data["lon"],
+                "bbox": data["bbox"],
+                "index": index_of(data["node"]),
+            }
+        )
     cell_km = data.get("cell_km")
     for key in ("matches", "results", "cells"):
         for r in _rows(data.get(key)):
