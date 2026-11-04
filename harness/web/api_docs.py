@@ -44,8 +44,8 @@ TAGS: list[dict[str, Any]] = [
 ]
 
 ERRORS: dict[int, dict[str, Any]] = {
-    400: {"description": "The prompt is empty, the model is unknown, or the run was refused (for example, the "
-                         "suite's cost cap).",  # fmt: skip
+    400: {"description": "The prompt is empty, the model is unknown, the run was refused (for example, the "
+                         "suite's cost cap), or a paging cursor is invalid.",  # fmt: skip
           "content": {"application/json": {"example": {"error": "Type a prompt first."}}}},
     404: {"description": "No run with that ID (or no live stream / report for it).",
           "content": {"application/json": {"example": {"detail": "unknown run"}}}},
@@ -119,4 +119,6 @@ class RunRow(BaseModel):
 
 
 class RunsResponse(BaseModel):
-    runs: list[RunRow]
+    runs: list[RunRow] = Field(description="One page of runs, newest first.")
+    next: str | None = Field(None, description="Pass as `before` for the next page; null on the last page.")
+    total: int = Field(description="Runs matching the filters, across all pages.")

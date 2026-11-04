@@ -240,3 +240,45 @@ def test_api_docs_explain_every_endpoint_and_hide_the_pages(tmp_path):
     row = spec["components"]["schemas"]["RunRow"]["properties"]
     assert "description" in row["verdict"] and "description" in row["confidence"]
     assert "not_scored" in spec["paths"]["/api/runs/{run_id}/events"]["get"]["description"]
+
+
+def test_runs_list_pages_by_cursor_filters_and_is_stable_when_a_run_starts(tmp_path):
+    from harness import rows
+
+    cfg = cfg_for(tmp_path)
+    index = Index(cfg["out_dir"])
+
+    def add(i, model="sonnet", verdict="scored", started=None):
+        rid = f"run-{i:03d}"
+        row = {"id": rid, "started_at": started or f"2026-11-04T10:{i:02d}:00Z", "model_key": model,
+               "status": "ok", "prompt": "p", "prompt_file": None, "score": 90.0, "verdict": verdict,
+               "not_scored_cause": None, "confidence": "High", "cost_usd": 0.1, "judging_cost_usd": 0.1,
+               "tool_calls": 2, "errors": 0, "runtime_s": 10.0, "area": None}  # fmt: skip
+        p = tmp_path / "out" / rid / "row.json"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"version": rows.ROW_VERSION, "row": row}))
+        index.record_run(rid, f"file://{tmp_path}/archive")
+
+    for i in range(7):
+        add(i, model="kimi" if i % 2 else "sonnet", verdict="FAILED" if i == 3 else "scored")
+    add(7, started="2026-11-04T10:06:00Z")  # same start time as run-006: the ID breaks the tie
+    client = TestClient(create_app(cfg))
+
+    first = client.get("/api/runs?limit=3").json()
+    assert [r["id"] for r in first["runs"]] == ["run-007", "run-006", "run-005"] and first["total"] == 8
+    add(50, started="2026-11-04T11:00:00Z")  # a run starts while someone pages
+    seen, nxt = [r["id"] for r in first["runs"]], first["next"]
+    while nxt:
+        page = client.get(f"/api/runs?limit=3&before={nxt}").json()
+        seen += [r["id"] for r in page["runs"]]
+        nxt = page["next"]
+    assert seen == ["run-007", "run-006", "run-005", "run-004", "run-003", "run-002", "run-001", "run-000"]
+
+    kimi = client.get("/api/runs?model=kimi").json()
+    assert [r["id"] for r in kimi["runs"]] == ["run-005", "run-003", "run-001"] and kimi["next"] is None
+    assert [r["id"] for r in client.get("/api/runs?verdict=FAILED").json()["runs"]] == ["run-003"]
+    assert client.get("/api/runs?before=not-a-cursor").status_code == 400
+    assert (
+        client.get("/api/runs?limit=0").status_code == 422
+        and client.get("/api/runs?limit=201").status_code == 422
+    )

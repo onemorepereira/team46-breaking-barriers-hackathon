@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import json
 import threading
 from collections.abc import AsyncIterator
@@ -10,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -103,19 +105,42 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
     def all_rows() -> list[dict[str, Any]]:
         with ThreadPoolExecutor(max_workers=16) as pool:
             out = [r for r in pool.map(lambda kv: row_for(*kv), index.runs().items()) if r]
-        out.sort(key=lambda r: r.get("started_at") or "", reverse=True)
+        out.sort(key=_order_key, reverse=True)
         return out
 
     # Build any missing rows (older runs, or runs from another machine) in the background at startup, so the
     # first visit to the runs page doesn't wait on S3.
     threading.Thread(target=lambda: _quietly(all_rows), name="rows-warmup", daemon=True).start()
 
-    @app.get("/api/runs", tags=["Runs"], response_model=RunsResponse, summary="List archived runs")
-    def list_runs() -> dict[str, Any]:
-        """Every run in `out/index.json`, newest first, one summary row each: the score and verdict, the
-        confidence label, agent and judging cost, tool calls, errors and runtime. Rows are read from
-        `out/<id>/row.json`, which is rewritten whenever the run is judged or replayed."""
-        return {"runs": all_rows()}
+    @app.get("/api/runs", tags=["Runs"], response_model=RunsResponse, summary="List archived runs",
+             responses={400: ERRORS[400]})  # fmt: skip
+    def list_runs(
+        limit: int = Query(50, ge=1, le=200, description="Runs per page."),
+        before: str | None = Query(None, description="The `next` cursor from the previous page. Omit it "
+                                   "for the newest runs."),
+        model: str | None = Query(None, description="Only runs by this agent model key, e.g. `kimi`."),
+        verdict: str | None = Query(None, description="Only runs with this verdict: `scored`, `FAILED`, "
+                                    "`not scored` or `not judged`."),
+    ) -> dict[str, Any]:  # fmt: skip
+        """Archived runs, newest first, one summary row each: the score and verdict, the confidence
+        label, agent and judging cost, tool calls, errors and runtime.
+
+        **Paging** uses a cursor, so a run that starts while you page doesn't shift the pages. Pass the
+        response's `next` as `before` to get the following page; `next` is null on the last page. `total`
+        counts every run that matches the filters. Rows are read from `out/<id>/row.json`, rewritten
+        whenever the run is judged or replayed."""
+        out = all_rows()
+        if model:
+            out = [r for r in out if r.get("model_key") == model]
+        if verdict:
+            out = [r for r in out if r.get("verdict") == verdict]
+        total = len(out)
+        if before:
+            cursor = _decode_cursor(before)
+            out = [r for r in out if _order_key(r) < cursor]
+        page = out[:limit]
+        more = len(out) > limit
+        return {"runs": page, "next": _encode_cursor(_order_key(page[-1])) if more else None, "total": total}
 
     @app.get("/api/runs/{run_id}", tags=["Runs"], summary="One run, in full", responses={404: ERRORS[404]})
     def get_run(run_id: str) -> dict[str, Any]:
@@ -176,6 +201,25 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         return FileResponse(path, media_type="text/html")
 
     return app
+
+
+def _order_key(row: dict[str, Any]) -> tuple[str, str]:
+    """Newest first, ties broken by run ID so every row has one place in the order."""
+    return (str(row.get("started_at") or ""), str(row.get("id") or ""))
+
+
+def _encode_cursor(key: tuple[str, str]) -> str:
+    return base64.urlsafe_b64encode(json.dumps(list(key)).encode()).decode().rstrip("=")
+
+
+def _decode_cursor(cursor: str) -> tuple[str, str]:
+    try:
+        raw = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
+        if isinstance(raw, list) and len(raw) == 2 and all(isinstance(x, str) for x in raw):
+            return (raw[0], raw[1])
+    except (ValueError, binascii.Error):
+        pass
+    raise HTTPException(400, "invalid cursor: pass the `next` value from the previous page")
 
 
 def _quietly(fn: Any) -> None:

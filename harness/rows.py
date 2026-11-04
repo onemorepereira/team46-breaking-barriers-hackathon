@@ -9,12 +9,16 @@ archive of a run that hasn't changed. Bump ROW_VERSION when the row's shape chan
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any
 
 from analysis.trace import Run
 
 ROW_VERSION = 1
+
+_memo: dict[Path, tuple[int, dict[str, Any]]] = {}  # path -> (mtime_ns, row): skip re-parsing unchanged files
+_memo_lock = threading.Lock()
 
 
 def _path(out_dir: str | Path, run_id: str) -> Path:
@@ -37,11 +41,21 @@ def save(out_dir: str | Path, run: Run) -> dict[str, Any]:
 
 def load(out_dir: str | Path, run_id: str) -> dict[str, Any] | None:
     """The saved row, or None when there is none, it can't be read, or it is from an older shape."""
+    p = _path(out_dir, run_id)
     try:
-        data = json.loads(_path(out_dir, run_id).read_text(encoding="utf-8"))
+        mtime = p.stat().st_mtime_ns
+        with _memo_lock:
+            hit = _memo.get(p)
+        if hit and hit[0] == mtime:
+            return hit[1]
+        data = json.loads(p.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
     if not isinstance(data, dict) or data.get("version") != ROW_VERSION:
         return None
     row = data.get("row")
-    return row if isinstance(row, dict) else None
+    if not isinstance(row, dict):
+        return None
+    with _memo_lock:
+        _memo[p] = (mtime, row)
+    return row

@@ -15,27 +15,43 @@
   const statusTone = (s) => (s === "ok" ? "success" : s === "limit_exceeded" ? "warning" : "danger");
   const body = document.getElementById("runs-body");
   const message = (text, cls) => body.replaceChildren(el("tr", {}, el("td", { colspan: 11, class: cls, text })));
-  fetch("/api/runs").then((r) => r.json()).then(({ runs }) => {
-    if (!runs.length) { message("No runs yet. Start one from the console.", "text-secondary"); return; }
-    body.replaceChildren(...runs.map((r) => {
-      const score = r.verdict === "FAILED" ? el("span", { class: "badge bg-danger-lt", text: "FAILED" })
-        : r.score === null ? el("span", { class: "text-secondary small", text: r.verdict, title: r.not_scored_cause || null })
-        : el("span", { class: `badge bg-${tone(r.score)}-lt`, text: Math.round(r.score) });
-      const tr = el("tr", { style: "cursor:pointer" },
-        el("td", { class: "text-secondary small text-nowrap", text: (r.started_at || "").replace("T", " ").replace("Z", "") }),
-        el("td", { class: "small text-truncate", style: "max-width:26rem", title: r.prompt || "" },
-          el("a", { href: `/runs/${r.id}`, text: r.prompt || r.prompt_file || r.id })),
-        el("td", {}, el("span", { class: "badge bg-azure-lt", text: r.model_key || "?" })),
-        el("td", { class: "small text-secondary", text: r.area || "—" }),
-        el("td", {}, el("span", { class: `badge bg-${statusTone(r.status)}-lt`, text: r.status })),
-        el("td", { class: "text-end" }, score),
-        el("td", { class: "small", text: r.confidence || "" }),
-        el("td", { class: "text-end small", text: usd(r.cost_usd) }),
-        el("td", { class: "text-end small", text: usd(r.judging_cost_usd) }),
-        el("td", { class: "text-end small", text: `${r.tool_calls}${r.errors ? ` (${r.errors} err)` : ""}` }),
-        el("td", { class: "text-end small", text: r.runtime_s === null ? "—" : `${Math.round(r.runtime_s)}s` }));
-      tr.addEventListener("click", (e) => { if (e.target.tagName !== "A") location.href = `/runs/${r.id}`; });
-      return tr;
-    }));
-  }).catch((e) => message(`Couldn't load runs: ${e}`, "text-danger"));
+  const row = (r) => {
+    const score = r.verdict === "FAILED" ? el("span", { class: "badge bg-danger-lt", text: "FAILED" })
+      : r.score === null ? el("span", { class: "text-secondary small", text: r.verdict, title: r.not_scored_cause || null })
+      : el("span", { class: `badge bg-${tone(r.score)}-lt`, text: Math.round(r.score) });
+    const tr = el("tr", { style: "cursor:pointer" },
+      el("td", { class: "text-secondary small text-nowrap", text: (r.started_at || "").replace("T", " ").replace("Z", "") }),
+      el("td", { class: "small text-truncate", style: "max-width:26rem", title: r.prompt || "" },
+        el("a", { href: `/runs/${r.id}`, text: r.prompt || r.prompt_file || r.id })),
+      el("td", {}, el("span", { class: "badge bg-azure-lt", text: r.model_key || "?" })),
+      el("td", { class: "small text-secondary", text: r.area || "—" }),
+      el("td", {}, el("span", { class: `badge bg-${statusTone(r.status)}-lt`, text: r.status })),
+      el("td", { class: "text-end" }, score),
+      el("td", { class: "small", text: r.confidence || "" }),
+      el("td", { class: "text-end small", text: usd(r.cost_usd) }),
+      el("td", { class: "text-end small", text: usd(r.judging_cost_usd) }),
+      el("td", { class: "text-end small", text: `${r.tool_calls}${r.errors ? ` (${r.errors} err)` : ""}` }),
+      el("td", { class: "text-end small", text: r.runtime_s === null ? "—" : `${Math.round(r.runtime_s)}s` }));
+    tr.addEventListener("click", (e) => { if (e.target.tagName !== "A") location.href = `/runs/${r.id}`; });
+    return tr;
+  };
+  // Cursor paging (GET /api/runs?limit&before): the first page, then "Load more" appends the next.
+  const PAGE = 50;
+  const more = document.getElementById("runs-more"), footer = document.getElementById("runs-footer");
+  let next = null, shown = 0;
+  const load = (first) => {
+    more.disabled = true;
+    const url = `/api/runs?limit=${PAGE}${next ? `&before=${encodeURIComponent(next)}` : ""}`;
+    fetch(url).then((r) => r.json()).then(({ runs, next: n, total }) => {
+      if (first && !runs.length) { message("No runs yet. Start one from the console.", "text-secondary"); return; }
+      if (first) body.replaceChildren();
+      body.append(...runs.map(row));
+      shown += runs.length; next = n;
+      footer.hidden = false;
+      document.getElementById("runs-count").textContent = `Showing ${shown} of ${total} runs`;
+      more.hidden = !next; more.disabled = false;
+    }).catch((e) => { more.disabled = false; if (first) message(`Couldn't load runs: ${e}`, "text-danger"); });
+  };
+  more.addEventListener("click", () => load(false));
+  load(true);
 })();
