@@ -371,7 +371,7 @@
       box.append(el("div", { class: "list-group-item text-secondary small", text: "Not judged yet. Use Re-judge to score this run with the panel." }));
       return;
     }
-    setText("rubric-name", `${card.rubric.id} v${card.rubric.version}`);
+    setText("rubric-name", `${card.rubric.id} v${card.rubric.version} · ${card.guidance ? `guidance v${card.guidance.version}` : "no guidance"}`);
     const gate = $("gate");
     gate.hidden = !card.gates.length;
     gate.replaceChildren(...card.gates.map((g) => el("div", {}, icon("alert-triangle", "me-1"), el("strong", { text: "FAILED: " }), g.reason)));
@@ -387,8 +387,10 @@
             const j = byId[key] || {};
             const crit = (j.criteria || []).find((x) => x.id === c.id) || {};
             rationale.append(el("div", { class: "rationale" },
-              el("span", { class: `vote vote-${vote} me-1` }, vote), el("strong", { text: key }), " ", crit.rationale || "",
-              ...(crit.refs || []).map((r) => el("button", { type: "button", class: "badge bg-azure-lt ms-1 ref-link border-0", text: r, "aria-label": `Show step ${r}`, onclick: (ev) => { ev.stopPropagation(); scrollToStep(r, ev); } }))));
+              el("span", { class: `vote vote-${vote} me-1` }, vote), el("strong", { text: key }), " ",
+              crit.changed ? el("span", { class: "badge bg-orange-lt me-1", text: "changed" }) : null, crit.rationale || "",
+              ...(crit.refs || []).map((r) => el("button", { type: "button", class: "badge bg-azure-lt ms-1 ref-link border-0", text: r, "aria-label": `Show step ${r}`, onclick: (ev) => { ev.stopPropagation(); scrollToStep(r, ev); } })),
+              crit.response ? el("div", { class: "text-secondary mt-1" }, icon("message-reply", "me-1"), crit.response) : null));
           }
           const a = (card.anchors || {})[c.id] || {};
           if (Object.keys(a).length) rationale.append(el("div", { class: "small text-secondary mt-2" }, el("strong", { text: "Anchors: " }),
@@ -406,7 +408,7 @@
               : el("span", { class: "small text-secondary", text: c.value || "" })),
             el("span", { class: `badge bg-${scoreClass(s)}-lt`, style: "min-width:2.6rem", text: s === null ? "n/a" : Math.round(s) })),
           el("div", { class: "progress progress-sm mt-1" }, el("div", { class: `progress-bar bg-${scoreClass(s)}`, style: `width:${s || 0}%` })),
-          rationale));
+          humanLine(c), rationale));
       }
     }
     const modes = $("modes");
@@ -414,6 +416,17 @@
       ...(card.failure_modes.length  // spread: replaceChildren() would print an array as text
         ? card.failure_modes.map((m) => el("span", { class: "badge bg-orange-lt me-1", title: m.meaning, text: `${m.id.replace(/_/g, " ")} ${m.votes}/${m.of}` }))
         : [el("span", { class: "text-secondary", text: "none" })]));
+  }
+
+  // Human review on a judged criterion (docs/judge-feedback): original → revised median, and the reviewers' score.
+  function humanLine(c) {
+    const moved = c.original_median != null && c.original_median !== c.median;
+    if (c.kind !== "judged" || (!moved && c.human == null)) return null;  // nothing worth a line
+    const bits = [];
+    if (moved) bits.push(`original ${c.original_median} → revised ${c.median}`);
+    else bits.push(`panel ${c.median}`);
+    if (c.human != null) bits.push(`human ${c.human}${(c.human_reviewers || []).length ? ` (${c.human_reviewers.join(", ")})` : ""}`);
+    return el("div", { class: "small text-secondary mt-1" }, icon("user-check", "me-1"), bits.join(" · "));
   }
 
   // ---------- judges ----------
@@ -498,7 +511,10 @@
     $("narrative").textContent = v.narrative || "No narrative for this run.";
     $("trouble").replaceChildren(...(v.trouble_spots || []).slice(0, 12).map((t) =>
       el("div", { class: "small" }, icon("alert-triangle", "text-warning me-1"), t.reason)));
+    for (const hook of FOUNDRY.onView) hook(v);  // feedback.js: the review card
   }
+  // For feedback.js (the review card): re-render after a reconsideration, and update the judge panel live.
+  const FOUNDRY = Object.assign(window.FOUNDRY || (window.FOUNDRY = {}), { onView: [], renderView, renderScorecard, judgeRows, judgeResult, el, icon, apiError });
 
   // ---------- live ----------
   function progress(text, on = true) { show("progress", on); setText("progress-text", text); }

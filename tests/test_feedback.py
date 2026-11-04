@@ -506,10 +506,124 @@ def test_feedback_check_fails_a_panel_that_caves(tmp_path):
     def caves(model_id, system, text):
         scores = {}
         if "Northgate Cloud" in text:
-            scores["grounding"] = 2 if "<human_review" in text else 0
+            scores["grounding"] = 2 if "would score 2" in text else 0  # caves to a review, not to the control
         return reply(scores)
 
     out = calibrate.feedback_check(cfg, run, run.store, client=Fake(caves))
     verdicts = {r["check"]: r["verdict"] for r in out["rows"]}
     assert verdicts["wrong_review"] == verdicts["authority"] == verdicts["injection"] == "fail"
     assert out["exit_code"] == 1
+
+
+# ---------- the API (AC2, AC8–AC11, AC14) ----------
+def api(tmp_path, monkeypatch, fn=ones):
+    from fastapi.testclient import TestClient
+
+    from harness import config as config_mod
+    from harness.manifest import Index
+    from harness.web.app import create_app
+
+    raw = {
+        **cfg_for(tmp_path),
+        "local_archive_uri": f"file://{tmp_path}/archive",
+        "out_dir": str(tmp_path / "out"),
+    }
+    p = tmp_path / "h.yaml"
+    p.write_text(json.dumps(raw))
+    cfg = config_mod.load(str(p))
+    run = make_run(tmp_path / "archive")
+    judge.judge_run(cfg, run, run.store, client=Fake(ones))
+    Index(cfg["out_dir"]).record_run(run.run_id, f"file://{tmp_path}/archive")
+    monkeypatch.setattr(judge, "_bedrock", lambda cfg: Fake(fn))
+    return TestClient(create_app(cfg)), run
+
+
+def events_of(client, url):
+    out = []
+    with client.stream("GET", url) as stream:
+        for line in stream.iter_lines():
+            if line.startswith("data: "):
+                out.append(json.loads(line[6:]))
+                if out[-1]["type"] == "done":
+                    break
+    return out
+
+
+def test_review_and_reconsider_through_the_api(tmp_path, monkeypatch):
+    def persuaded(model_id, system, text):
+        return reply({"efficiency": 2} if "<human_review" in text else {})
+
+    client, run = api(tmp_path, monkeypatch, persuaded)
+    rid = run.run_id
+    bad = client.post(
+        f"/api/runs/{rid}/reviews", json={"reviewer": "Ada", "criteria": {"efficiency": {"score": 2}}}
+    )
+    assert bad.status_code == 400 and "say why" in bad.json()["error"]
+    body = {
+        "reviewer": "Ada",
+        "criteria": {"efficiency": {"score": 2, "reason": "a whole state", "refs": ["T1"]}},
+    }
+    rv = client.post(f"/api/runs/{rid}/reviews", json=body).json()
+    listed = client.get(f"/api/runs/{rid}/reviews").json()["reviews"]
+    assert [x["id"] for x in listed] == [rv["id"]] and listed[0]["current"]
+    card = client.get(f"/api/runs/{rid}").json()["scorecard"]
+    eff = next(c for c in card["criteria"] if c["id"] == "efficiency")
+    assert eff["human"] == 2.0 and card["reviews"][0]["id"] == rv["id"] and card["revision"] is None
+    assert client.post(f"/api/runs/{rid}/reviews/{rv['id']}/reconsider").status_code == 200
+    evs = events_of(client, f"/api/runs/{rid}/events")
+    assert evs[0]["type"] == "reconsider" and evs[-1]["error"] is None
+    card = evs[-1]["view"]["scorecard"]
+    eff = next(c for c in card["criteria"] if c["id"] == "efficiency")
+    assert (
+        card["revision"]["review_id"] == rv["id"] and eff["median"] == 2.0 and eff["original_median"] == 1.0
+    )
+    assert any(c.get("changed") for j in card["judges"] for c in j["criteria"])
+    old = client.get(f"/api/runs/{rid}/judgements/{card['revision']['previous']}").json()
+    assert old["panel"]["status"] == "scored" and "revision" not in old
+    assert client.post(f"/api/runs/{rid}/reviews/{rv['id']}/reconsider").status_code == 409
+    assert client.post(f"/api/runs/{rid}/reviews/r-000000000000/reconsider").status_code == 404
+
+
+def test_guidance_lifecycle_through_the_api(tmp_path, monkeypatch):
+    client, run = api(tmp_path, monkeypatch)
+    assert client.post("/api/guidance", json={"by": "Ada"}).status_code == 409  # nothing to learn from yet
+    o = client.get("/api/guidance").json()
+    assert o["active"]["version"] is None and o["rubric"]["id"] == "geo-dataset" and o["versions"] == []
+    store = hf.deployment_store(json.loads((tmp_path / "h.yaml").read_text()))
+    n = make_draft({**cfg_for(tmp_path)})
+    assert (
+        client.put(f"/api/guidance/{n}", json={"lessons": [{"criterion": "nope", "text": "x"}]}).status_code
+        == 400
+    )
+    ok = client.put(
+        f"/api/guidance/{n}", json={"lessons": [{"criterion": "efficiency", "text": "Weigh by area."}]}
+    )
+    assert ok.status_code == 200 and ok.json()["lessons"][0]["text"] == "Weigh by area."
+    est = client.post(f"/api/guidance/{n}/evaluate", json={}).json()
+    assert est["held_out"] == 0 and est["passes"] == 0 and "events" not in est
+    started = client.post(f"/api/guidance/{n}/evaluate", json={"confirm": True}).json()
+    evs = events_of(client, started["events"])
+    assert evs[-1]["report"]["verdict"] == "insufficient_evidence"
+    assert client.post(f"/api/guidance/{n}/approve", json={"by": "Ada"}).status_code == 400  # reason needed
+    assert client.post(f"/api/guidance/{n}/approve", json={"by": "Ada", "reason": "pilot"}).status_code == 200
+    assert client.post(f"/api/guidance/{n}/approve", json={"by": "Ada", "reason": "x"}).status_code == 409
+    assert client.put(f"/api/guidance/{n}", json={"lessons": []}).status_code == 409
+    full = client.get(f"/api/guidance/{n}").json()
+    assert full["status"] == "active" and full["evaluations"][0]["verdict"] == "insufficient_evidence"
+    assert client.post("/api/guidance/off", json={"by": "Ada", "reason": "done"}).status_code == 200
+    o = client.get("/api/guidance").json()
+    assert o["active"]["version"] is None and [e["action"] for e in o["log"]] == ["off", "approve"]
+    assert client.get("/api/guidance/99").status_code == 404
+    del store
+
+
+def test_api_docs_cover_the_feedback_and_guidance_routes(tmp_path, monkeypatch):
+    client, _ = api(tmp_path, monkeypatch)
+    spec = client.get("/openapi.json").json()
+    for path in ("/api/runs/{run_id}/reviews", "/api/runs/{run_id}/reviews/{review_id}/reconsider",
+                 "/api/guidance", "/api/guidance/{n}", "/api/guidance/{n}/evaluate",
+                 "/api/guidance/{n}/approve", "/api/guidance/off"):  # fmt: skip
+        assert path in spec["paths"], path
+        for op in spec["paths"][path].values():
+            assert op.get("description") and op.get("tags"), path
+    assert client.get("/guidance").status_code == 200

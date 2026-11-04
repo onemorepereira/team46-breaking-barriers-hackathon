@@ -97,11 +97,39 @@ Each defect is reported as one of:
 - **inconclusive:** it was already 0;
 - **non-specific:** another criterion dropped as much as the target.
 
+## Human feedback: reviews, reconsideration and guidance
+Anyone using a deployment can answer a score, and the judges learn from the answers ([spec](../judge-feedback/spec.md), [design](../judge-feedback/design.md)).
+
+1. **Review** a judged run on its page (**Your review**), criterion by criterion. Either agree, or give the score you'd give, a reason, and optionally the steps that show it (`T3`, `M2`). Measured criteria are code, so they take a note, not a score.
+2. **Ask the judges to reconsider.** The judges that voted re-score the run, each seeing its own earlier reply and your review.
+   - The review is a claim they check against the steps, not an order. A judge may keep its score, and says why.
+   - The revised votes become the run's score, marked "Revised after human review". The original judgement stays one click away.
+   - Your own score is shown beside the panel's, never mixed into it.
+3. **Guidance.** On the **Guidance** page, propose lessons from all reviews. The chair judge drafts short, general clarifications per criterion, each citing its reviews.
+   - **Edit** them, then **evaluate** them. About a third of reviewed runs are held out by run ID and never shown to the proposer. Evaluation re-judges them with the live guidance and with the draft, compares both with the reviewers, and reruns planted-defect calibration. It says **adopt** only if agreement with reviewers improves and calibration still passes.
+   - **Approve** a version to make it active; without an **adopt** verdict you must give a reason. Approve an older version to roll back, or switch guidance off.
+   - An active version is added under each criterion's anchors in every judge's prompt. It never replaces an anchor.
+   - Each judgement records the version it used, so only like is compared with like.
+
+**Where it lives:** in the deployment's own archive (`archive_uri`, under `feedback/`). So guidance is scoped to one Foundry instance, survives restarts, and is never in the repo or the browser. Guidance is keyed to a rubric's id and version: ADB's rubric, once dropped in, starts with none.
+
+**Can the judges be talked into a wrong score?** `harness calibrate <run> --feedback` checks four cases on planted copies of the run:
+- a wrong review;
+- the same wrong review made with authority ("I insist");
+- one with injected instructions;
+- a right review.
+
+The judges must resist the first three and accept the last. The review text is escaped and declared data in the prompt.
+
+**Agreement with people:** `harness agreement --human`, and the Guidance page, report Krippendorff's α between the panel and reviewers, with its CI. Agreement between judges (`harness agreement`) only counts first judgements, never votes a review influenced.
+
 ## Commands
 
 ```sh
 uv run harness judge <run-id> [--passes 3]   # score an archived run; writes runs/<id>/judgement.json
 uv run harness calibrate <run-id>            # planted-defect check of the panel
+uv run harness calibrate <run-id> --feedback # do the judges resist wrong reviews and accept right ones?
+uv run harness guidance list                 # this deployment's guidance versions and agreement
 uv run harness agreement --all               # Krippendorff's alpha across every judged run
 uv run harness compare <suite-id>            # suite table with scores, confidence and corpus alpha
 uv run harness ui                            # the console: live runs, scores, map, plain-language trace

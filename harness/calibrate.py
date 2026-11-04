@@ -207,7 +207,11 @@ def feedback_verdict(
 
 def feedback_check(cfg: Config, run: Run, store: Store, client: Any = None) -> dict[str, Any]:
     """Judge planted copies of the run, then reconsider each with a wrong, pushy, injected or right review.
-    The panel must resist the first three and accept the last (design: Sycophancy and injection checks)."""
+    The panel must resist the first three and accept the last (design: Sycophancy and injection checks).
+
+    Each check is measured against a **control** reconsideration of the same copy, with a review that only
+    agrees with the panel: re-scoring alone moves some medians, and that noise must not count as the review's
+    effect (found live on run a5670c6b, where the control moved as much as the injected review)."""
     from harness import feedback
 
     j = judge.judging_cfg(cfg)
@@ -219,7 +223,7 @@ def feedback_check(cfg: Config, run: Run, store: Store, client: Any = None) -> d
     client = client or judge._bedrock(cfg)
     rows: list[dict[str, Any]] = []
     cost = 0.0
-    first: dict[str, tuple[dossier_mod.Dossier, list[dict[str, Any]]]] = {}
+    first: dict[str, tuple[dossier_mod.Dossier, list[dict[str, Any]], dict[str, float | None]]] = {}
     for check, kind, level, reason, direction in FEEDBACK_CHECKS:
         target = r.calibration.get(kind)
         score = r.max_score if level == "top" else int(level)
@@ -233,8 +237,17 @@ def feedback_check(cfg: Config, run: Run, store: Store, client: Any = None) -> d
         if kind not in first:
             ps = judge.run_panel(cfg, r, pd, seats, 1, client, None, spares)
             cost += sum(x.get("cost_usd") or 0 for p in ps for x in p["judges"])
-            first[kind] = (pd, ps)
-        pd, ps = first[kind]
+            meds = _medians(r, ps)
+            m = meds.get(target)
+            agree = {"reviewer": "calibration", "note": "",
+                     "criteria": {target: {"agree": True, "score": m, "panel_median": m}}}  # fmt: skip
+            jd0 = {"passes": ps}
+            cp = feedback.reconsider_pass(
+                cfg, r, pd, jd0, agree, feedback.called_seats(jd0), spares, None, client
+            )
+            cost += sum(x.get("cost_usd") or 0 for p in cp for x in p["judges"])
+            first[kind] = (pd, ps, _medians(r, cp))
+        pd, ps, control = first[kind]
         before = _medians(r, ps)
         jd = {"passes": ps, "seats": [vars(s) for s in seats]}
         refs = sorted(x for x in pd.known_refs if x.startswith("T"))[:2] if check == "right_review" else []
@@ -255,13 +268,15 @@ def feedback_check(cfg: Config, run: Run, store: Store, client: Any = None) -> d
         rp = feedback.reconsider_pass(cfg, r, pd, jd, review, called, spares, None, client)
         cost += sum(x.get("cost_usd") or 0 for p in rp for x in p["judges"])
         after = _medians(r, rp)
-        verdict, why = feedback_verdict(direction, before, after, target, r.max_score)
+        baseline = {k: control.get(k) if control.get(k) is not None else before.get(k) for k in before}
+        verdict, why = feedback_verdict(direction, baseline, after, target, r.max_score)
         rows.append(
             {
                 "check": check,
                 "perturbation": kind,
                 "target": target,
                 "before": before.get(target),
+                "control": control.get(target),
                 "after": after.get(target),
                 "verdict": verdict,
                 "why": why,

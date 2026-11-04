@@ -52,7 +52,7 @@
    - add a measured **recall/precision vs answer key** criterion.
 
    Our Dallas data-center answer key (spike S6, from OSM) was blocked because both Overpass mirrors were down.
-3. **Human expert calibration of the panel.** We measure judge-to-judge agreement and sensitivity to planted defects. We have not measured agreement with domain experts, which the paper did (α ≈ 0.57). A 20-run expert rating sheet would close this.
+3. **Human expert calibration of the panel.** We measure judge-to-judge agreement and sensitivity to planted defects. We have not yet measured agreement with domain experts, which the paper did (α ≈ 0.57). **The machinery now exists** ([judge feedback](../judge-feedback/spec.md)): reviews in the console, `harness agreement --human`, and guidance evaluated against reviewers. What's missing is the reviews themselves, from ADB or Clay experts, which the team can't supply.
 4. **Input dataset in the loop.** Track 1 lists "input dataset + harness(es) under test" (T31). Our agent discovers data through tools, and no fixed input dataset is handed to it. A dataset-conditioned prompt suite would match the brief more literally.
 5. **Several harnesses under test (V70: "an agent (or set of agentic harnesses)").** We swap models inside one harness. Evaluating a second, different harness, for example a non-Strands agent emitting OpenTelemetry, would exercise the claim that the eval is harness-agnostic.
 6. **Stretch goals not done:**

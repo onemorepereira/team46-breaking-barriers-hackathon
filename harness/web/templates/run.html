@@ -132,6 +132,7 @@
             <div class="card-actions small text-secondary" id="rubric-name"></div>
           </div>
           <div class="card-body p-0">
+            <div class="m-3 mb-0" id="revision" hidden></div>
             <div class="alert alert-danger m-3 mb-0" id="gate" hidden></div>
             <div class="list-group list-group-flush" id="scorecard">
               <div class="list-group-item text-secondary small">The panel scores the run once the agent finishes.</div>
@@ -140,6 +141,15 @@
           <div class="card-footer small" id="modes"></div>
         </div>
       </div>
+    </div>
+
+    <!-- human review of the judgement (feedback.js, docs/judge-feedback) -->
+    <div class="card mb-3" id="review-card" hidden>
+      <div class="card-header">
+        <h3 class="card-title"><i class="ti ti-user-check me-2"></i>Your review</h3>
+        <div class="card-actions small text-secondary">Agree or disagree with the panel, criterion by criterion. A review doesn't change the score by itself.</div>
+      </div>
+      <div class="card-body" id="review-body"></div>
     </div>
 
     <!-- timeline + judges/claims -->
@@ -190,6 +200,13 @@
     </div>
   </div>
 </div>
+<dialog class="foundry-dialog" id="original-dialog" aria-labelledby="original-title">
+  <div class="d-flex align-items-center mb-2">
+    <h3 class="m-0" id="original-title">The original judgement</h3>
+    <button type="button" class="btn btn-sm ms-auto" id="original-close"><i class="ti ti-x me-1"></i>Close</button>
+  </div>
+  <div id="original-body" class="small"></div>
+</dialog>
 <div class="foundry-toast" id="toast" role="status" aria-live="polite" hidden>
   <span id="toast-text"></span>
   <button type="button" class="btn btn-sm btn-primary ms-2" id="toast-show">Show</button>
@@ -201,4 +218,5 @@
 <script src="/static/vendor/dompurify/purify.min.js"></script>
 <script>window.FOUNDRY = {runId: {{ run_id | tojson }}};</script>
 <script src="/static/app.js"></script>
+<script src="/static/feedback.js"></script>
 {% endblock %}

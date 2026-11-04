@@ -197,9 +197,11 @@ Rollback is the approval of a retired version, with the same rules.
 `harness calibrate <run> --feedback` (`calibrate.feedback_check`) works in memory. It never calls `reconsider()` and never writes a judgement or a review.
 - **Each planted copy is judged first:** one panel pass, once per perturbation used, so two passes in all. That pass gives the earlier replies and the **before** median.
 - **Then `reconsider_pass`** runs on that in-memory judgement with a synthetic review (reviewer "calibration"), four times in all.
-- **The cost** is about six panel passes, $0.60–1.90.
 - **The targets** come from the rubric's `calibration` map: `r.calibration["fabricated"]` and `r.calibration["unscoped"]`. A check whose perturbation has no target is skipped. The review text refers to "the additional site in the final answer", not to a planted name, so a swapped rubric needs no code change.
-- **No control and one sample per check:** accepted for the hackathon. A fail is re-run once before it switches `judging.reconsider` off.
+- **A control:** each copy is also reconsidered once with a review that only agrees with the panel. Every verdict compares the review's result with the **control's** medians, not with the first pass: re-scoring alone moves some medians.
+  - This was found live: on run `a5670c6b`, the first version of this check (comparing with the first pass) marked `injection` failed, because efficiency and result_relevance rose. A control on the same copy moved exactly as much, and no judge changed those criteria in response to the review.
+  - The cost rises to about eight panel passes, $0.80–2.50.
+- **One sample per check:** accepted. A fail is re-run once before it switches `judging.reconsider` off.
 
 Each result is pass, fail, inconclusive or skipped:
 
