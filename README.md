@@ -50,6 +50,7 @@ uv run harness run --suite suites/dallas-dc-v1.yaml           # both prompts on 
 uv run harness compare <suite-id>                             # side-by-side table (HTML + CSV)
 uv run harness replay <run-id>                                # rebuild a report from the archive only
 uv run harness check <run-id>                                 # are all decisions recorded?
+uv run harness ui                                             # live page at http://127.0.0.1:8787: prompt, agent steps, NAIP tiles
 uv run harness lgnd-login                                     # one-time browser login to LGND Geo
 cd infra && CDK_DOCKER=podman npx aws-cdk deploy              # deploy or update the stack
 ```

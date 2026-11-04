@@ -121,13 +121,13 @@ def _git_sha() -> str:
         return "unknown"
 
 
-def execute(cfg: Config, index: Index, plan: RunPlan) -> Outcome:
+def execute(cfg: Config, index: Index, plan: RunPlan, extra_env: dict[str, str] | None = None) -> Outcome:
     store = open_store(plan.archive_uri)
     key = f"runs/{plan.run_id}/run.json"
     store.write_text(key, json.dumps(plan.manifest, indent=1))
     index.record_run(plan.run_id, plan.archive_uri)
     try:
-        result = _run_local(cfg, plan) if plan.backend == "local" else _run_agentcore(cfg, plan)
+        result = _run_local(cfg, plan, extra_env) if plan.backend == "local" else _run_agentcore(cfg, plan)
     except Exception as e:  # noqa: BLE001 - recorded in run.json, never retried automatically
         result = {"status": "error", "error": f"{type(e).__name__}: {e}"}
     if result.get("status") != "error" or "final_output" not in result:
@@ -141,13 +141,18 @@ def execute(cfg: Config, index: Index, plan: RunPlan) -> Outcome:
     return Outcome(str(manifest["status"]), result.get("error"))
 
 
-def _run_local(cfg: Config, plan: RunPlan) -> dict[str, Any]:
+def _run_local(cfg: Config, plan: RunPlan, extra_env: dict[str, str] | None = None) -> dict[str, Any]:
     out = Path(cfg["out_dir"]) / plan.run_id
     out.mkdir(parents=True, exist_ok=True)
     payload_path = out / "payload.json"
     payload_path.write_text(json.dumps(plan.payload), encoding="utf-8")
     env = {**os.environ, "HARNESS_ARCHIVE_URI": plan.archive_uri,
            "HARNESS_EXPORTER": os.environ.get("HARNESS_EXPORTER", cfg["local_exporter"])}  # fmt: skip
+    if cfg.get("lgnd_secret_id") and not os.environ.get("HARNESS_TEST_SCRIPT"):
+        # same LGND Geo access as the deployed runtime (refresh token in Secrets Manager)
+        env.setdefault("HARNESS_LGND_URL", "https://geo.lgnd.ai/mcp")
+        env.setdefault("HARNESS_LGND_SECRET_ID", str(cfg["lgnd_secret_id"]))
+    env.update(extra_env or {})
     proc = subprocess.run([sys.executable, "-m", "agent.local", str(payload_path)], env=env, timeout=900,
                           capture_output=True, text=True)  # fmt: skip
     (out / "agent.log").write_text(proc.stdout + proc.stderr, encoding="utf-8")

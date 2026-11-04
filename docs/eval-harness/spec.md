@@ -27,7 +27,7 @@ Clay and ADB can't tell whether to trust a dataset an AI agent built (V13). Noth
 - **The final workflow-scoring method.** It's still open **[team]**. This version reports raw workflow signals and leaves scoring pluggable.
 - **The output score itself.** It's blocked on ADB's rubric (V191). This version ships the report section with no score in it.
 - **Final prompt wording.** The task is decided, but the exact prompts are still open **[team]**. A draft prompt drives the tests.
-- **A UI for launching runs.** A command line plus static report files is enough. The brief's minimal UI is only a "Should Have" (V130).
+- **A UI for launching runs.** A command line plus static report files is enough. The brief's minimal UI is only a "Should Have" (V130). **Changed in Build (user request, 2026-11-04):** a lightweight local `harness ui` was added. You type a prompt, watch the agent's decision spans live, and see the NAIP tiles LGND returned on a map, with its verdicts.
 - **Scores or rankings in the comparison.** The comparison table (AC11) shows raw numbers side by side and doesn't declare a winner **[team]**.
 - **Other stretch goals:** multi-agent traces, sensitivity analysis, dynamic MCP discovery (T186–T190).
 - **Production hardening:** authentication, multi-tenancy, a data warehouse (T167).

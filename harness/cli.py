@@ -210,6 +210,12 @@ def cmd_lgnd_login(cfg: config_mod.Config, index: Index, args: argparse.Namespac
     return lgnd.login_browser(secret, cfg["region"])
 
 
+def cmd_ui(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
+    from harness import ui
+
+    return ui.serve(cfg, args.port)
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="harness", description="Track 1 evaluation harness")
     p.add_argument("--config", default=None, help="path to harness.yaml (default: ./harness.yaml)")
@@ -220,8 +226,10 @@ def build_parser() -> argparse.ArgumentParser:
     what.add_argument("--suite", help="suite file, e.g. suites/dallas-dc-v1.yaml")
     run.add_argument("--model", default=None, help="model key from harness.yaml models")
     run.add_argument("--backend", choices=["agentcore", "local"], default=None)
+    ui = sub.add_parser("ui", help="local page to start a run, watch it live, and see the NAIP tiles")
+    ui.add_argument("--port", type=int, default=8787)
     lg = sub.add_parser(
-        "lgnd-login", help="one-time OAuth device login to LGND Geo; saves to Secrets Manager"
+        "lgnd-login", help="one-time OAuth browser login to LGND Geo; saves to Secrets Manager"
     )
     lg.add_argument("--secret", default=None, help="secret ID (default: lgnd_secret_id in harness.yaml)")
     lg.add_argument("--device", action="store_true", help="use the device-code flow instead of the browser")
@@ -245,6 +253,7 @@ def main(argv: list[str] | None = None) -> int:
             "replay": cmd_replay,
             "compare": cmd_compare,
             "lgnd-login": cmd_lgnd_login,
+            "ui": cmd_ui,
         }[args.command]
         return handler(cfg, index, args)
     except (ArchiveError, FileNotFoundError, ValueError) as e:
