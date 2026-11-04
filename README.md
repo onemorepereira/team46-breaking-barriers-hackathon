@@ -63,7 +63,16 @@ From the Verify stage on Nov 4; the evidence is in the [handoff](docs/eval-harne
 - **All 11 acceptance criteria were proven by commands that actually ran**, including live AgentCore runs, a CloudWatch query, an S3 archive listing and the CI tests **[team]**.
 - **Every deployed run's trace check reports 0 missing fields, and 100% of decision spans were archived** **[team]**.
 - **Claim rules matter.** With one verbatim value per claim, the Dallas suite graded 21 of 21 claims matched; before that rule, a run combining values from different tool results graded 0 of 6 **[team]**.
-- **The models behave differently.** On the same task, Kimi K3 made far more traceable claims than Sonnet 5.5, but took 5–8 times longer **[team]**.
+- **The models behave differently.** On the same task, Kimi K3 made far more traceable claims than Sonnet 5.5, but took 4–5 times longer and cost about 2–6 times more **[team]**. Suite `dallas-dc-v1-20261104T0450` on AgentCore, with all fixes applied **[team]**:
+
+  | Prompt | Model | Steps | Input tokens | Est. cost | Time | Claims matched / mismatch / unsourced |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | `dallas-dc` | Sonnet 5.5 | 7 | 80k | $0.18 | 43 s | 8 / 0 / 0 |
+  | `dallas-dc` | Kimi K3 | 28 | 263k | $1.07 | 234 s | 35 / 0 / 0 |
+  | `dallas-dc-strict` | Sonnet 5.5 | 7 | 79k | $0.17 | 25 s | 4 / 0 / 0 |
+  | `dallas-dc-strict` | Kimi K3 | 11 | 93k | $0.38 | 94 s | 8 / 0 / 0 |
+
+  Costs use Sonnet at $2 / $10 and Kimi at $3.30 / $16.50 per million input / output tokens, and count cached tokens at the full input rate **[team]**. All 4 runs report 0 missing fields **[team]**.
 - **The agent found candidate sites.** Through LGND Geo's NAIP imagery search and imagery check, it reported candidate data-center sites near Dallas. Each one traces to a tool result, and their names and operators are still unconfirmed **[team]**.
 - **Live runs found grader bugs, and replay re-graded old runs after the fixes**: JSON-escaped line breaks, Unicode escapes, cached prompt tokens counted as input, and tool errors counted twice **[team]**.
 
