@@ -4,8 +4,8 @@ Every number or factual claim in `deck.html`, with the file it comes from. If a 
 
 | Slide | Claim | Source |
 | --- | --- | --- |
-| 1, 9 | Team Foundry, Team 46: Aditya Pasarti, Farhan Shahriar, Uday Kandi, Miguel Pereira | The team **[team]** |
-| 9 | Open source, Apache-2.0 | `LICENSE` |
+| 1, 10 | Team Foundry, Team 46: Aditya Pasarti, Farhan Shahriar, Uday Kandi, Miguel Pereira | The team **[team]** |
+| 10 | Open source, Apache-2.0 | `LICENSE` |
 | 1 | Evaluating agentic workflows is Clay's #1 unmet need (speaker note) | `docs/Clay-Foundry-Vision-Hackathon.md:17` |
 | 1 | "15 data centers" | Run `a5670c6b`: 15/15 claims verified (`docs/console-polish/handoff.md:38`) |
 | 2 | Every model and tool call is an OpenTelemetry span | `README.md`, "What we built"; `docs/eval-harness/handoff.md` |
@@ -23,17 +23,22 @@ Every number or factual claim in `deck.html`, with the file it comes from. If a 
 | 5 | The first calibration pass caught a bug in our evidence builder | `docs/judging/handoff.md:55` |
 | 5 | Agreement score 0.50 (Krippendorff's α), 95% CI 0.12–0.67, 7 runs | `docs/judging/handoff.md:116` (0.502) |
 | 5 | Human experts' α ≈ 0.56 in the paper Clay shared (GRA) | `docs/judging/paper-notes.md:17` |
-| 6 | Before: FAILED, no answer, $1.50 | `docs/console-polish/handoff.md:39` (run `fdacf7cf`) |
-| 6 | After: 85.4 High, 0 errors, 15/15, 8/8, $0.81 | `docs/console-polish/handoff.md:38` (run `a5670c6b`) |
-| 6 | "Northern California" resolved to a 20 m building in San Francisco | `docs/judging/handoff.md:110` (run `c251934d`) |
-| 6 | The LGND token lives 300 s, and every call after 290 s failed | `docs/console-polish/handoff.md:50` |
-| 6 | Narrowed searches (16 km circles) were widened to all of Texas | `docs/console-polish/spec.md`, problem 3 |
-| 7 | Strands on Bedrock AgentCore; Sonnet 5.5 or Kimi K3; RODA and LGND Geo over MCP; OTel to S3; FastAPI console; CDK | `README.md`, "How it works" and "Decisions" |
-| 7 | The exporter is swapped by config, proved in CI | `README.md`: "OpenTelemetry is the only telemetry API" and goal 5, "Keep observation pluggable" |
-| 7 | ADB's rubric is one YAML file | `docs/judging/guide.md`, "To use ADB's rubric" |
-| 7 | Replays work offline from the trace | `README.md` ("Reports work offline"); `docs/tile-cache/handoff.md:24` (31/31 tiles from the archive with every provider blocked) |
-| 8 | Checks claims against the tool output, not the world; no answer key yet | `docs/judging/gaps.md`; `docs/factory.md`, "Open work" |
-| 8 | Next steps: answer key, ADB rubric, expert ratings, plain-language verdicts, prompt compliance | `docs/factory.md` ("Open work" and "Slices open for the team") |
+| 6 | A review is evidence to check, not an order; the revised score keeps the original | `docs/judge-feedback/spec.md` (AC3, AC4); `docs/judging/guide.md`, "Human feedback" |
+| 6 | Opus: "The steps show eight sites were checked against imagery, not three: five Central Valley sites in T6 and three North Coast sites in T9" (our deliberately wrong review) | `docs/judge-feedback/handoff.md`, "Exercised live" (run `42b0a155`, review `r-4d3985152d1d`) |
+| 6 | Lessons are tested on held-out runs (a third of reviewed runs) and approved by a person; each score records its guidance version; rollback | `docs/judge-feedback/design.md`, "Train and held-out runs", "Evaluation", "Approval, off and rollback" |
+| 6 | Stored in each deployment's own archive, not in the code or a browser | `docs/judge-feedback/design.md`, "Where things live" |
+| 6 | Wrong, "I insist" and injected reviews resisted, live, measured against a control | `docs/judge-feedback/handoff.md`, AC7 (run `a5670c6b`, `harness calibrate --feedback`, $1.43) |
+| 7 | Before: FAILED, no answer, $1.50 | `docs/console-polish/handoff.md:39` (run `fdacf7cf`) |
+| 7 | After: 85.4 High, 0 errors, 15/15, 8/8, $0.81 | `docs/console-polish/handoff.md:38` (run `a5670c6b`) |
+| 7 | "Northern California" resolved to a 20 m building in San Francisco | `docs/judging/handoff.md:110` (run `c251934d`) |
+| 7 | The LGND token lives 300 s, and every call after 290 s failed | `docs/console-polish/handoff.md:50` |
+| 7 | Narrowed searches (16 km circles) were widened to all of Texas | `docs/console-polish/spec.md`, problem 3 |
+| 8 | Strands on Bedrock AgentCore; Sonnet 5.5 or Kimi K3; RODA and LGND Geo over MCP; OTel to S3; FastAPI console; CDK | `README.md`, "How it works" and "Decisions" |
+| 8 | The exporter is swapped by config, proved in CI | `README.md`: "OpenTelemetry is the only telemetry API" and goal 5, "Keep observation pluggable" |
+| 8 | ADB's rubric is one YAML file | `docs/judging/guide.md`, "To use ADB's rubric" |
+| 8 | Replays work offline from the trace | `README.md` ("Reports work offline"); `docs/tile-cache/handoff.md:24` (31/31 tiles from the archive with every provider blocked) |
+| 9 | Checks claims against the tool output, not the world; no answer key yet | `docs/judging/gaps.md`; `docs/factory.md`, "Open work" |
+| 9 | Next steps: answer key, ADB rubric, ADB's experts reviewing runs (the loop is built), plain-language verdicts, prompt compliance | `docs/factory.md` ("Open work" and "Slices open for the team") |
 
 **Costs for Q&A** (not on a slide):
 - **Judging:** $0.10–0.31 per run with the tribunal: run `3d7ac12a` cost $0.10 (`docs/judging/handoff.md`, "Tribunal of three") and `a5670c6b` cost $0.31.
