@@ -97,6 +97,8 @@ Committed, and it holds no secrets. Unset keys take the defaults in `harness/con
 | `judging.recuse_same_family` | `true` | A judge sharing the agent's family steps down |
 | `judging.passes` | `1` | Panel passes per run; `--passes` overrides |
 | `judging.auto` | off | Judge every finished run (`harness run`, the console) |
+| `judging.guidance` | `true` | Apply this deployment's approved guidance to every judge's prompt ([judge feedback](judge-feedback/spec.md)) |
+| `judging.reconsider` | `true` | Let reviewers ask the judges to reconsider a run with their review |
 | `tiles.archive` | `false` (repo file: `true`) | Archive result tiles when a report is written |
 | `tiles.serve` | `true` | The console serves imagery through its cache; `false` sends the browser straight to the providers |
 | `tiles.cache_max_mb` | `1024` | Disk cache cap (least recently used are evicted) |

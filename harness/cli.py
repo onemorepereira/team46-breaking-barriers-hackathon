@@ -85,10 +85,12 @@ def cmd_compare(cfg: config_mod.Config, index: Index, args: argparse.Namespace) 
     if not suite.get("run_ids"):
         print(f"suite {args.suite_id} has no archived runs.")
         return 1
-    reports = []
+    reports, runs = [], []
     for run_id in suite["run_ids"]:
         try:
-            reports.append(report.analyze(Run.load(open_store(index.run_uri(run_id) or uri), run_id)))
+            run = Run.load(open_store(index.run_uri(run_id) or uri), run_id)
+            reports.append(report.analyze(run))
+            runs.append(run)
         except ArchiveError as e:
             print(f"warning: {e}", file=sys.stderr)
     rows = report.compare_rows(reports)
@@ -96,7 +98,7 @@ def cmd_compare(cfg: config_mod.Config, index: Index, args: argparse.Namespace) 
     out.mkdir(parents=True, exist_ok=True)
     from analysis.judging import panel
 
-    judged = [rep.judgement for rep in reports if rep.judgement]
+    judged = [jd for run in runs if (jd := run.unrevised_judgement)]  # no human-influenced votes
     agreement = panel.corpus_alpha(judged) if judged else None
     html = report.render_compare(args.suite_id, rows, _now(), agreement)
     (out / "compare.html").write_text(html, encoding="utf-8")
@@ -310,7 +312,7 @@ def cmd_agreement(cfg: config_mod.Config, index: Index, args: argparse.Namespace
     judgements = []
     for rid in dict.fromkeys(ids):
         try:
-            jd = Run.load(_run_store(cfg, index, rid), rid).judgement
+            jd = Run.load(_run_store(cfg, index, rid), rid).unrevised_judgement
         except ArchiveError:
             continue
         if jd:
