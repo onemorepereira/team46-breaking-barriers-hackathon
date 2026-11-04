@@ -7,6 +7,8 @@ from typing import Any
 
 
 def rewrite(data: bytes, content_type: str, path: str, prefix: str) -> bytes:
+    if "javascript" in content_type and path.rsplit("/", 1)[-1] not in ("app.js", "runs.js", "api-docs.js"):
+        return data
     text = data.decode("utf-8")
     if "text/html" in content_type:
         text = re.sub(r"""((?:href|src|action)=["'])/(?!/)""", lambda m: m[1] + prefix + "/", text)
