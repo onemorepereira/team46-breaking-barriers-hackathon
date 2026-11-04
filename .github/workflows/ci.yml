@@ -20,6 +20,8 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy
       - run: uv run pytest
+      - name: Infrastructure checks (docs/aws-hardening; needs the infra group and Node for jsii)
+        run: uv run --group infra pytest tests/test_infra.py
   secrets:
     runs-on: ubuntu-latest
     steps:

@@ -181,10 +181,11 @@ Per-run limits (40 steps, 400k input and 200k output tokens, 600 s wall clock, 6
 - `uv run pytest` runs everything offline. `pytest-socket` blocks the network in the tests that must not reach it.
 - **Building runs:** `tests/fixtures/builder.py` (`RunBuilder`, `standard_run`) writes a realistic archived run, so analysis, judging, report and console tests work from real files.
 - **Faking judges:** `tests/test_judging.py:FakeBedrock`.
+- **Infrastructure:** `uv run --group infra pytest tests/test_infra.py` synthesizes the CDK stack and checks the IAM, bucket, log-retention, image-scanning and container rules ([AWS hardening](aws-hardening/spec.md)). It's skipped without the `infra` group; CI runs it.
 - **Faking tile providers:** `tests/test_tiles.py`.
 - **Real end-to-end subprocess runs:** `HARNESS_TEST_SCRIPT` drives the agent with `tools/scripted.py`.
 - **Live checks** (real Bedrock, LGND, S3) aren't in CI. Each feature's `handoff.md` records the live runs that proved it.
-- **CI** runs ruff (lint and format), mypy, pytest and gitleaks; see [CONTRIBUTING](../CONTRIBUTING.md#before-you-push).
+- **CI** runs ruff (lint and format), mypy, pytest, the infrastructure checks and gitleaks; see [CONTRIBUTING](../CONTRIBUTING.md#before-you-push).
 
 ## 10. Troubleshooting
 
