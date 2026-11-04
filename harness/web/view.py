@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from analysis import provenance, signals, summary, timeline
-from analysis.judging import conditions, measure, rubric
+from analysis.judging import measure, rubric
 from analysis.judging.explain import explain
 from analysis.trace import Run
 from core import geometry
@@ -61,12 +61,16 @@ def map_layers(m: measure.Measured, run_id: str | None = None, serve_tiles: bool
 
 
 def scorecard(
-    run: Run, deploy_store: Any = None, reconsider: bool = True, rubric_path: str | None = None
+    run: Run,
+    deploy_store: Any = None,
+    reconsider: bool = True,
+    rubric_path: str | None = None,
+    result: Any = None,
 ) -> dict[str, Any] | None:
     jd = run.judgement
     if not jd:
         return None
-    result = judge.rescore(jd, run).as_dict()
+    result = (result if result is not None else judge.rescore(jd, run)).as_dict()
     names = rubric.display_names(rubric.parse(jd["rubric"]["snapshot"]), rubric_path)
     for c in result["criteria"]:
         c["plain"] = names[c["id"]]
@@ -168,7 +172,8 @@ def run_view(
     m = measure.measure(run, prov)
     sig = signals.compute(run)
     summ = summary.build(run, prov)
-    card = scorecard(run, deploy_store, reconsider, rubric_path)
+    result = judge.rescore(run.judgement, run, m) if run.judgement else None
+    card = scorecard(run, deploy_store, reconsider, rubric_path, result=result)
     entries = [e.as_dict() for e in timeline.entries(run.spans)]
     by_ref: dict[str, list[float]] = {}
     for x in m.located:
@@ -240,8 +245,8 @@ def run_view(
         "timeline": entries,
         "map": map_layers(m, run.run_id, serve_tiles),
         "scorecard": card,
-        "conditions": conditions.evaluate(run),
-        "explanation": explain(run, judge.rescore(run.judgement, run) if run.judgement else None, measured=m),
+        "conditions": m.conditions,
+        "explanation": explain(run, result, measured=m),
         "source_check_note": provenance.matcher_update_note(run.judgement),
         "claims": claims,
         "final_answer": measure.answer_text(run.final_output),

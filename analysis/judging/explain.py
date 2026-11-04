@@ -108,10 +108,10 @@ def explain(run: Run, result: PanelResult | None, *, measured: Measured | None =
         if "no_tool_data" in ids:
             doubts.append("No tool returned usable data.")
             checks.append("Check tool access and errors before trying again.")
-    elif m.conditions_error:
+    elif m.conditions_error and any(c.id == "condition_compliance" for c in result.criteria):
         headline = "This evaluation is incomplete because the request conditions could not be read."
         facts.append("No overall score is available until the request conditions can be checked.")
-        checks.append("Check service access, then start a new run to read the request conditions.")
+        checks.append("Check service access, then use Re-judge to retry reading the request conditions.")
     elif result.overall is None:
         headline = "There were not enough judge replies to give this run a score."
         facts.append("No score is available because too few judges returned usable replies.")
@@ -124,7 +124,7 @@ def explain(run: Run, result: PanelResult | None, *, measured: Measured | None =
         if not m.trace_integrity:
             doubts.append("Parts of the saved record are missing or could not be checked.")
             checks.append("Restore the missing records before relying on this score.")
-        if m.conditions_need_review:
+        if m.conditions_need_review and any(c.id == "condition_compliance" for c in result.criteria):
             doubts.append("Some conditions in your request have no supporting evidence.")
             checks.insert(0, "Review each unverified or contradicted condition in the conditions table.")
         if result.confidence == "Medium" and not m.conditions_need_review:
@@ -156,7 +156,8 @@ def explain(run: Run, result: PanelResult | None, *, measured: Measured | None =
         evidence_checks.append(f"Check {outside} listed {noun} outside the area you asked for.")
     if m.claims_total > m.claims_matched or m.claims_block_missing:
         evidence_checks.append("Compare the listed values with their sources; some could not be matched.")
-    checks = list(dict.fromkeys([*evidence_checks, *checks]))[:3]
+    condition_checks = [c for c in checks if c.startswith("Review each unverified")]
+    checks = list(dict.fromkeys([*condition_checks, *evidence_checks, *checks]))[:3]
     if not checks:
         checks = ["Check a few listed results against an independent source before using them."]
     if result and result.overall is not None and result.verdict != "FAILED":

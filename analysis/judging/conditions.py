@@ -19,7 +19,10 @@ def load(run: Run) -> dict[str, Any] | None:
 def records(data: Any) -> list[dict[str, Any]]:
     out = []
     if isinstance(data, dict):
-        if any(k in data for k in ("lat", "latitude")):
+        fields = {k.lower(): v for k, v in data.items()}
+        if any(k in fields for k in ("lat", "latitude")) or fields.get("type") == "Feature":
+            out.append(data)
+        elif fields.get("type") == "Point":
             out.append(data)
         cols, rows = data.get("columns"), data.get("rows")
         if isinstance(cols, list) and isinstance(rows, list):
@@ -45,7 +48,7 @@ def references(run: Run, feature: str) -> list[tuple[float, float, str]]:
     words = set(re.findall(r"[a-z]+", feature.lower())) - {"a", "an", "the", "of", "in"}
     found = []
     for s in run.tool_results:
-        if s.attr("harness.tool.status") == "error":
+        if s.attr("harness.tool.status") in ("error", None):
             continue
         text = run.tool_result_text(s) or str(s.attr("harness.tool.result", ""))
         try:
@@ -53,33 +56,42 @@ def references(run: Run, feature: str) -> list[tuple[float, float, str]]:
         except ValueError:
             continue
         for r in records(data):
-            label = " ".join(str(r.get(k, "")) for k in ("name", "type", "label", "category", "description"))
+            fields = {k.lower(): v for k, v in r.items()}
+            props = fields.get("properties")
+            if isinstance(props, dict):
+                fields.update({k.lower(): v for k, v in props.items()})
+            label = " ".join(
+                str(fields.get(k, "")) for k in ("name", "type", "label", "category", "description")
+            )
             if (
                 not words
                 or not words <= set(re.findall(r"[a-z]+", label.lower()))
                 or re.search(r"\b(?:not|unconfirmed|maybe|unknown)\b", label.lower())
             ):
                 continue
-            try:
-                lat, lon = (
-                    float(r.get("lat", r.get("latitude", ""))),
-                    float(r.get("lon", r.get("longitude", ""))),
-                )
+            # Use the provenance parser's coordinate aliases and GeoJSON ordering, but only
+            # this record's own location: never borrow coordinates from a nested child site.
+            location = {
+                k: v
+                for k, v in r.items()
+                if k.lower()
+                in ("lat", "latitude", "lon", "lng", "longitude", "type", "coordinates", "geometry")
+            }
+            for lat, lon in provenance._coordinate_pairs(location):
                 if -90 <= lat <= 90 and -180 <= lon <= 180:
                     found.append((lat, lon, str(s.attr("harness.tool.ref"))))
-            except (TypeError, ValueError):
-                pass
     return found
 
 
-def evaluate(run: Run) -> dict[str, Any] | None:
+def evaluate(run: Run, prov: provenance.Provenance | None = None) -> dict[str, Any] | None:
     saved = load(run)
-    if saved is None:
+    if saved is None or saved.get("status") == "not_checked":
         return None  # never infer conditions on replay of a legacy archive
     conditions = saved.get("conditions", [])
     rows: list[dict[str, Any]] = []
     area = (run.manifest.get("snapshot") or {}).get("search_area") or {}
-    for claim in provenance.grade(run).claims:
+    prov = prov if prov is not None else provenance.grade(run)
+    for claim in prov.claims:
         pair = geometry.coordinate_pair(claim.value)
         if not pair:
             continue
@@ -94,7 +106,11 @@ def evaluate(run: Run) -> dict[str, Any] | None:
                 status = "supported" if inside else "contradicted"
                 reason, refs = "Location compared with the saved requested boundary", [claim.ref]
             elif kind == "within_distance":
-                candidates = references(run, c["reference_feature"])
+                candidates = [
+                    (lat, lon, ref)
+                    for lat, lon, ref in references(run, c["reference_feature"])
+                    if geometry.distance_km(*pair, lat, lon) > 0.001
+                ]
                 if candidates:
                     distances = [(geometry.distance_km(*pair, lat, lon), ref) for lat, lon, ref in candidates]
                     distance, ref = min(distances)
