@@ -64,6 +64,9 @@ def lgnd_extras(name: str, result: str) -> dict[str, Any]:
         if r.get("node")
     ]
     out: dict[str, Any] = {}
+    if data.get("matches") is not None:
+        out["where"] = data.get("where")
+        out["unscoped"] = data.get("where") == "everywhere"
     if chips:
         out["chips"] = chips
     if verdicts:
@@ -112,6 +115,12 @@ def span_event(span: dict[str, Any]) -> dict[str, Any] | None:
         }
         if a.get("harness.tool.server") == "lgnd":
             ev.update(lgnd_extras(str(a.get("harness.tool.name")), result))
+            try:
+                area = (json.loads(a.get("harness.tool.arguments") or "{}").get("scope") or {}).get("area")
+            except (json.JSONDecodeError, AttributeError):
+                area = None
+            if isinstance(area, dict) and {"lat", "lon"} <= area.keys():
+                ev["area"] = area
         return ev
     if name == "harness.run.end":
         return {"type": "end", "status": a.get("harness.status")}

@@ -102,3 +102,28 @@ def test_scripted_run_streams_events_to_done(tmp_path):
     finally:
         proc.terminate()
         proc.wait(timeout=10)
+
+
+def test_unscoped_search_is_flagged(tmp_path):
+    from analysis.provenance import grade
+    from analysis.store import FileStore
+    from analysis.summary import build
+    from analysis.trace import Run
+    from tests.fixtures.builder import RunBuilder
+
+    b = RunBuilder(root=tmp_path)
+    b.run_start()
+    b.model("", tool_use={"toolUseId": "tooluse_T1", "name": "search_place_find", "input": {}})
+    sid, _ = b.tool(
+        "search_place_find", {"scope": {"index": "naip"}}, json.dumps({"where": "everywhere", "matches": {}})
+    )
+    b.lines[-1]["attributes"]["harness.tool.server"] = "lgnd"
+    b.model("done")
+    b.run_end()
+    b.write(final_output="done")
+    run = Run.load(FileStore(f"file://{tmp_path}"), "run-0001")
+    assert any("searched everywhere" in t.reason for t in build(run, grade(run)).trouble_spots)
+    assert (
+        lgnd_extras("search_place_find", json.dumps({"where": "everywhere", "matches": {}}))["unscoped"]
+        is True
+    )

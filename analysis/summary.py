@@ -56,6 +56,15 @@ def _step(span: Any) -> Step | None:
     return None
 
 
+def _searched_everywhere(span: Any) -> bool:
+    """LGND answers a search with no scope.area with where='everywhere' (seen in live runs)."""
+    try:
+        data = json.loads(str(span.attr("harness.tool.result", "")))
+    except json.JSONDecodeError:
+        return False
+    return isinstance(data, dict) and data.get("where") == "everywhere"
+
+
 def trouble_spots(run: Run, prov: Provenance) -> list[TroubleSpot]:
     """The only trouble-spot rule (design ADR-3)."""
     spots: list[TroubleSpot] = []
@@ -74,6 +83,12 @@ def trouble_spots(run: Run, prov: Provenance) -> list[TroubleSpot]:
         if int(s.attr("harness.tool.attempt", 0) or 0) > 0:
             spots.append(
                 TroubleSpot(s.span_id, f"tool {ref} retried (attempt {s.attr('harness.tool.attempt')})")
+            )
+        if s.attr("harness.tool.server") == "lgnd" and _searched_everywhere(s):
+            spots.append(
+                TroubleSpot(
+                    s.span_id, f"tool {ref} {s.attr('harness.tool.name')} had no area: searched everywhere"
+                )
             )
         if s.attr("harness.tool.repeat_of"):
             spots.append(TroubleSpot(s.span_id, f"tool {ref} repeats {s.attr('harness.tool.repeat_of')}"))
