@@ -42,7 +42,8 @@ def write_report(cfg: config_mod.Config, run: Run, archive_tiles: bool = True) -
     out = Path(cfg["out_dir"]) / run.run_id
     out.mkdir(parents=True, exist_ok=True)
     path = out / "report.html"
-    path.write_text(report.render_run(report.analyze(run), _now()), encoding="utf-8")
+    rep = report.analyze(run, rubric_path=(cfg.get("judging") or {}).get("rubric"))
+    path.write_text(report.render_run(rep, _now()), encoding="utf-8")
     from harness import rows
 
     rows.save(cfg["out_dir"], run)  # the runs table row, kept in step with the report

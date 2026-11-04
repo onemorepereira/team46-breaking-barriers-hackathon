@@ -363,6 +363,16 @@
     setText("k-tokens", `${num(counts.tin)} / ${num(counts.tout)}`);
   }
 
+  // ---------- plain explanation (saved evidence only) ----------
+  function renderExplanation(explanation) {
+    const card = $("explanation-card");
+    card.hidden = !explanation;
+    if (!explanation) return;
+    setText("explanation-headline", explanation.headline);
+    setText("explanation-summary", explanation.summary);
+    $("explanation-checks").replaceChildren(...explanation.check_by_hand.map((text) => el("li", { text })));
+  }
+
   // ---------- scorecard ----------
   function renderScorecard(card) {
     const box = $("scorecard");
@@ -405,6 +415,7 @@
               ? Object.entries(c.votes || {}).map(([k, v]) => el("span", { class: `vote vote-${v}`, title: `${k}: ${v}` }, v))
               : el("span", { class: "small text-secondary", text: c.value || "" })),
             el("span", { class: `badge bg-${scoreClass(s)}-lt`, style: "min-width:2.6rem", text: s === null ? "n/a" : Math.round(s) })),
+          el("div", { class: "small text-secondary mt-1", text: c.plain || c.question }),
           el("div", { class: "progress progress-sm mt-1" }, el("div", { class: `progress-bar bg-${scoreClass(s)}`, style: `width:${s || 0}%` })),
           rationale));
       }
@@ -491,6 +502,7 @@
     setClaims(v.map.claims);
     setText("map-note", v.map.area ? "" : "No area in the prompt: results are shown without a boundary check.");
     fitAll();
+    renderExplanation(v.explanation);
     renderScorecard(v.scorecard);
     renderJudges(v.scorecard);
     renderClaims(v.claims);

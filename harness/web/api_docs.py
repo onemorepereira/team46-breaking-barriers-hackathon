@@ -82,6 +82,8 @@ A `text/event-stream` of JSON events (`data: {...}`), in order. The stream ends 
 | `judge_error` | judging failed | `error` |
 | `done` | last | `status`, `error`, and `view`: the same object as **One run, in full** |
 
+The final `view` also includes `explanation` (`headline`, `summary`, `check_by_hand`), and each scorecard criterion includes a `plain` question. Both are display fields; they add no model calls.
+
 Live streams exist for runs started or re-judged since the console started; an archived run has none (404).
 """
 

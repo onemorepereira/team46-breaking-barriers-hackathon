@@ -12,7 +12,8 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from markdown_it import MarkdownIt
 
 from analysis import check, provenance, signals, summary
-from analysis.judging import measure, panel
+from analysis.judging import measure, panel, rubric
+from analysis.judging.explain import explain
 from analysis.trace import Run
 
 _env = Environment(loader=PackageLoader("analysis", "templates"), autoescape=select_autoescape(default=True))
@@ -52,9 +53,10 @@ class RunReport:
     measured: measure.Measured
     panel: panel.PanelResult | None
     judgement: dict[str, Any] | None
+    plain_names: dict[str, str]
 
 
-def analyze(run: Run) -> RunReport:
+def analyze(run: Run, rubric_path: str | None = None) -> RunReport:
     prov = provenance.grade(run)
     return RunReport(
         run=run,
@@ -67,6 +69,11 @@ def analyze(run: Run) -> RunReport:
         measured=measure.measure(run, prov),
         panel=panel.rescore(run.judgement, run) if run.judgement else None,
         judgement=run.judgement,
+        plain_names=(
+            rubric.display_names(rubric.parse(run.judgement["rubric"]["snapshot"]), rubric_path)
+            if run.judgement
+            else {}
+        ),
     )
 
 
@@ -77,6 +84,7 @@ def render_run(rep: RunReport, generated_at: str) -> str:
         generated_at=generated_at,
         answer=measure.answer_text(rep.run.final_output),
         claims_json=claims_blocks(rep.run.final_output),
+        explanation=explain(rep.run, rep.panel, measured=rep.measured),
     )
 
 

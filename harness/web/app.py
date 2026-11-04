@@ -171,8 +171,13 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         judge agreement), `timeline` (each step in plain English, with the raw span), `map` (GeoJSON:
         the requested boundary, result footprints, claimed sites), `scorecard` (every criterion, each judge's
         vote and rationale, the seats, failure modes), `claims`, `final_answer`, `narrative` and
-        `trouble_spots`."""
-        return run_view(load(run_id), serve_tiles=bool(tile_cfg["serve"]))
+        `trouble_spots`. `explanation` gives a plain headline, a short summary and concrete things to check
+        by hand; scorecard entries also carry a `plain` question. These add no model calls."""
+        return run_view(
+            load(run_id),
+            serve_tiles=bool(tile_cfg["serve"]),
+            rubric_path=(cfg.get("judging") or {}).get("rubric"),
+        )
 
     @app.post("/api/runs", tags=["Runs"], response_model=RunStarted, summary="Start a run",
               responses={400: ERRORS[400]})  # fmt: skip

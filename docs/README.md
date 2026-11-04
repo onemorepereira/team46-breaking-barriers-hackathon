@@ -38,7 +38,7 @@ Each folder holds a feature's spec (problem and acceptance criteria), its design
 | Docs pass | [spec](docs-pass/spec.md) · [handoff](docs-pass/handoff.md) | This index, the developer guide and CONTRIBUTING, plus the accuracy audit |
 | Presentation | [README](presentation/README.md) · [deck](presentation/deck.html) · [demo script](presentation/demo.md) · [claims](presentation/claims.md) · [Q&A](presentation/qa.md) · [one-pager](presentation/one-pager.md) · [spec](presentation/spec.md) · [handoff](presentation/handoff.md) | The interactive HTML deck, the judging-only live demo, and their sources |
 
-**Open slices** (specs for the team; status in [the factory](factory.md#slices-open-for-the-team-2026-11-04)): [plain-language evals](plain-verdict/spec.md) · [prompt compliance](prompt-compliance/spec.md) · [visual design](visual-design/spec.md)
+**Open slices** (specs for the team; status in [the factory](factory.md#slices-open-for-the-team-2026-11-04)): [plain-language evals](plain-verdict/spec.md) ([local handoff](plain-verdict/handoff.md)) · [prompt compliance](prompt-compliance/spec.md) · [visual design](visual-design/spec.md)
 
 ## Data and configuration in the repo
 

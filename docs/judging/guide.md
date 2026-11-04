@@ -14,6 +14,12 @@ The overall score is the mean of the two. Two criteria are **measured by code**:
 
 Eight criteria are **judged** by a tribunal of three LLMs from three different model families. Each panel score is the median of the three votes. Next to the score sits a **confidence** label (High, Medium or Low). It says how far the judges agreed and whether the trace is intact. It does **not** say the answer is true: that would need an answer key, which is our main open gap ([gaps.md](gaps.md)).
 
+## Plain explanation on each report
+
+The run page and static report start with **What this means**: a short account of the request, listed locations, score, evidence limits, and up to three things to check by hand. It is computed from the saved archive without an AI call. Counts describe the agent's listed locations, not a count of independently confirmed facilities. Image checks that returned "no" or an unclear answer get specific review actions.
+
+Scorecard questions use optional `plain:` labels from the current configured rubric. Old judgements keep their archived scoring definitions; display text falls back to the saved question when no current label exists. Adding a plain label does not change votes, scoring anchors, weights, or aggregation, although the file's hash changes.
+
 ## The rubric
 
 `rubrics/geo-dataset-v1.yaml` is generalized for any agentic geospatial dataset build. Each judged criterion has one sentence per score: 0, 1 and 2.

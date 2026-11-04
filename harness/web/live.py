@@ -139,8 +139,14 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str,
                     judge_into(cfg, state, run, store)
                 run = Run.load(store, plan.run_id)
             write_report(cfg, run, archive_tiles=False)
-            state.final = {"type": "done", "status": outcome.status, "error": outcome.error,
-                           "view": run_view(run, serve_tiles=state.serve_tiles)}  # fmt: skip
+            state.final = {
+                "type": "done",
+                "status": outcome.status,
+                "error": outcome.error,
+                "view": run_view(
+                    run, serve_tiles=state.serve_tiles, rubric_path=(cfg.get("judging") or {}).get("rubric")
+                ),
+            }
             finished = run
         except Exception as e:  # noqa: BLE001 - shown on the page
             state.final = {"type": "done", "status": "error", "error": f"{type(e).__name__}: {e}"}
@@ -184,8 +190,14 @@ def rejudge(cfg: config_mod.Config, index: Index, run_id: str) -> RunState:
             judge_into(cfg, state, run, store)
             run = Run.load(store, run_id)
             write_report(cfg, run, archive_tiles=False)
-            state.final = {"type": "done", "status": run.status, "error": None,
-                           "view": run_view(run, serve_tiles=state.serve_tiles)}  # fmt: skip
+            state.final = {
+                "type": "done",
+                "status": run.status,
+                "error": None,
+                "view": run_view(
+                    run, serve_tiles=state.serve_tiles, rubric_path=(cfg.get("judging") or {}).get("rubric")
+                ),
+            }
             finished = run
         except Exception as e:  # noqa: BLE001
             state.final = {"type": "done", "status": "error", "error": f"{type(e).__name__}: {e}"}

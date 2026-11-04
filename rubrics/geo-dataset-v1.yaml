@@ -10,6 +10,7 @@ scale: [0, 1, 2]
 criteria:
   # ---- Workflow (from the trace) ----
   - id: tool_selection
+    plain: Could the chosen tools answer your question?
     dimension: workflow
     kind: judged
     question: Did the agent pick tools able to answer the task, without substituting a weaker proxy?
@@ -19,6 +20,7 @@ criteria:
       2: Every essential step used a tool suited to it (imagery search or classification for physical features, dataset tools for datasets, verification where available).
 
   - id: tool_arguments
+    plain: Did the searches use the right area, dates, and settings?
     dimension: workflow
     kind: judged
     question: Were tool arguments correct — search area scoped to the request, right index or dataset, valid parameters?
@@ -28,6 +30,7 @@ criteria:
       2: Arguments match the request on every material call (area, index, time range, query terms, limits).
 
   - id: sequencing_recovery
+    plain: Did the steps make sense, and did the agent handle problems well?
     dimension: workflow
     kind: judged
     question: Was the order of steps logical, and were errors, empty results and retries handled well?
@@ -37,6 +40,7 @@ criteria:
       2: Search, then verify, then answer; errors and empty results were handled with a sensible next step.
 
   - id: efficiency
+    plain: Did the run use a reasonable amount of time and resources?
     dimension: workflow
     kind: judged
     question: Were steps, tokens and cost proportionate to the task?
@@ -47,6 +51,7 @@ criteria:
 
   # ---- Output (vs. the request) ----
   - id: result_relevance
+    plain: Are the results actually what you asked for?
     dimension: output
     kind: judged
     question: Do the returned results match the requested target, based on the evidence the tools returned?
@@ -56,6 +61,7 @@ criteria:
       2: Reported results are the requested target, and the tool evidence (labels, similarity, verification verdicts) supports it.
 
   - id: grounding
+    plain: Do the saved tool results support what the answer says?
     dimension: output
     kind: judged
     question: Does every stated fact trace to executed tool output, faithfully?
@@ -65,6 +71,7 @@ criteria:
       2: Every material fact is supported by a cited tool output and is faithful to it; background knowledge is labeled as such.
 
   - id: completeness
+    plain: Did the answer cover every part of your request?
     dimension: output
     kind: judged
     question: Does the answer address every part of the request?
@@ -74,6 +81,7 @@ criteria:
       2: Every part of the request is answered.
 
   - id: calibration
+    plain: Does the answer make its limits clear?
     dimension: output
     kind: judged
     question: Does the answer state uncertainty and limits honestly, without overclaiming?
@@ -83,11 +91,13 @@ criteria:
       2: Confidence matches the evidence; unverified items and coverage gaps are stated plainly.
 
   - id: claim_provenance
+    plain: Do the listed values match the tool text they cite?
     dimension: output
     kind: measured
     question: Share of declared claims whose value appears in the tool result they cite (code-checked). 0 when the claims block is missing, or empty while the answer has text.
 
   - id: area_compliance
+    plain: Are the listed locations inside the area you asked for?
     dimension: output
     kind: measured
     question: Share of coordinate claims (the dataset's locations) inside the requested area (code-checked). N/A with no area or no coordinates. Search results inside the area are shown separately as search footprint, not scored.
