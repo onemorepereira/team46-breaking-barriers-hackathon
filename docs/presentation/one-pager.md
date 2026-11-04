@@ -22,6 +22,9 @@ An evaluator that judges **the work, not just the answer**.
 - **The judges agree about as well as human experts do** in a published study on this kind of task (agreement 0.50, against 0.56 for experts).
 - **It caught bugs in our own system.** Once, a place name was matched to a single building, so every search came back empty; once, a sign-in expired mid-run. The evidence showed exactly what went wrong. After the fixes, a run that had failed scored 85 out of 100 with high confidence.
 
+## Experts stay in charge
+An expert can review any score, criterion by criterion. The judges then reconsider against the evidence. They don't simply obey: in our test, a judge rejected a deliberately wrong review and pointed to the steps that disproved it. Reviews also become short lessons for the judges. Each lesson is tested on runs it wasn't drawn from, approved by a person, and kept per deployment, so ADB's judges learn from ADB's experts.
+
 ## What it doesn't prove yet
 It checks the agent against **its own evidence**, not against the real world. Confirming that a site really is a data center needs a reference list (an "answer key"), and ADB's own scoring rules. Both plug in without rebuilding the system: ADB's rubric is a single file.
 

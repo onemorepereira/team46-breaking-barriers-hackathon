@@ -24,7 +24,7 @@ Tomorrow we present to the judges and to Clay and ADB. The work is spread across
 Runtime data is never committed, so the demo runs exist only on Miguel's machine and in his S3 bucket. **The demo runs from Miguel's laptop.** The slice owner writes the script against the run IDs above, using screenshots Miguel shares (or runs of their own made in their sandbox), and rehearses on Miguel's laptop.
 
 ## Acceptance criteria
-- [x] **AC1 An interactive HTML deck of 9 slides** (decided 2026-11-04), `docs/presentation/deck.html`:
+- [x] **AC1 An interactive HTML deck of 10 slides** (9 decided 2026-11-04; slide 6, human feedback, added the same day), `docs/presentation/deck.html`:
   - **one self-contained file:** no framework or CDN, so it opens from disk; arrow keys or a click advance it;
   - **a presenter view:** `N` shows notes and a slide timer;
   - **a print style:** prints to `docs/presentation/deck.pdf` for the judges and as a backup;

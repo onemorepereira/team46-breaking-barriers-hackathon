@@ -148,6 +148,7 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str,
                 deploy_store=_deploy_or_none(cfg),
                 reconsider=_reconsider(cfg),
                 rubric_path=(cfg.get("judging") or {}).get("rubric"),
+                narrative_model=cfg.get("narrative_model"),
             )
             state.final = {"type": "done", "status": outcome.status, "error": outcome.error, "view": view}
             finished = run
@@ -210,6 +211,7 @@ def rejudge(cfg: config_mod.Config, index: Index, run_id: str) -> RunState:
                 deploy_store=_deploy_or_none(cfg),
                 reconsider=_reconsider(cfg),
                 rubric_path=(cfg.get("judging") or {}).get("rubric"),
+                narrative_model=cfg.get("narrative_model"),
             )
             state.final = {"type": "done", "status": run.status, "error": None, "view": view}
             finished = run
@@ -254,6 +256,7 @@ def reconsider_job(cfg: config_mod.Config, index: Index, run_id: str, review_id:
                     deploy_store=deploy,
                     reconsider=_reconsider(cfg),
                     rubric_path=(cfg.get("judging") or {}).get("rubric"),
+                    narrative_model=cfg.get("narrative_model"),
                 ),
             }
         except Exception as e:  # noqa: BLE001 - the judgement stays as it was

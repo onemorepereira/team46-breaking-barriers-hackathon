@@ -1,0 +1,15 @@
+# T1 ("where are all the assets of this type here?") across the asset classes and places of the LGND/Ode
+# benchmark for ADB (docs/adb-alignment/lgnd-ode-brief.md). `role` pairs a home place with a transfer place per
+# concept; `reference` ties a run to a reference set under references/ (docs/adb-alignment/spec.md AC8).
+suite: adb-t1-v1
+backend: agentcore
+models: [sonnet]
+prompts:
+  - {file: prompts/tasks/adb/nagoya-warehouses.md, concept: warehouse, place: "Nagoya, JP", role: home}
+  - {file: prompts/tasks/adb/gifu-warehouses.md, concept: warehouse, place: "Gifu, JP", role: transfer}
+  - {file: prompts/tasks/adb/nagoya-fuel-tanks.md, concept: fuel_tank, place: "Nagoya, JP"}
+  - {file: prompts/tasks/adb/manila-bridges.md, concept: bridge, place: "Metro Manila, PH"}
+  - {file: prompts/tasks/adb/kathmandu-substations.md, concept: substation, place: "Kathmandu, NP"}
+  - {file: prompts/tasks/adb/pecos-solar.md, concept: solar_farm, place: "Pecos County, TX, US", role: home,
+     reference: uspvdb-tx-pecos-v4}
+  - {file: prompts/tasks/adb/jodhpur-solar.md, concept: solar_farm, place: "Jodhpur, IN", role: transfer}

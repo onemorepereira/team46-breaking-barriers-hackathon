@@ -35,5 +35,14 @@ One place for the agent runtime, the models and the judges, with OpenTelemetry t
 **11. Can I trust a run whose judges disagree?**
 That's what confidence is for: wide disagreement lowers it to Medium or Low, so you know to look closer. The demo run is a good example: one judge scored it well below the other two, and the page shows why, vote by vote.
 
-**12. Is it open source? Can Clay run it?**
+**12. Can a person overrule the judges?**
+Not overrule: correct. An expert reviews a run criterion by criterion, and the judges reconsider against the trace. They keep their vote when the review isn't supported, and say why. We tested that with a deliberately wrong review, and Opus corrected us from the steps. The expert's own score sits beside the panel's and is never mixed in. (`docs/judging/guide.md`, "Human feedback"; `docs/judge-feedback/handoff.md`)
+
+**13. Doesn't that make the judges sycophantic?**
+That's the risk we test for. `harness calibrate --feedback` sends a wrong review, the same one with "I insist", and one with injected instructions, and checks against a control that none of them moves the scores. Live, all three were resisted. (`docs/judge-feedback/handoff.md`, AC7)
+
+**14. How do lessons from one run reach the next?**
+Reviews are drafted into short, general lessons per criterion. They're tested on a third of reviewed runs that the drafter never saw, and a person approves them in the console. From then on they're in every judge's prompt, versioned, and they can be rolled back. They live in that deployment's archive, so ADB's instance learns from ADB's experts. (`docs/judge-feedback/design.md`)
+
+**15. Is it open source? Can Clay run it?**
 Yes, under Apache-2.0 on GitHub. The infrastructure is code (CDK), and the developer guide covers setup and running in a fresh AWS account. (`LICENSE`, `docs/developer-guide.md`)

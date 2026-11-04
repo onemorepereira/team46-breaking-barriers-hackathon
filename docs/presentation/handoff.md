@@ -1,7 +1,7 @@
 # Presentation: Handoff (first version, for Miguel to edit and present)
 
 **What's ready** (branch `feature/presentation-deck`, 2026-11-04):
-- `deck.html`, 9 slides, with a team closing slide;
+- `deck.html`, 10 slides, with a team closing slide (slide 6, human feedback, added after the judge-feedback feature shipped);
 - `deck.pdf`;
 - `demo.md`, the judging-only script with pre-flight and fallbacks;
 - `claims.md`, every deck number with its source;
