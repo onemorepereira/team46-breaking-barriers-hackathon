@@ -62,3 +62,38 @@ Both panels scored 100 under the current starting rubric. These smoke results de
 Local checks: 301 Python tests passed, one infrastructure-only test module skipped because it requires the optional CDK group; four frontend contract tests passed; TypeScript build, Python lint/format/type checks passed. GitHub CI also runs the optional infrastructure checks, frontend rebuild consistency and secret scanning. The finished-source ZIP contains tracked source and built assets only, excluding credentials, local configuration, dependencies, traces and private outputs.
 
 Review fixes after PR #12's code review: [review-fixes.md](review-fixes.md).
+
+## Workspace usability update
+
+Branch `improve/workspace-usability` starts from main at `dc04626` and preserves the PR #12/#13 fixes. It adds:
+
+- A map-side imagery inspector: selecting a reported point shifts the camera into the free space on its left. The image is selected only from that point's cited tool step; missing imagery is labelled. All four basemaps, overlay controls, independent reference assets/false alarms and trace-to-map zoom remain available.
+- A short bottom summary and **Expand summary** opening the right-hand **Summary** tab. It separates what was found, what is missing, how the search ran and what to check next. The saved full narrative remains available on demand.
+- Findings, Evaluation, Actions and Summary tabs. Large answers, source tables, score detail, conditions, judge metadata, cost, licences, revisions and exports are collapsed by default. Section and accessibility preferences persist in this browser across runs, re-judges and reloads. Closed sections are unmounted; full reports are not stored in browser preferences.
+- A clear **Rubric evaluation score** label. Judge agreement/reliability and independent reference accuracy metrics remain separate.
+- Thumbs up/down beside the overall, workflow/output and criterion scores. Either response is saved immediately; thumbs down reveals an optional comment. **Detailed human review and reconsideration** retains authored multi-criterion reviews, measured-check notes, evidence references, original judgement access and explicit reconsideration.
+- Judge guidance inside the workspace, including proposal, manual lesson editing, source links, estimate/confirm evaluation, progress, reports, approval/rollback, switch-off and reviewer agreement. These operations retain their existing backend rules. Quick thumbs feedback does not feed guidance or numeric human-score calculations.
+- Editable prompt templates, model/verdict archive filters, better header alignment, and saved dyslexia-friendly reading, colour-safe palette, high contrast, larger text and reduced motion choices.
+
+### Quick feedback API and retention
+
+`GET /api/runs/{run_id}/reactions` lists quick responses. `POST` to the same path accepts `judged_at`, `target` (`overall`, a dimension or a criterion ID) and `vote` (`up` or `down`). A stale timestamp or an unscored/live run is rejected. `PUT /api/runs/{run_id}/reactions/{response_id}` saves an optional thumbs-down `comment` (up to 2,000 characters). Records retain the actual normalized score, rubric and original judgement timestamp under the deployment archive's `feedback/reactions/<run_id>/`. A comment added after re-judging stays attached to the original judgement. Responses are anonymous and count responses, not unique people. They make no model calls and do not automatically revise scores. The existing named `/reviews` API is unchanged.
+
+### Feature parity checklist
+
+| Classic console capability | Workspace location |
+| --- | --- |
+| Start/select model; follow live work; resume after refresh | New run and Actions |
+| Archive pagination and model/verdict filters | Previous runs |
+| Four context basemaps, boundary, chips, claim locations | Map and inspector |
+| Reference found/missed assets and false-alarm cells | Map overlays; Evaluation benchmark |
+| Full answer, all values, source links and imagery dates | Findings; map inspector |
+| Rubric questions, anchors, every judge reason and evidence ref | Evaluation → Rubric scorecard |
+| Every requested condition, gates, failures, recovery, cost/tokens | Evaluation expandable sections |
+| Licences, independent benchmark, guidance snapshot, earlier judgement | Evaluation expandable sections |
+| Multi-criterion authored review, measured note, saved reviews, reconsideration | Evaluation → Detailed human review |
+| Draft/edit/evaluate/approve/rollback/off guidance and agreement | Judge guidance |
+| Raw model/tool spans, metadata, step bounds, datasets | Actions |
+| Static HTML and JSON evidence exports; API documentation | Evaluation exports; footer API link |
+
+Software checks do not establish geospatial truth or accessibility certification. Verify third-party imagery availability and domain-specific reference validity independently. The synthetic preview deliberately has no real satellite imagery; quick-feedback write tests use an isolated synthetic local archive, never production reviewer data.

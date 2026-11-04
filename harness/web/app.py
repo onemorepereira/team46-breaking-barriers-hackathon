@@ -29,7 +29,7 @@ from analysis.judging import feedback as fb
 from analysis.trace import ArchiveError, Run
 from core.store import open_store
 from harness import config as config_mod
-from harness import feedback, imagery, invoke, rows, tiles
+from harness import feedback, imagery, invoke, reactions, rows, tiles
 from harness import judge as judge_mod
 from harness.manifest import Index
 from harness.web import live
@@ -44,12 +44,14 @@ from harness.web.api_docs import (
     JudgeStarted,
     LessonsRequest,
     ModelsResponse,
+    ReactionComment,
+    ReactionRequest,
     ReviewRequest,
     RunRequest,
     RunsResponse,
     RunStarted,
 )
-from harness.web.view import run_row, run_view
+from harness.web.view import run_row, run_view, scorecard
 
 HERE = Path(__file__).parent
 TEAM = "Team Foundry"
@@ -278,6 +280,33 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         (only those can be reconsidered); `reconsidered` holds the revised judgement's `judged_at`."""
         return {"reviews": feedback.run_reviews(deploy(), load(run_id))}
 
+    @app.get("/api/runs/{run_id}/reactions", tags=["Feedback"], summary="Quick evaluation feedback")
+    def get_reactions(run_id: str) -> Any:
+        """List quick responses newest first, including their score snapshot and original judgement.
+        `current` identifies responses to the current judgement; earlier responses are retained."""
+        run = load(run_id)
+        return {"reactions": reactions.list_for(deploy(), run_id, (run.judgement or {}).get("judged_at"))}
+
+    @app.post("/api/runs/{run_id}/reactions", tags=["Feedback"], summary="Save a thumbs response")
+    def post_reaction(run_id: str, body: ReactionRequest) -> Any:
+        """Record feedback on the score shown, without changing scores or calling any model.
+        Reject stale judgement timestamps so feedback cannot silently attach to a new score."""
+        state = live.RUNS.get(run_id)
+        if state is not None and not state.done:
+            raise HTTPException(409, "Wait for this run's judgement to finish before giving feedback.")
+        return feedback_call(reactions.save, deploy(), run_id, scorecard(load(run_id)), body.model_dump())
+
+    @app.put(
+        "/api/runs/{run_id}/reactions/{response_id}",
+        tags=["Feedback"],
+        summary="Save an optional thumbs-down comment",
+    )
+    def reaction_comment(run_id: str, response_id: str, body: ReactionComment) -> Any:
+        """Add or replace an optional comment on an existing thumbs-down response. The response keeps
+        its original judgement and score snapshot, including after a re-judge. No models are called."""
+        load(run_id)
+        return feedback_call(reactions.comment, deploy(), run_id, response_id, body.comment)
+
     @app.post(
         "/api/runs/{run_id}/reviews",
         tags=["Feedback"],
@@ -424,6 +453,14 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
             stream(state), media_type="text/event-stream", headers={"cache-control": "no-cache"}
         )
 
+    @app.get("/api/guidance/{n}/progress", tags=["Guidance"])
+    def guidance_progress(n: int, cursor: str = Query("")) -> Any:
+        """Cursor-based progress for the same held-out evaluation job as the SSE endpoint."""
+        state = live.GUIDANCE_JOBS.get(n)
+        if state is None:
+            raise HTTPException(404, "no live evaluation for this version")
+        return progress_snapshot(state, cursor)
+
     @app.post(
         "/api/guidance/{n}/approve",
         tags=["Guidance"],
@@ -453,6 +490,9 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         state = live.RUNS.get(run_id)
         if state is None:
             raise HTTPException(404, "no live run with that ID since the console started")
+        return progress_snapshot(state, cursor)
+
+    def progress_snapshot(state: live.RunState, cursor: str) -> Any:
         try:
             pos, sent_extra = (int(x) for x in cursor.split(".")) if cursor else (0, 0)
             if pos < 0 or sent_extra < 0:

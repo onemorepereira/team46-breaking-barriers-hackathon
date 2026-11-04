@@ -22,6 +22,8 @@ export type View = {
   reference: any;
   licences: any;
   source_check_note?: string;
+  trouble_spots?: any[];
+  datasets?: any[];
 };
 export function basePath(path = window.location.pathname): string {
   // The last `/workspace` segment is the app's own mount; anything before it is the deploy prefix.
@@ -36,13 +38,14 @@ export async function request<T>(
   path: string,
   body?: unknown,
   signal?: AbortSignal,
+  method?: "PUT" | "POST",
 ): Promise<T> {
   const response = await fetch(endpoint(path), {
     credentials: "same-origin",
     signal,
     ...(body !== undefined
       ? {
-          method: "POST",
+          method: method || "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         }
@@ -98,7 +101,7 @@ export function candidatesOf(view: View | null): Candidate[] {
 }
 export function formatScore(value: unknown): string {
   return typeof value === "number" && Number.isFinite(value)
-    ? `${Math.round(value)}`
+    ? `${Number(value.toFixed(1))}`
     : "—";
 }
 export function money(value: unknown): string {
@@ -143,4 +146,41 @@ export function reviewPayload(
     note: note.trim(),
     measured_note: "",
   };
+}
+
+// Select imagery only from the cited tool result, nearest to the reported point.
+export function imageForCandidate(
+  view: View | null,
+  index: number | null,
+): number | null {
+  if (index === null) return null;
+  const candidate = candidatesOf(view)[index];
+  if (!candidate) return null;
+  const chips = view?.map.chips?.features || [];
+  let best: number | null = null,
+    distance = Infinity;
+  chips.forEach((chip: any, i: number) => {
+    if (!chip.properties?.tile_url || chip.properties.ref !== candidate.ref)
+      return;
+    const coords = chip.geometry?.coordinates?.[0];
+    if (!Array.isArray(coords)) return;
+    const points = coords.filter(
+      (c: any) => Array.isArray(c) && c.every(Number.isFinite),
+    );
+    if (!points.length) return;
+    const lon =
+      (Math.min(...points.map((c: any) => c[0])) +
+        Math.max(...points.map((c: any) => c[0]))) /
+      2;
+    const lat =
+      (Math.min(...points.map((c: any) => c[1])) +
+        Math.max(...points.map((c: any) => c[1]))) /
+      2;
+    const d = (lon - candidate.lon) ** 2 + (lat - candidate.lat) ** 2;
+    if (d < distance) {
+      distance = d;
+      best = i;
+    }
+  });
+  return best;
 }
