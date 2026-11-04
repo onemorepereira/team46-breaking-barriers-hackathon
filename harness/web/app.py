@@ -172,7 +172,8 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         the requested boundary, result footprints, claimed sites), `scorecard` (every criterion, each judge's
         vote and rationale, the seats, failure modes), `claims`, `final_answer`, `narrative` and
         `trouble_spots`. `explanation` gives a plain headline, a short summary and concrete things to check
-        by hand; scorecard entries also carry a `plain` question. These add no model calls."""
+        by hand; scorecard entries also carry a `plain` question. `source_check_note` warns when replay
+        uses a newer value checker than the saved judgement. These add no model calls."""
         return run_view(
             load(run_id),
             serve_tiles=bool(tile_cfg["serve"]),

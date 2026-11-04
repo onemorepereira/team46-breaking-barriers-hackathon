@@ -8,6 +8,7 @@
 <h2 id="explanation-title">What this means</h2>
 <p><strong>{{ explanation.headline }}</strong></p>
 <p>{{ explanation.summary }}</p>
+{% if source_check_note %}<p class="muted">{{ source_check_note }}</p>{% endif %}
 <h3>Check by hand</h3>
 <ul>{% for item in explanation.check_by_hand %}<li>{{ item }}</li>{% endfor %}</ul>
 </section>

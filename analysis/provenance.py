@@ -6,8 +6,10 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 import unicodedata
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -19,6 +21,89 @@ NUMBER_IN_TEXT_RE = re.compile(r"-?\d+(?:\.\d+)?")
 FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
 MATCHED, MISMATCH, UNSOURCED = "matched", "mismatch", "unsourced"
+VALUE_MATCHER_VERSION = 2
+VERDICTS = {"supported", "not supported", "unsupported", "confirmed", "not confirmed", "unconfirmed",
+            "yes", "no", "maybe"}  # fmt: skip
+PAIR_RE = re.compile(r"(?<![\d.])(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?!(?:\d|\.\d))")
+
+
+def matcher_update_note(judgement: dict[str, Any] | None) -> str | None:
+    if judgement and judgement.get("value_matcher_version", 1) != VALUE_MATCHER_VERSION:
+        return (
+            "Source checks were updated after this run was judged. "
+            "This replay may score differently from the original report."
+        )
+    return None
+
+
+def _verdict_values(data: Any) -> Iterator[str]:
+    if isinstance(data, dict):
+        for key, value in data.items():
+            if key.lower() in ("verdict", "answer") and isinstance(value, str):
+                yield normalize_text(value)
+            else:
+                yield from _verdict_values(value)
+    elif isinstance(data, list):
+        for value in data:
+            yield from _verdict_values(value)
+
+
+def _coordinate_pairs(data: Any) -> Iterator[tuple[float, float]]:
+    """Pairs from named record fields, column-labelled tables, GeoJSON Points or nested MCP text."""
+    if isinstance(data, dict):
+        fields = {k.lower(): v for k, v in data.items()}
+        lat = fields.get("lat", fields.get("latitude"))
+        lon = fields.get("lon", fields.get("lng", fields.get("longitude")))
+        if lat is not None and lon is not None:
+            try:
+                if not isinstance(lat, bool) and not isinstance(lon, bool):
+                    yield float(lat), float(lon)
+            except (ValueError, TypeError):
+                pass
+        cols, rows = data.get("columns"), data.get("rows")
+        if isinstance(cols, list) and all(isinstance(c, str) for c in cols) and isinstance(rows, list):
+            for row in rows:
+                if isinstance(row, list):
+                    yield from _coordinate_pairs(dict(zip(cols, row, strict=False)))
+        if data.get("type") == "Point":
+            coords = data.get("coordinates")
+            if isinstance(coords, list) and len(coords) >= 2:
+                try:
+                    yield float(coords[1]), float(coords[0])  # GeoJSON has an explicit lon/lat contract
+                except (ValueError, TypeError):
+                    pass
+        for value in data.values():
+            yield from _coordinate_pairs(value)
+    elif isinstance(data, list):
+        for value in data:
+            yield from _coordinate_pairs(value)
+    elif isinstance(data, str):
+        try:
+            nested = json.loads(data)
+        except ValueError:
+            yield from ((float(m[1]), float(m[2])) for m in PAIR_RE.finditer(data))
+        else:
+            if isinstance(nested, dict | list):
+                yield from _coordinate_pairs(nested)
+
+
+def match_coordinate(value: str, result: str) -> bool:
+    parts = [p.strip() for p in value.split(",")]
+    wanted = [float(p) for p in parts]
+    tolerance = [0.5 * 10 ** -_decimals(p) + 1e-12 for p in parts]
+    try:
+        data = json.loads(result)
+    except ValueError:
+        data = result
+    return any(
+        math.isfinite(lat)
+        and math.isfinite(lon)
+        and -90 <= lat <= 90
+        and -180 <= lon <= 180
+        and abs(lat - wanted[0]) <= tolerance[0]
+        and abs(lon - wanted[1]) <= tolerance[1]
+        for lat, lon in _coordinate_pairs(data)
+    )
 
 
 @dataclass
@@ -113,6 +198,18 @@ def match_text(value: str, result: str) -> bool:
     v, r = normalize_text(value), normalize_text(unescape_json_text(result))
     if not v:
         return False
+    if v in VERDICTS:
+        try:
+            labels = list(_verdict_values(json.loads(result)))
+        except ValueError:
+            labels = []
+        if labels:
+            return v in labels
+        for found in re.finditer(rf"(?<!\w){re.escape(v)}(?!\w)", r):
+            prefix = r[: found.start()]
+            if not re.search(r"\b(?:not|never|no)\s+$", prefix):
+                return True
+        return False
     if len(v) < 3:
         return re.search(rf"\b{re.escape(v)}\b", r) is not None
     return v in r
@@ -120,8 +217,7 @@ def match_text(value: str, result: str) -> bool:
 
 def matches(value: str, value_class: str, result: str) -> bool:
     if value_class == "coordinate":
-        parts = [p.strip() for p in value.split(",")]
-        return all(match_number(p, result) for p in parts)
+        return match_coordinate(value, result)
     if value_class == "number":
         return match_number(value, result)
     return match_text(value, result)
@@ -166,6 +262,12 @@ def grade(run: Run) -> Provenance:
         span = refs.get(ref) if ref else None
         if span is None:
             out.append(ClaimResult(str(item.get("claim", "")), value, ref, UNSOURCED, anchor, vclass, notes))
+            continue
+        if span.attr("harness.tool.status") == "error":
+            notes.append("cited tool call failed")
+            out.append(
+                ClaimResult(str(item.get("claim", "")), value, ref, UNSOURCED, span.span_id, vclass, notes)
+            )
             continue
         text = run.tool_result_text(span)
         if text is None:

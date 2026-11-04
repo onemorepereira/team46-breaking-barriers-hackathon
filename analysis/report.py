@@ -85,6 +85,7 @@ def render_run(rep: RunReport, generated_at: str) -> str:
         answer=measure.answer_text(rep.run.final_output),
         claims_json=claims_blocks(rep.run.final_output),
         explanation=explain(rep.run, rep.panel, measured=rep.measured),
+        source_check_note=provenance.matcher_update_note(rep.judgement),
     )
 
 

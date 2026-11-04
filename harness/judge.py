@@ -20,6 +20,7 @@ from analysis.judging import dossier as dossier_mod
 from analysis.judging import measure, panel
 from analysis.judging.rubric import Rubric
 from analysis.judging.rubric import load as load_rubric
+from analysis.provenance import VALUE_MATCHER_VERSION
 from analysis.trace import Run
 from core import prompts
 from core.store import Store
@@ -319,6 +320,7 @@ def assemble(
         "seats": [asdict(s) for s in panel_seats],
         "passes": pass_results,
         "panel": result.as_dict(),
+        "value_matcher_version": VALUE_MATCHER_VERSION,
         "judging_cost_usd": round(cost, 6),
     }
 

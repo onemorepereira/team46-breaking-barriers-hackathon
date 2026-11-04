@@ -192,6 +192,7 @@ def run_view(run: Run, serve_tiles: bool = True, rubric_path: str | None = None)
         "map": map_layers(m, run.run_id, serve_tiles),
         "scorecard": card,
         "explanation": explain(run, result, measured=m),
+        "source_check_note": provenance.matcher_update_note(run.judgement),
         "claims": claims,
         "final_answer": measure.answer_text(run.final_output),
         "narrative": summ.narrative,

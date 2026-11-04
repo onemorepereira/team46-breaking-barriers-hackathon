@@ -60,6 +60,12 @@ Each teammate works in **their own sandbox account**. The committed `harness.yam
    - update the slice's row here;
    - open a PR to `main`, and ask a teammate who didn't build it to review it.
 
+## Additional local fixes under review
+
+| Effort | Purpose | Status | Owner | Records |
+| --- | --- | --- | --- | --- |
+| Value matching | Reject opposite verdicts, coordinates spliced across records, and failed tool output; label older replays | Implemented locally; independent review pending | Aditya | [spec](value-matching/spec.md) · [handoff](value-matching/handoff.md) |
+
 ## Changes without a spec
 
 Fixes and small features, each with a test and recorded in its commit. All on 2026-11-04.

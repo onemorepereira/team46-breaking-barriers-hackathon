@@ -503,6 +503,8 @@
     setText("map-note", v.map.area ? "" : "No area in the prompt: results are shown without a boundary check.");
     fitAll();
     renderExplanation(v.explanation);
+    setText("source-check-note", v.source_check_note || "");
+    show("source-check-note", Boolean(v.source_check_note));
     renderScorecard(v.scorecard);
     renderJudges(v.scorecard);
     renderClaims(v.claims);

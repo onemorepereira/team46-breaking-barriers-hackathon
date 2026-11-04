@@ -39,6 +39,12 @@ Scorecard questions use optional `plain:` labels from the current configured rub
 
 **To use ADB's rubric:** write it in the same YAML shape and point `judging.rubric` in `harness.yaml` at it. No code changes. Code names only the two measured criteria. The rubric's `calibration:` map says which judged criterion each planted defect should lower.
 
+### Value-checker update under review (2026-11-04)
+
+Checker version 2 requires a coordinate pair from the same source record or labelled table row. Verification labels such as "supported" no longer match "not supported", and failed tool calls cannot verify claims. Ordinary text and number checks still compare declared values; they do not prove the meaning of every claim or its real-world truth.
+
+New judgements record `value_matcher_version`. Old judgements remain intact; viewing or replaying them uses current measured checks and shows an update note, so their regenerated scores may differ from earlier reports. Keep the checker version, judge seats, and rubric fixed when comparing runs.
+
 ## The panel
 
 A tribunal of three judges from three families:

@@ -40,6 +40,8 @@ Each folder holds a feature's spec (problem and acceptance criteria), its design
 
 **Open slices** (specs for the team; status in [the factory](factory.md#slices-open-for-the-team-2026-11-04)): [plain-language evals](plain-verdict/spec.md) ([local handoff](plain-verdict/handoff.md)) · [prompt compliance](prompt-compliance/spec.md) · [visual design](visual-design/spec.md)
 
+Local scoring fix under review: [value-matching spec](value-matching/spec.md) · [handoff](value-matching/handoff.md).
+
 ## Data and configuration in the repo
 
 | Path | What it is |
