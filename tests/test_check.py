@@ -110,3 +110,18 @@ def test_spans_after_run_end_and_non_agent_scopes_are_ignored(tmp_path):
     assert all(s.scope != "mcp" for s in run.spans)
     assert check_run(run) == []
     assert json.loads((tmp_path / "runs/run-0001/run.json").read_text())["run_id"] == "run-0001"
+
+
+def test_archive_errors_and_lost_decision_spans_fail_the_check(tmp_path):
+    b = standard_run(tmp_path)
+    end = b.lines[-1]
+    end["attributes"]["harness.decision_spans_emitted"] = 99  # more emitted than archived: a lost part
+    b.write(final_output="x")
+    assert any("decision spans emitted, " in f for f in fields(check_run(load(tmp_path))))
+    import json as _json
+
+    rj = tmp_path / "runs/run-0001/result.json"
+    data = _json.loads(rj.read_text())
+    data["archive_errors"] = 2
+    rj.write_text(_json.dumps(data))
+    assert "2 archive write(s) failed" in fields(check_run(load(tmp_path)))

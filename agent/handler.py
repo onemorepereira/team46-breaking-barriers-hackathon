@@ -125,7 +125,11 @@ def handle(payload: Any) -> dict[str, Any]:
         }
     )
     tel.archive.start_run()
-    limits = {"max_tokens": int(payload["model_params"].get("max_tokens", 16000)), **payload["limits"]}
+    limits = {
+        "max_tokens": int(payload["model_params"].get("max_tokens", 16000)),
+        "model_id": payload["model_id"],
+        **payload["limits"],
+    }
     limits.setdefault("max_output_tokens", 200_000)
     status, err, final_output = "error", None, ""
     hooks: HarnessHooks | None = None

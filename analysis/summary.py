@@ -60,7 +60,10 @@ def trouble_spots(run: Run, prov: Provenance) -> list[TroubleSpot]:
     """The only trouble-spot rule (design ADR-3)."""
     spots: list[TroubleSpot] = []
     for s in run.spans:
-        if s.status == "ERROR" and s.name != TOOL_RESULT:
+        if s.status == "ERROR" and s.span_kind not in (
+            "tool",
+            "harness",
+        ):  # tool failures: harness.tool_result
             spots.append(TroubleSpot(s.span_id, f"{s.name} ended with ERROR {s.status_message}".strip()))
     for s in run.tool_results:
         ref = s.attr("harness.tool.ref")

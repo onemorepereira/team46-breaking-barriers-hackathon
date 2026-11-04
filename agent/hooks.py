@@ -64,6 +64,8 @@ class HarnessHooks(HookProvider):
         self.limits = limits
         self.server_of = server_of
         self.cancel = threading.Event()
+        # Claude on Bedrock returns summarized thinking; other models (e.g. Kimi K3) return their own.
+        self.reasoning_kind = "summarized" if "anthropic" in str(limits.get("model_id", "")) else "native"
         self.emitted = 0
         self.limit_reason: str | None = None
         self._lock = threading.Lock()
@@ -186,7 +188,7 @@ class HarnessHooks(HookProvider):
                 "harness.model.output": message if message is not None else {},
                 "harness.reasoning.available": bool(reasoning),
                 "harness.reasoning.text": reasoning or None,
-                "harness.reasoning.kind": "summarized",
+                "harness.reasoning.kind": self.reasoning_kind,
                 "harness.stop_reason": str(resp.stop_reason) if resp is not None else "error",
                 "harness.usage.input_tokens": in_tok,
                 "harness.usage.output_tokens": out_tok,

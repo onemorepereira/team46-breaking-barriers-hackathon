@@ -58,6 +58,27 @@ def check_run(run: Run) -> list[Missing]:
 
     out += _check_models(run)
     out += _check_tools(run)
+    out += _check_archive(run)
+    return out
+
+
+def _check_archive(run: Run) -> list[Missing]:
+    """Lost span parts or failed uploads (design: S3 write fails → check fails)."""
+    out: list[Missing] = []
+    errors = int((run.result or {}).get("archive_errors", run.manifest.get("archive_errors", 0)) or 0)
+    if errors:
+        out.append(Missing("-", "archive", f"{errors} archive write(s) failed"))
+    end = run.run_end
+    emitted = end.attr("harness.decision_spans_emitted") if end else None
+    archived = sum(1 for s in run.spans if s.scope == "harness")
+    if emitted is not None and int(emitted) != archived:
+        out.append(
+            Missing(
+                end.span_id if end else "-",
+                "archive",
+                f"{emitted} decision spans emitted, {archived} archived",
+            )
+        )
     return out
 
 

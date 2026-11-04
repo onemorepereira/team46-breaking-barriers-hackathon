@@ -15,6 +15,9 @@ DATASET_ARG_FIELDS: dict[str, str] = {
     "sample_dataset": "slug",
     "find_related_datasets": "slug",
 }
+# Catalog searches find datasets but don't access one (Build deviation, design: Datasets accessed).
+SEARCH_TOOLS = {"search_datasets", "list_datasets", "discover_by_organization", "discover_by_license",
+                "get_knowledge_base_stats", "search_stac_endpoints"}  # fmt: skip
 
 
 @dataclass
@@ -49,9 +52,11 @@ def compute(run: Run) -> Signals:
     models, tools = run.model_results, run.tool_results
     in_tok = sum(int(s.attr("harness.usage.input_tokens", 0) or 0) for s in models)
     out_tok = sum(int(s.attr("harness.usage.output_tokens", 0) or 0) for s in models)
-    errors = sum(1 for s in run.spans if s.status == "ERROR") + sum(
-        1 for s in tools if s.attr("harness.tool.status") == "error"
-    )
+    # A failed tool shows up twice: Strands' execute_tool span (ERROR) and our harness.tool_result. Count
+    # tool failures once, from harness.tool_result, plus ERROR spans of other kinds (agent, cycle, model).
+    errors = sum(
+        1 for s in run.spans if s.status == "ERROR" and s.span_kind not in ("tool", "harness")
+    ) + sum(1 for s in tools if s.attr("harness.tool.status") == "error")
     prices = (run.manifest.get("snapshot") or {}).get("prices_per_mtok") or {}
     price = prices.get(run.manifest.get("model_key", ""))
     cost = None
@@ -86,14 +91,19 @@ def tools_available(run: Run) -> list[dict[str, Any]]:
 
 def datasets_accessed(run: Run) -> list[dict[str, str]]:
     """Datasets the agent opened by ID (tool arguments). Unmapped tools are listed as unknown."""
-    seen: dict[tuple[str, str], dict[str, str]] = {}
+    seen: dict[str, set[str]] = {}
     for s in run.tool_results:
         name = str(s.attr("harness.tool.name", ""))
         args = s.json_attr("harness.tool.arguments", {}) or {}
+        if not isinstance(args, dict) or name in SEARCH_TOOLS:
+            continue
         field = DATASET_ARG_FIELDS.get(name)
-        if field and isinstance(args, dict) and args.get(field):
-            key = (name, str(args[field]))
-            seen.setdefault(key, {"dataset": str(args[field]), "via": name})
-        elif not field:
-            seen.setdefault((name, ""), {"dataset": "dataset unknown", "via": name})
-    return list(seen.values())
+        scope = args.get("scope")
+        if field and args.get(field):
+            dataset = str(args[field])
+        elif s.attr("harness.tool.server") == "lgnd" and isinstance(scope, dict) and scope.get("index"):
+            dataset = f"lgnd:{scope['index']}"  # LGND tools name their imagery index (e.g. naip)
+        else:
+            dataset = f"dataset unknown ({name})"
+        seen.setdefault(dataset, set()).add(name)
+    return [{"dataset": d, "via": ", ".join(sorted(v))} for d, v in seen.items()]

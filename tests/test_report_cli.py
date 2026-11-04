@@ -57,12 +57,18 @@ def test_trouble_spots_are_all_named_with_real_span_ids(tmp_path):
     run = Run.load(FileStore(f"file://{tmp_path}"), "run-trouble")
     summ = build(run, grade(run))
     reasons = " | ".join(t.reason for t in summ.trouble_spots)
-    for needle in ["ERROR", "returned an error", "retried", "repeats T1", "max_tokens", "is mismatch",
+    # (Strands' execute_tool ERROR span is not a separate trouble spot: the tool_result already names it)
+    for needle in ["returned an error", "retried", "repeats T1", "max_tokens", "is mismatch",
                    "is unsourced", "limit exceeded"]:  # fmt: skip
         assert needle in reasons, needle
     ids = run.span_ids()
     assert all(t.span_id in ids for t in summ.trouble_spots)
     assert all(s.span_id in ids for s in summ.steps)
+    # one failed tool call is one error and one "returned an error" trouble spot, not two (Verify gate)
+    from analysis.signals import compute
+
+    assert compute(run).errors == 1
+    assert sum("T1" in t.reason and "error" in t.reason for t in summ.trouble_spots) == 1
     assert [s.label for s in summ.steps if s.kind == "tool"] == ["T1 search_datasets", "T1 search_datasets",
                                                                   "T2 get_dataset_details"]  # fmt: skip
 
