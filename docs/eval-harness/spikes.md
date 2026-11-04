@@ -34,3 +34,26 @@ The stack is `Team46EvalHarness` (CDK, us-west-2): runtime `team46_eval_harness-
 | Does a 13-minute synchronous call work? | **Not tested.** Real runs take about a minute. The documented background-task fallback (`HealthyBusy` through `BedrockAgentCoreApp.add_async_task`) stays the plan if long runs appear. |
 | Does a 16 KB attribute reach CloudWatch? | **Not tested:** no tool result exceeded 16 KB in these runs. |
 | What is the per-tool MCP timeout? | `MCPAgentTool.timeout` is passed as `read_timeout_seconds`, so the handler sets `tool.timeout = timedelta(seconds=60)` on every listed tool. No wrapper is needed (this corrects the S1 note). |
+
+## LGND Geo search areas (2026-11-04)
+
+LGND Geo's `scope.area` accepts **three shapes**: a box `{south, north, west, east}`, a circle `{lat, lon, radius_km}`, or a **polygon** `{ring: [{lat, lon}, ...]}`. It defaults to `null`, which means the **whole index** ("`area`: omit for the whole index"). The tools that read `area` are `search_place_find`, `search_change_find`, `search_similar_change_find`, `discover_area_view`, `discover_area_shift_find` (where it's required) and `toolbox_classifier_apply` (unless `nodes`/`inside` are given). The two zoom tools ignore it.
+
+**Probe:** the same query (`search_place_find`, NAIP, "data center", limit 50), with every result checked against the official ZIP 75080 polygon:
+
+| Area passed | LGND `where` | Chips inside ZIP 75080 |
+| --- | --- | --- |
+| none | everywhere | 0 / 50 |
+| 4 km circle at the ZIP's center | within 4 km of … | 17 / 50 |
+| the ZIP's bounding box | box … | 23 / 50 |
+| the ZIP polygon (359 vertices) | polygon with 359 vertices | **50 / 50** |
+
+**Cause of the off-area results:** the agent either left the area out (whole index) or approximated with a circle. LGND supports exact polygons; the agent never used them.
+
+**Fix:** `area_mode: enforce` (the default). The harness reads the area from the prompt, resolves its official boundary, simplifies it to at most 500 vertices (Douglas–Peucker, using the largest outer ring), and a `BeforeToolCallEvent` hook sets `scope.area` on every LGND area tool. Reassigning `event.tool_use` works in strands-agents 1.63.0, confirmed by LGND answering "polygon with N vertices". Each tool result records `harness.tool.area_enforced` and `harness.tool.area_requested`, the area the model itself asked for.
+
+**Live results:**
+- **ZIP 75080:** 24 of 24 chips inside. The model had asked for a 5 km circle, which would have spilled into 75081.
+- **Richardson city limits:** 42 of 42 chips and 5 of 5 located claims inside, compared with 14 of 45 and 2 of 5 without enforcement.
+
+`area_mode: observe` grades the agent unaided.

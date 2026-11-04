@@ -242,3 +242,78 @@ def coordinate_pair(value: str) -> tuple[float, float] | None:
         return None
     lat, lon = float(m.group(1)), float(m.group(2))
     return (lat, lon) if -90 <= lat <= 90 and -180 <= lon <= 180 else None
+
+
+def _perp_dist(p: list[float], a: list[float], b: list[float]) -> float:
+    (x, y), (x1, y1), (x2, y2) = p, a, b
+    dx, dy = x2 - x1, y2 - y1
+    if dx == 0 and dy == 0:
+        return math.hypot(x - x1, y - y1)
+    return abs(dy * x - dx * y + x2 * y1 - y2 * x1) / math.hypot(dx, dy)
+
+
+def _simplify(points: list[list[float]], tol: float) -> list[list[float]]:
+    """Douglas-Peucker on an open polyline."""
+    if len(points) < 3:
+        return points
+    keep = [False] * len(points)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(points) - 1)]
+    while stack:
+        i, j = stack.pop()
+        best, idx = 0.0, -1
+        for k in range(i + 1, j):
+            d = _perp_dist(points[k], points[i], points[j])
+            if d > best:
+                best, idx = d, k
+        if idx != -1 and best > tol:
+            keep[idx] = True
+            stack += [(i, idx), (idx, j)]
+    return [p for p, k in zip(points, keep, strict=True) if k]
+
+
+def to_lgnd_area(geometry: dict[str, Any], max_vertices: int = 500) -> dict[str, Any]:
+    """LGND Geo's polygon scope: {"ring": [{"lat", "lon"}, ...]} from the largest outer ring, simplified.
+
+    LGND takes one ring without holes, so a hole or a second part is ignored here; the inside/outside check
+    on results still uses the full geometry.
+    """
+    polys = geometry["coordinates"] if geometry.get("type") == "MultiPolygon" else [geometry["coordinates"]]
+    outer = max((p[0] for p in polys if p), key=len)
+    ring = outer[:-1] if outer and outer[0] == outer[-1] else list(outer)
+    tol = 0.0
+    while len(ring) > max_vertices:
+        tol = tol * 2 if tol else 1e-5
+        ring = _simplify(outer, tol)[:-1]
+    return {"ring": [{"lat": round(p[1], 6), "lon": round(p[0], 6)} for p in ring]}
+
+
+def area_for_prompt(cfg: Any, prompt: str) -> tuple[Area | None, dict[str, Any]]:
+    """Read the prompt's search area and resolve its boundary. Never raises: on failure the run goes ahead
+    without an area, and the event says why."""
+    try:
+        model_key = cfg.get("narrative_model") or next(iter(cfg["models"]))
+        spec = extract_area(prompt, cfg["models"][model_key]["id"], cfg["region"])
+        area = resolve_area(spec, Path(cfg["out_dir"]) / "geo-cache")
+        if area is None:
+            return None, {
+                "type": "area",
+                "label": None,
+                "note": "The prompt names no place, so there is no area check.",
+            }
+        return area, area.as_event()
+    except Exception as e:  # noqa: BLE001 - reported, never fatal
+        return None, {"type": "area", "label": None, "note": f"Couldn't resolve the prompt's area: {e}"}
+
+
+def payload_area(area: Area | None, mode: str) -> dict[str, Any] | None:
+    """What the agent receives: the label, the source, and LGND's polygon scope when there is a boundary."""
+    if area is None or mode == "off":
+        return None
+    return {
+        "label": area.label,
+        "source": area.source,
+        "mode": mode,
+        "lgnd_area": to_lgnd_area(area.geometry) if area.geometry else None,
+        "geometry": area.geometry,
+    }

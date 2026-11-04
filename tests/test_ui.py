@@ -95,7 +95,8 @@ def test_scripted_run_streams_events_to_done(tmp_path):
                         done = ev
                         break
                 assert time.monotonic() < deadline
-        assert types[0] == "area" and types[1] == "start" and "model" in types and "tool" in types and "end" in types
+        assert types[:2] == ["area", "start"]
+        assert {"model", "tool", "end"} <= set(types)
         assert done["status"] == "ok" and [c["status"] for c in done["claims"]] == ["matched", "matched"]
         assert done["missing_fields"] == 0
         assert b"Run report" in urllib.request.urlopen(base + done["report"], timeout=10).read()

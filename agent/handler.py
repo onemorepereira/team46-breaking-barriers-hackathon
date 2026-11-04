@@ -141,6 +141,7 @@ def handle(payload: Any) -> dict[str, Any]:
             else:
                 model = _bedrock_model(payload)
                 tools, server_of, available = _mcp_tools(stack, int(limits.get("tool_timeout_s", 60)))
+            search_area = payload.get("search_area")
             hooks = HarnessHooks(
                 tracer=tel.tracer(),
                 writer=tel.writer,
@@ -148,12 +149,19 @@ def handle(payload: Any) -> dict[str, Any]:
                 tools_available=available,
                 limits=limits,
                 server_of=server_of,
+                search_area=search_area,
             )
             hooks.run_start()
+            run_system_prompt = system_prompt
+            if search_area and search_area.get("label"):
+                label, source = search_area["label"], search_area.get("source")
+                run_system_prompt += f"\n\nSearch area for this request: {label} (boundary: {source})."
+                if search_area.get("mode") == "enforce" and search_area.get("lgnd_area"):
+                    run_system_prompt += " LGND Geo searches are limited to this boundary automatically."
             agent = Agent(
                 model=model,
                 tools=tools,
-                system_prompt=system_prompt,
+                system_prompt=run_system_prompt,
                 hooks=[hooks],
                 conversation_manager=NullConversationManager(),
                 callback_handler=None,

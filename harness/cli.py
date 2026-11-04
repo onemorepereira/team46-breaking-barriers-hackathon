@@ -80,6 +80,13 @@ def cmd_compare(cfg: config_mod.Config, index: Index, args: argparse.Namespace) 
 
 
 def _run_one(cfg: config_mod.Config, index: Index, plan: invoke.RunPlan) -> tuple[invoke.Outcome, str]:
+    mode = str(cfg.get("area_mode") or "enforce")
+    if mode != "off" and not os.environ.get("HARNESS_TEST_SCRIPT"):
+        from harness import geo
+
+        area, event = geo.area_for_prompt(cfg, plan.payload["prompt"])
+        invoke.attach_area(plan, geo.payload_area(area, mode))
+        print(f"area: {event.get('label') or '—'} ({event.get('source') or event.get('note')}; {mode})")
     outcome = invoke.execute(cfg, index, plan)
     store = open_store(plan.archive_uri)
     run = Run.load(store, plan.run_id)

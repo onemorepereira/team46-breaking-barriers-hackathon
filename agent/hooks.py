@@ -25,6 +25,15 @@ from agent.archive import ArchiveWriter
 from agent.telemetry import to_attr
 
 SPAN_CAP_BYTES = 16 * 1024
+# LGND Geo tools whose scope reads `area` (from their input schemas); omitting it searches the whole index.
+AREA_TOOLS = {
+    "search_place_find",
+    "search_change_find",
+    "search_similar_change_find",
+    "discover_area_view",
+    "discover_area_shift_find",
+    "toolbox_classifier_apply",
+}
 
 
 class LimitExceeded(Exception):
@@ -56,6 +65,7 @@ class HarnessHooks(HookProvider):
         tools_available: list[dict[str, Any]],
         limits: dict[str, Any],
         server_of: dict[str, str],
+        search_area: dict[str, Any] | None = None,
     ) -> None:
         self.tracer = tracer
         self.writer = writer
@@ -63,6 +73,8 @@ class HarnessHooks(HookProvider):
         self.tools_available = tools_available
         self.limits = limits
         self.server_of = server_of
+        self.search_area = search_area or {}
+        self._area_requested: dict[str, Any] = {}  # tool_use_id -> the area the model asked for
         self.cancel = threading.Event()
         # Claude on Bedrock returns summarized thinking; other models (e.g. Kimi K3) return their own.
         self.reasoning_kind = "summarized" if "anthropic" in str(limits.get("model_id", "")) else "native"
@@ -222,8 +234,27 @@ class HarnessHooks(HookProvider):
                     self._first_ref_for_call[key] = ref
             else:
                 self._attempts[use_id] += 1
-            self._tool_args[use_id] = use.get("input")
+            self._enforce_area(event, use_id)
+            self._tool_args[use_id] = event.tool_use.get("input")
             self._tool_started[use_id] = time.monotonic()
+
+    def _enforce_area(self, event: BeforeToolCallEvent, use_id: str) -> None:
+        """Enforce mode: LGND searches run inside the prompt's official boundary, whatever the model sent."""
+        area = self.search_area.get("lgnd_area")
+        use = event.tool_use
+        name = str(use.get("name"))
+        if self.search_area.get("mode") != "enforce" or not area or name not in AREA_TOOLS:
+            return
+        if self.server_of.get(name) != "lgnd":
+            return
+        inp = dict(use.get("input") or {})
+        if name == "toolbox_classifier_apply" and (inp.get("nodes") or inp.get("inside")):
+            return  # that tool ignores area when nodes or inside are given
+        scope = dict(inp.get("scope") or {})
+        self._area_requested[use_id] = scope.get("area")
+        scope["area"] = area
+        inp["scope"] = scope
+        event.tool_use = {**use, "input": inp}  # type: ignore[assignment]
 
     def after_tool(self, event: AfterToolCallEvent) -> None:
         with self._lock:
@@ -260,6 +291,10 @@ class HarnessHooks(HookProvider):
                     "harness.tool.latency_ms": latency_ms,
                     "harness.tool.attempt": attempt,
                     "harness.tool.repeat_of": self._repeat_of.get(use_id),
+                    "harness.tool.area_enforced": use_id in self._area_requested or None,
+                    "harness.tool.area_requested": (
+                        self._area_requested.get(use_id) if use_id in self._area_requested else None
+                    ),
                 },
             )
             # What the model sees: the ref label, and at most 16 KB of the result.

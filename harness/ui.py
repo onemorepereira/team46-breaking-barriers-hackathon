@@ -143,23 +143,6 @@ def span_event(span: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def resolve_prompt_area(cfg: config_mod.Config, prompt: str) -> tuple[geo.Area | None, dict[str, Any]]:
-    """Read the search area from the prompt and resolve its boundary; never blocks the run on failure."""
-    try:
-        model_key = cfg.get("narrative_model") or next(iter(cfg["models"]))
-        spec = geo.extract_area(prompt, cfg["models"][model_key]["id"], cfg["region"])
-        area = geo.resolve_area(spec, Path(cfg["out_dir"]) / "geo-cache")
-        if area is None:
-            return None, {
-                "type": "area",
-                "label": None,
-                "note": "The prompt names no place, so there is no area check.",
-            }
-        return area, area.as_event()
-    except Exception as e:  # noqa: BLE001 - the run continues without an area check
-        return None, {"type": "area", "label": None, "note": f"Couldn't resolve the prompt's area: {e}"}
-
-
 def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str) -> str:
     out = Path(cfg["out_dir"]) / "ui"
     out.mkdir(parents=True, exist_ok=True)
@@ -177,7 +160,11 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str) -> 
 
         env = {"HARNESS_EXPORTER": "console", "HARNESS_CONSOLE_PATH": str(live.resolve())}
         if not os.environ.get("HARNESS_TEST_SCRIPT"):
-            state.area, state.area_event = resolve_prompt_area(cfg, prompt)
+            state.area, state.area_event = geo.area_for_prompt(cfg, prompt)
+            mode = str(cfg.get("area_mode") or "enforce")
+            invoke.attach_area(plan, geo.payload_area(state.area, mode))
+            if state.area_event is not None:
+                state.area_event["mode"] = mode
         else:
             state.area_event = {"type": "area", "label": None, "note": "Scripted test run: no area check."}
         try:

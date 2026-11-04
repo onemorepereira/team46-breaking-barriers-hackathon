@@ -22,6 +22,7 @@ DEFAULTS: dict[str, Any] = {
     "prices_per_mtok": {},
     "rubric": None,
     "scorer": "none",
+    "area_mode": "enforce",  # enforce | observe | off: how the prompt's area is applied to LGND searches
     "out_dir": "out",
 }
 

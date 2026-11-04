@@ -121,6 +121,14 @@ def _git_sha() -> str:
         return "unknown"
 
 
+def attach_area(plan: RunPlan, search_area: dict[str, Any] | None) -> None:
+    """Send the prompt's area to the agent and snapshot it in run.json (replay never re-resolves it)."""
+    if search_area is None:
+        return
+    plan.payload["search_area"] = {k: v for k, v in search_area.items() if k != "geometry"}
+    plan.manifest["snapshot"]["search_area"] = search_area
+
+
 def execute(cfg: Config, index: Index, plan: RunPlan, extra_env: dict[str, str] | None = None) -> Outcome:
     store = open_store(plan.archive_uri)
     key = f"runs/{plan.run_id}/run.json"
