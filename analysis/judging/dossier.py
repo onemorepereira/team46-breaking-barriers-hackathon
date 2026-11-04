@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
 from analysis import provenance, signals, timeline
 from analysis.trace import Run
+from core import geometry
 from core.spans import MODEL_RESULT, TOOL_RESULT
 from tools.lgnd import descriptors as lgnd
 
@@ -140,16 +142,39 @@ def build(run: Run, tool_result_chars: int = TOOL_RESULT_CHARS) -> Dossier:
 
 
 def _center(area: dict[str, Any]) -> tuple[float, float]:
-    c = area.get("center")
-    if isinstance(c, list | tuple) and len(c) == 2:
-        return float(c[0]), float(c[1])
+    """A point inside the area (lat, lon), for the fabricated site, so it never reads as a scope violation.
+
+    The vertex average can fall outside a concave boundary (Richardson, TX does), so scan a grid over the
+    bounding box and take the inside point nearest that average.
+    """
     geom = area.get("geometry")
-    if isinstance(geom, dict):
-        polys = geom["coordinates"] if geom.get("type") == "MultiPolygon" else [geom["coordinates"]]
-        ring = polys[0][0] if polys and polys[0] else []
-        if ring:
-            return sum(p[1] for p in ring) / len(ring), sum(p[0] for p in ring) / len(ring)
-    return DEFAULT_CENTER
+    if not isinstance(geom, dict):
+        c = area.get("center")
+        return (float(c[0]), float(c[1])) if isinstance(c, list | tuple) and len(c) == 2 else DEFAULT_CENTER
+    polys = geom["coordinates"] if geom.get("type") == "MultiPolygon" else [geom["coordinates"]]
+    ring = [pt for poly in polys if poly for pt in poly[0]]
+    if not ring:
+        return DEFAULT_CENTER
+    lon0, lat0 = sum(p[0] for p in ring) / len(ring), sum(p[1] for p in ring) / len(ring)
+    if geometry.contains(geom, lon0, lat0):
+        return lat0, lon0
+    west, east = min(p[0] for p in ring), max(p[0] for p in ring)
+    south, north = min(p[1] for p in ring), max(p[1] for p in ring)
+    n = 40
+    inside = [
+        (south + (north - south) * (r + 0.5) / n, west + (east - west) * (c + 0.5) / n)
+        for r in range(n)
+        for c in range(n)
+        if geometry.contains(
+            geom, west + (east - west) * (c + 0.5) / n, south + (north - south) * (r + 0.5) / n
+        )
+    ]
+    if not inside:
+        return lat0, lon0
+    return min(inside, key=lambda q: (q[0] - lat0) ** 2 + (q[1] - lon0) ** 2)
+
+
+WHERE_RE = re.compile(r'("(?:where|area|targets)"\s*:\s*)"[^"]*"')
 
 
 def perturb(d: Dossier, kind: str) -> Dossier:
@@ -167,21 +192,17 @@ def perturb(d: Dossier, kind: str) -> Dossier:
             s.args["scope"].pop("area")
             s.text = json.dumps(s.args)[:3000]
             s.digest = s.digest.split(" (The harness held")[0]
-            for phrase in (" within ", " inside ", " in the box ", " near "):
+            for phrase in (" within ", " inside ", " in the box ", " near ", " in a custom area"):
                 if phrase in s.digest and ":" in s.digest:
                     head, tail = s.digest.split(":", 1)
                     s.digest = head.split(phrase)[0] + " everywhere (no area given):" + tail
                     break
-            try:
-                data = json.loads(s.output)
-                if isinstance(data, dict) and "where" in data:
-                    data["where"] = "everywhere"
-                    s.output = json.dumps(data)[: len(s.output) + 40]
-            except json.JSONDecodeError:
-                pass
+            # Rewrite every area description in the output text, parseable or trimmed, so the step agrees with
+            # itself: "where", "area" and "targets" all say everywhere.
+            s.output = WHERE_RE.sub(r'\1"everywhere"', s.output)
     elif kind == "fabricated":
         first_tool = next((s.ref for s in p.steps if s.kind == "tool"), "T1")
-        where = f"{p.center[0] + 0.01:.4f}, {p.center[1] + 0.01:.4f}"
+        where = f"{p.center[0]:.4f}, {p.center[1]:.4f}"
         claim = json.dumps({"claim": "Lakeview Data Center location", "value": where, "ref": first_tool})
         p.final_answer = (
             (p.final_answer or "")

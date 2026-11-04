@@ -243,12 +243,13 @@ def test_corpus_alpha_uses_whole_runs():
         return {"passes": [{"judges": [judge_reply(k, s) for k, s in scores_by_judge.items()]}]}
 
     runs = [
-        jd({"a": {"x": 2, "y": 0}, "b": {"x": 2, "y": 0}}),
-        jd({"a": {"x": 1, "y": 2}, "b": {"x": 1, "y": 2}}),
-        jd({"a": {"x": 0, "y": 1}, "b": {"x": 0, "y": 2}}),
+        jd({"a": {"x": 2, "y": 0}, "b": {"x": 2, "y": 0}, "c": {"x": 2, "y": 0}}),
+        jd({"a": {"x": 1, "y": 2}, "b": {"x": 1, "y": 2}, "c": {"x": 1, "y": 2}}),
+        jd({"a": {"x": 0, "y": 1}, "b": {"x": 0, "y": 2}, "c": {"x": 0, "y": 1}}),
+        jd({"a": {"x": 2, "y": 2}, "b": {"x": 0, "y": 0}}),  # a dropped pass (2 valid) doesn't count
     ]
     res = panel.corpus_alpha(runs, samples=200)
-    assert res["runs"] == 3 and res["units"] == 6 and res["coders"] == 2
+    assert res["runs"] == 3 and res["units"] == 6 and res["coders"] == 3
     assert 0.5 < res["alpha"] < 1 and res["ci95"][0] <= res["alpha"] <= res["ci95"][1]
 
 
@@ -412,3 +413,101 @@ def test_standard_run_still_judges(tmp_path):
     b = standard_run(tmp_path)
     run = Run.load(FileStore(f"file://{tmp_path}"), b.run_id)
     assert measure.measure(run).area_compliance is None and dossier.build(run).steps
+
+
+# ---------- Verify-review regressions ----------
+def test_within_one_is_per_pass_then_averaged(tmp_path):
+    m = measure.measure(lgnd_run(tmp_path))
+    split = [
+        {
+            "pass": 1,
+            "judges": [
+                judge_reply(k, {c: v for c in JUDGED}) for k, v in zip("abcde", [0, 2, 2, 2, 2], strict=True)
+            ],
+        },
+        {"pass": 2, "judges": [judge_reply(k, {c: 2 for c in JUDGED}) for k in "abcde"]},
+    ]
+    p = panel.aggregate(RUBRIC, split, m)
+    assert p.within_one == 0.5 and p.confidence == "Medium"  # not 1.0 / High from averaging spreads first
+
+
+def test_failure_modes_pool_votes_across_passes(tmp_path):
+    m = measure.measure(lgnd_run(tmp_path))
+    one = {c: 2 for c in JUDGED}
+    passes = [
+        {
+            "pass": n,
+            "judges": [judge_reply(k, one, ["retry_loop"] if (n, k) in tags else []) for k in "abcde"],
+        }
+        for n in (1, 2)
+        for tags in [{(1, "a"), (1, "b"), (1, "c"), (2, "a"), (2, "b"), (2, "c")}]
+    ]
+    assert [f["id"] for f in panel.aggregate(RUBRIC, passes, m).failure_modes] == ["retry_loop"]  # 6 of 10
+    few = [
+        {
+            "pass": n,
+            "judges": [
+                judge_reply(k, one, ["retry_loop"] if (n == 1 and k in "abc") else []) for k in "abcde"
+            ],
+        }
+        for n in (1, 2)
+    ]
+    assert panel.aggregate(RUBRIC, few, m).failure_modes == []  # 3 of 10 pooled votes is no majority
+
+
+def test_no_valid_judges_reports_no_dimension_scores(tmp_path):
+    m = measure.measure(lgnd_run(tmp_path))
+    p = panel.aggregate(RUBRIC, [{"pass": 1, "judges": [{"key": k, "status": "error"} for k in "abcde"]}], m)
+    assert p.overall is None and p.dimensions == {"workflow": None, "output": None}
+
+
+CONCAVE = {
+    "label": "Ell",
+    "source": "test",
+    "mode": "enforce",
+    "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+            [[-97, 32], [-96, 32], [-96, 32.2], [-96.8, 32.2], [-96.8, 33], [-97, 33], [-97, 32]]
+        ],
+    },
+}
+
+
+def test_fabricated_site_is_inside_a_concave_area(tmp_path):
+    lon0 = sum(p[0] for p in CONCAVE["geometry"]["coordinates"][0]) / 7
+    lat0 = sum(p[1] for p in CONCAVE["geometry"]["coordinates"][0]) / 7
+    assert not geometry.contains(CONCAVE["geometry"], lon0, lat0)  # the vertex average is outside the L
+    d = dossier.build(lgnd_run(tmp_path, area=CONCAVE))
+    fab = dossier.perturb(d, "fabricated")
+    lat, lon = (
+        float(x) for x in fab.final_answer.split("Northgate Cloud, at ")[1].split(".\n")[0].split(", ")
+    )
+    assert geometry.contains(CONCAVE["geometry"], lon, lat)
+
+
+def test_unscoped_rewrites_every_area_description_even_when_trimmed(tmp_path):
+    d = dossier.build(lgnd_run(tmp_path))
+    step = next(s for s in d.steps if s.kind == "tool")
+    step.output = (
+        '{"index":"s2","area":"within 60 km of 17.5, 105.2","where":"polygon with 5 vertices","cells":['
+        "\n[trimmed 900 chars]"
+    )
+    out = next(s for s in dossier.perturb(d, "unscoped").steps if s.kind == "tool").output
+    assert '"area":"everywhere"' in out and '"where":"everywhere"' in out and "17.5" not in out
+
+
+def test_calibrate_skips_a_perturbation_that_changes_nothing(tmp_path):
+    b = RunBuilder(root=tmp_path, model_key="sonnet", model_id="us.anthropic.claude-sonnet-5-5")
+    b.run_start()
+    b.model("", tool_use={"toolUseId": "tooluse_T1", "name": "search_datasets", "input": {}})
+    b.tool("search_datasets", {"query": "dc"}, '{"results": []}')  # RODA only: nothing to unscope
+    b.model(ANSWER)
+    b.run_end()
+    b.write(final_output=ANSWER, prices={"sonnet": {"in": 2.0, "out": 10.0}})
+    run = Run.load(FileStore(f"file://{tmp_path}"), "run-0001")
+    fake = FakeBedrock({})
+    out = calibrate.calibrate(CFG, run, run.store, client=fake)
+    v = {r["perturbation"]: r for r in out["rows"]}
+    assert v["unscoped"]["verdict"] == "skipped" and "changes nothing" in v["unscoped"]["why"]
+    assert sum(1 for model, _, _ in fake.calls if model == "qwen") == 3  # base + 2 testable, not 4 panels

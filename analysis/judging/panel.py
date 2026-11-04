@@ -69,6 +69,7 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
     top = rubric.max_score
     results: list[CriterionResult] = []
     spreads, mads = [], []
+    pass_within: dict[int, list[bool]] = {}  # pass index -> per criterion: all votes within one point?
     for c in rubric.criteria:
         if c.kind == "measured":
             share = measured.score_of(c.id)
@@ -97,6 +98,7 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
             med = lower_median(list(v.values()))
             medians.append(med)
             pass_spreads.append(max(v.values()) - min(v.values()))
+            pass_within.setdefault(i, []).append(pass_spreads[-1] <= 1)
             pass_mads.append(sum(abs(x - med) for x in v.values()) / len(v))
             if i == 0:
                 votes1 = v
@@ -131,6 +133,8 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
     for d in ("workflow", "output"):
         vals = [r.score for r in results if r.dimension == d and r.score is not None]
         dims[d] = round(sum(vals) / len(vals), 1) if vals else None
+    if not usable:
+        dims = {d: None for d in dims}  # a dimension isn't scored on measured criteria alone
     present = [v for v in dims.values() if v is not None]
     overall = round(sum(present) / len(present), 1) if present else None
     status = "scored" if usable else "insufficient"
@@ -151,7 +155,9 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
         for t, n in tags.most_common()
         if n >= need
     ]
-    within = sum(1 for s in spreads if s <= 1) / len(spreads) if spreads else None
+    # within-one per pass (share of criteria whose votes span <= 1 point), averaged across passes (AC7)
+    shares = [sum(w) / len(w) for w in pass_within.values() if w]
+    within = sum(shares) / len(shares) if shares else None
     mad_all = round(sum(mads) / len(mads), 3) if mads else None
     conf, reasons = confidence(measured, valid_counts, within, bool(usable))
     verdict = "FAILED" if gates else ("scored" if usable else "not scored")
@@ -215,6 +221,8 @@ def corpus_alpha(judgements: list[dict[str, Any]], samples: int = 1000, seed: in
         if not passes:
             continue
         valid = _valid(passes[0])
+        if len(valid) < MIN_VALID:
+            continue  # a dropped pass doesn't count toward agreement either
         run_units = []
         for cid in sorted({k for j in valid for k in j.get("scores", {})}):
             unit = {j["key"]: int(j["scores"][cid]) for j in valid if cid in j.get("scores", {})}

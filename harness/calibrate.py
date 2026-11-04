@@ -32,20 +32,37 @@ def _medians(r: Rubric, passes: list[dict[str, Any]]) -> dict[str, float | None]
     return out
 
 
-def verdicts(r: Rubric, base: dict[str, float | None], perturbed: dict[str, dict[str, float | None]]
-             ) -> list[dict[str, Any]]:  # fmt: skip
+def verdicts(
+    r: Rubric,
+    base: dict[str, float | None],
+    perturbed: dict[str, dict[str, float | None]],
+    testable: list[str] | None = None,
+) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for kind in dossier_mod.PERTURBATIONS:
         target = r.calibration.get(kind)
         if target is None:
-            rows.append({"perturbation": kind, "target": None, "verdict": "skipped"})
+            rows.append(
+                {"perturbation": kind, "target": None, "verdict": "skipped", "why": "no target in the rubric"}
+            )
+            continue
+        if testable is not None and kind not in testable:
+            rows.append(
+                {
+                    "perturbation": kind,
+                    "target": target,
+                    "verdict": "skipped",
+                    "why": "the perturbation changes nothing in this run's dossier",
+                }
+            )
             continue
         after = perturbed.get(kind, {})
         b, a = base.get(target), after.get(target)
         others = [
             (base[c] or 0) - (after.get(c) or 0)
-            for c in base if c != target and base.get(c) is not None and after.get(c) is not None
-        ]  # fmt: skip
+            for c in base
+            if c != target and base.get(c) is not None and after.get(c) is not None
+        ]
         other_drop = max(others) if others else 0.0
         if b is None or a is None:
             verdict, drop = "inconclusive", None
@@ -54,10 +71,18 @@ def verdicts(r: Rubric, base: dict[str, float | None], perturbed: dict[str, dict
         else:
             drop = b - a
             verdict = "pass" if drop > 0 else "fail"
-        rows.append({"perturbation": kind, "target": target, "original": b, "perturbed": a, "drop": drop,
-                     "max_other_drop": other_drop,
-                     "non_specific": drop is not None and drop > 0 and other_drop >= drop,
-                     "verdict": verdict})  # fmt: skip
+        rows.append(
+            {
+                "perturbation": kind,
+                "target": target,
+                "original": b,
+                "perturbed": a,
+                "drop": drop,
+                "max_other_drop": other_drop,
+                "non_specific": drop is not None and drop > 0 and other_drop >= drop,
+                "verdict": verdict,
+            }
+        )
     return rows
 
 
@@ -70,21 +95,49 @@ def exit_code(rows: list[dict[str, Any]]) -> int:
 def calibrate(cfg: Config, run: Run, store: Store, passes: int = 1, client: Any = None) -> dict[str, Any]:
     j = judge.judging_cfg(cfg)
     r = load_rubric(j["rubric"])
-    seats = judge.seats(cfg, run.manifest.get("model_key"), run.manifest.get("model_id"))
     d = dossier_mod.build(run)
+    base_text = dossier_mod.render(d)
+    # A perturbation that changes nothing (e.g. no area-scoped search to unscope) tests nothing: skip it.
+    kinds = [
+        k
+        for k in dossier_mod.PERTURBATIONS
+        if k in r.calibration and dossier_mod.render(dossier_mod.perturb(d, k)) != base_text
+    ]
+    if not kinds:
+        rows = verdicts(r, {}, {}, testable=[])
+        out = {
+            "schema_version": 1,
+            "run_id": run.run_id,
+            "rubric": {"id": r.id, "sha256": r.sha256},
+            "rows": rows,
+            "cost_usd": 0.0,
+            "exit_code": exit_code(rows),
+            "passes": passes,
+            "seats": [],
+        }
+        store.write_text(f"runs/{run.run_id}/calibration.json", json.dumps(out, indent=1))
+        return out
+    seats = judge.seats(cfg, run.manifest.get("model_key"), run.manifest.get("model_id"))
     base_passes = judge.run_panel(cfg, r, d, seats, passes, client)
     base = _medians(r, base_passes)
     perturbed, cost = {}, sum(x.get("cost_usd") or 0 for p in base_passes for x in p["judges"])
-    for kind in dossier_mod.PERTURBATIONS:
-        if kind not in r.calibration:
-            continue
+    for kind in kinds:
         ps = judge.run_panel(cfg, r, dossier_mod.perturb(d, kind), seats, passes, client)
         perturbed[kind] = _medians(r, ps)
         cost += sum(x.get("cost_usd") or 0 for p in ps for x in p["judges"])
-    rows = verdicts(r, base, perturbed)
-    out = {"schema_version": 1, "run_id": run.run_id, "rubric": {"id": r.id, "sha256": r.sha256},
-           "calibrated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "passes": passes,
-           "seats": [s.key for s in seats], "original": base, "perturbed": perturbed, "rows": rows,
-           "cost_usd": round(cost, 4), "exit_code": exit_code(rows)}  # fmt: skip
+    rows = verdicts(r, base, perturbed, testable=kinds)
+    out = {
+        "schema_version": 1,
+        "run_id": run.run_id,
+        "rubric": {"id": r.id, "sha256": r.sha256},
+        "calibrated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "passes": passes,
+        "seats": [s.key for s in seats],
+        "original": base,
+        "perturbed": perturbed,
+        "rows": rows,
+        "cost_usd": round(cost, 4),
+        "exit_code": exit_code(rows),
+    }
     store.write_text(f"runs/{run.run_id}/calibration.json", json.dumps(out, indent=1))
     return out

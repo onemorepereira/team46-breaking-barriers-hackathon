@@ -1,7 +1,7 @@
 # Judge Panel and Foundry Console — Spec
 
 **Track:** Standard   **Product stage:** Introduction
-**Status:** Building   **Last updated:** 2026-11-04
+**Status:** Built   **Last updated:** 2026-11-04
 
 > References like (T116) or (V53) are lines in the [Technical](../Clay-Foundry-Technical-Hackathon.md) and [Vision](../Clay-Foundry-Vision-Hackathon.md) briefs. **[GRA §x]** cites the Geospatial Research Agent paper (arXiv 2610.15750), summarized in [paper-notes.md](paper-notes.md). **[team]** marks our own decisions.
 

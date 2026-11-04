@@ -157,3 +157,31 @@ def test_scripted_run_streams_steps_then_the_full_view(tmp_path, monkeypatch):
     assert done["status"] == "ok" and done["view"]["kpis"]["missing_fields"] == 0
     assert [c["status"] for c in done["view"]["claims"]] == ["matched", "matched"]
     assert "Run report" in client.get(f"/reports/{run_id}").text
+
+
+def test_rejudge_endpoint_streams_the_panel_and_refreshes_the_view(tmp_path, monkeypatch):
+    from harness import judge
+    from tests.test_judging import CFG
+
+    cfg = cfg_for(
+        tmp_path,
+        models={**CFG["models"], "scripted": {"id": "scripted"}},
+        prices_per_mtok=CFG["prices_per_mtok"],
+        judging=CFG["judging"],
+    )
+    run = lgnd_run(tmp_path / "archive")
+    Index(cfg["out_dir"]).record_run(run.run_id, f"file://{tmp_path}/archive")
+    monkeypatch.setattr(judge, "_bedrock", lambda cfg: FakeBedrock({}))
+    client = TestClient(create_app(cfg))
+    assert client.post(f"/api/runs/{run.run_id}/judge").status_code == 200
+    events = []
+    with client.stream("GET", f"/api/runs/{run.run_id}/events") as stream:
+        for line in stream.iter_lines():
+            if line.startswith("data: "):
+                events.append(json.loads(line[6:]))
+                if events[-1]["type"] == "done":
+                    break
+    types = [e["type"] for e in events]
+    assert types[0] == "rejudge" and "judging" in types and types.count("judge") == 5
+    assert events[-1]["view"]["scorecard"]["valid_judges"] == [5]
+    assert client.get("/api/runs").json()["runs"][0]["verdict"] == "scored"  # the cached row was refreshed

@@ -1,4 +1,5 @@
 /* Team Foundry console: Tabler + brand accents. Brand: cyan #01D5F9, orange #FD8800 (from the TF logo). */
+[hidden] { display: none !important; } /* Tabler's d-flex would otherwise win over the hidden attribute */
 :root {
   --foundry-cyan: #01d5f9;
   --foundry-cyan-ink: #0891b2;

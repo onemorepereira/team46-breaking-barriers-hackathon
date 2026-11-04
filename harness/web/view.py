@@ -7,6 +7,7 @@ from typing import Any
 from analysis import provenance, signals, summary, timeline
 from analysis.judging import measure
 from analysis.trace import Run
+from core import geometry
 from harness import imagery, judge
 
 
@@ -58,6 +59,7 @@ def scorecard(run: Run) -> dict[str, Any] | None:
         return None
     result = judge.rescore(jd, run).as_dict()
     anchors = {c["id"]: c.get("anchors", {}) for c in jd["rubric"]["snapshot"].get("criteria", [])}
+    top = max(jd["rubric"]["snapshot"].get("scale") or [2])
     judges = []
     for j in (jd.get("passes") or [{}])[0].get("judges", []):
         scores = j.get("scores") or {}
@@ -73,7 +75,7 @@ def scorecard(run: Run) -> dict[str, Any] | None:
                 "latency_s": j.get("latency_s"),
                 "verdict": j.get("verdict"),
                 "failure_modes": j.get("failure_modes", []),
-                "score": round(sum(scores.values()) / len(scores) / 2 * 100, 1) if scores else None,
+                "score": round(sum(scores.values()) / len(scores) / top * 100, 1) if scores else None,
                 "criteria": [
                     {
                         "id": cid,
@@ -144,20 +146,17 @@ def run_view(run: Run) -> dict[str, Any]:
         "trace_integrity": m.trace_integrity,
         "missing_fields": m.missing_fields,
     }
-    located_claims = {(x.claim, f"{x.lat}, {x.lon}"): x.inside for x in m.located if x.source == "claim"}
+    # Claims are located in the same order provenance graded them; match by position, not by name.
+    located_claims = iter([x for x in m.located if x.source == "claim"])
     claims = []
     for c in prov.claims:
-        inside = next((v for (name, _), v in located_claims.items() if name == c.claim), None)
+        inside = None
+        if geometry.coordinate_pair(c.value):
+            inside = next(located_claims).inside
         claims.append(
-            {
-                "claim": c.claim,
-                "value": c.value,
-                "ref": c.ref,
-                "status": c.status,
-                "inside": inside,
-                "value_class": c.value_class,
-            }
-        )
+            {"claim": c.claim, "value": c.value, "ref": c.ref, "status": c.status, "inside": inside,
+             "value_class": c.value_class}
+        )  # fmt: skip
     return {
         "run": {
             "id": run.run_id,

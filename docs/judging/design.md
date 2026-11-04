@@ -120,9 +120,9 @@ Each `models.<key>` entry gains `family`. Judges are configured models like any 
 - **Per judged criterion:**
   - the median of valid judges per pass: an actual vote with 5 votes, the lower median with 3–4 (conservative). Failed judges are not replaced: failures are often systematic (e.g. timeouts on long reasoning), and a judgement records its seats as they were;
   - across passes, the mean ± std of the pass medians. This mean is the headline;
-  - spread (max − min) and MAD from the median per pass, averaged across passes. Unanimous means spread 0.
+  - spread (max − min) and MAD from the median per pass, averaged across passes. Unanimous means spread 0. **Within-one** is computed per pass (the share of criteria whose votes span ≤ 1 point) and then averaged across passes.
 - **Score:** a judged criterion scores median ÷ 2 × 100; a measured one scores share × 100.
-- **Gates:** a fatal gate sets every output criterion and the overall score to 0, records `gated_by`, and the page shows FAILED. Workflow scores stay visible for diagnosis.
+- **Gates:** a fatal gate sets every output criterion and the overall score to 0, marks each gated criterion `gated: true`, records the gate reasons in `gates`, and the page shows FAILED. Workflow scores stay visible for diagnosis.
 - **Dimensions:** each is the mean of its non-N/A criteria. Overall is the mean of the two dimensions, or the one that exists.
 - **Failure modes:** reported when at least ⌈(n + 1) / 2⌉ of the n valid judges tag them.
 - **Agreement:**

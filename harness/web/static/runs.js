@@ -23,7 +23,8 @@
         : el("span", { class: `badge bg-${tone(r.score)}-lt`, text: Math.round(r.score) });
       const tr = el("tr", { style: "cursor:pointer" },
         el("td", { class: "text-secondary small text-nowrap", text: (r.started_at || "").replace("T", " ").replace("Z", "") }),
-        el("td", { class: "small", style: "max-width:28rem" }, el("a", { href: `/runs/${r.id}`, text: r.prompt || r.prompt_file || r.id })),
+        el("td", { class: "small text-truncate", style: "max-width:26rem", title: r.prompt || "" },
+          el("a", { href: `/runs/${r.id}`, text: r.prompt || r.prompt_file || r.id })),
         el("td", {}, el("span", { class: "badge bg-azure-lt", text: r.model_key || "?" })),
         el("td", { class: "small text-secondary", text: r.area || "—" }),
         el("td", {}, el("span", { class: `badge bg-${statusTone(r.status)}-lt`, text: r.status })),

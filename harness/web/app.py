@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,7 @@ from harness.web.view import run_row, run_view
 
 HERE = Path(__file__).parent
 TEAM = "Team Foundry"
+ROWS_TTL_S = 120
 
 
 def create_app(cfg: config_mod.Config) -> FastAPI:
@@ -62,16 +64,31 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
     def models() -> dict[str, Any]:
         return {"models": agent_models(), "judges": (cfg.get("judging") or {}).get("panel", [])}
 
+    # Finished runs change only when re-judged: here (state.dirty) or from the CLI (caught by the TTL).
+    rows_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+
+    def row_for(run_id: str, uri: str) -> dict[str, Any] | None:
+        state = live.RUNS.get(run_id)
+        cached = rows_cache.get(run_id)
+        fresh = cached is not None and time.monotonic() - cached[0] < ROWS_TTL_S
+        if fresh and (state is None or (state.done and not state.dirty)):
+            return cached[1]  # type: ignore[index]
+        try:
+            row = run_row(Run.load(open_store(uri), run_id))
+        except Exception:  # noqa: BLE001 - one bad archive shouldn't hide the rest
+            return None
+        if row["status"] != "running":
+            rows_cache[run_id] = (time.monotonic(), row)
+            if state is not None:
+                state.dirty = False
+        return row
+
     @app.get("/api/runs")
     def list_runs() -> dict[str, Any]:
-        rows = []
-        for run_id, uri in index.runs().items():
-            if uri.startswith("s3://") and not cfg.get("ui_list_s3", True):
-                continue
-            try:
-                rows.append(run_row(Run.load(open_store(uri), run_id)))
-            except Exception:  # noqa: BLE001 - one bad archive shouldn't hide the rest
-                continue
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            rows = [r for r in pool.map(lambda kv: row_for(*kv), index.runs().items()) if r]
         rows.sort(key=lambda r: r.get("started_at") or "", reverse=True)
         return {"runs": rows}
 
