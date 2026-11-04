@@ -1,0 +1,9 @@
+# Copy to harness.local.yaml in Aditya's event Kiro environment. No credentials belong in this file.
+region: us-west-2
+backend: local
+archive_uri: file://./archive
+local_archive_uri: file://./archive
+lgnd_secret_id: null
+runtime_arn: null
+out_dir: out
+area_mode: off

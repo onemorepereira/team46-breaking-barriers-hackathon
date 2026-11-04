@@ -1,0 +1,28 @@
+# Aditya's real Bedrock sandbox copy
+
+This branch is based on Miguel's Team46 application plus `slice/complete-evaluations`. It is not yesterday's separate agent prototype.
+
+Expected workshop account: **952337755619**, assumed role **WSParticipantRole**, region **us-west-2**. Use the supplied Kiro instance identity. No credentials are stored in Git. The example config clears Miguel's secret/runtime and uses local archives instead of his S3 bucket.
+
+```sh
+cp harness.adi.example.yaml harness.local.yaml
+uv sync
+uv run python -m scripts.adi_sandbox check
+uv run python -m scripts.adi_sandbox ui --port 8787
+```
+
+The launcher refuses personal profiles, wrong account/role/region, another account's runtime/secret, or non-local archives. It does not change IAM or deploy cloud infrastructure.
+
+Run a real task with:
+
+```sh
+uv run python -m scripts.adi_sandbox run --prompt out/adi-live-task.md --model sonnet
+```
+
+The UI/agent/evaluator processes run on the workshop machine; actual model inference runs in AWS Bedrock. Reports and traces remain under the private working copy's `archive/` and `out/`. This is not a new public AgentCore deployment.
+
+RODA catalog tools are enabled. **LGND imagery tools are not connected in this isolated copy yet.** Physical-site tasks must expose that missing evidence rather than claim verified results. Connecting LGND needs a login secret in this same event account; do not reuse Miguel's secret.
+
+On November 4, actual inference probes succeeded for Sonnet 5.5, Opus 5.5, Kimi K3, Kimi K2.5, Mistral Large 3, DeepSeek V3.2 and Qwen3 235B in this event account. Model availability may change. A real Sonnet dataset-discovery run finished with eight steps, zero tool errors, and three valid judges (Mistral, DeepSeek and Kimi). Detailed run records stay out of Git.
+
+`harness.local.yaml`, credentials, archives and logs are private/ignored. Model calls consume the event budget. Source checks and replay do not prove real-world dataset accuracy.
