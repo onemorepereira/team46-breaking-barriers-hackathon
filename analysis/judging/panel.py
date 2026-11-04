@@ -77,7 +77,11 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
                 f"{measured.claims_matched}/{measured.claims_total}"
                 if c.id == "claim_provenance"
                 else (
-                    f"{measured.conditions_supported}/{measured.conditions_total}"
+                    (
+                        f"{measured.conditions_supported}/{measured.conditions_total}"
+                        if measured.conditions_total
+                        else "no location evidence"
+                    )
                     if c.id == "condition_compliance"
                     else f"{measured.claims_inside}/{measured.claims_located}"
                 )

@@ -163,3 +163,11 @@ def test_negative_reference_labels_do_not_supply_distance_evidence(tmp_path):
     }
     run.store.write_text(f"runs/{run.run_id}/{uri}", json.dumps(data))
     assert conditions.evaluate(run)["rows"][0]["cells"][2]["status"] == "unverified"
+
+
+def test_distance_request_without_locations_cannot_get_high_output_score(tmp_path):
+    run = lgnd_run(tmp_path, final_output="Here is a plan to find sites.")
+    save(run)
+    run, result = judged(run)
+    assert result.dimensions["output"] == 0
+    assert result.confidence != "High"

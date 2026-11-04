@@ -120,7 +120,7 @@ def evaluate(run: Run) -> dict[str, Any] | None:
         "error": saved.get("error"),
         "supported": supported,
         "total": len(cells),
-        "score": supported / len(cells) if cells and advanced else None,
+        "score": (supported / len(cells) if cells else 0.0) if advanced else None,
         "needs_review": bool(saved.get("error"))
         or (advanced and not rows)
         or any(c["status"] != "supported" for c in cells),

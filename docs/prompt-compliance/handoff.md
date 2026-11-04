@@ -30,7 +30,7 @@ For the full app over real archives, use `uv run harness ui`. Use your event acc
 
 ## Validation
 
-Tests cover known distances and the date line, extraction once, omitted distance constraints, invalid distances, extraction failure, failed evidence, supported/contradicted/unverified matrix cells, matching reference types, negative reference labels, far-reference uncertainty, legacy replay, output caps, and no mutation of archived judgements. The existing feedback tests still pass with version-scoped guidance. Full checks are recorded in the PR.
+Tests cover known distances and the date line, extraction once, omitted distance constraints, invalid distances, extraction failure, failed evidence, supported/contradicted/unverified matrix cells, matching reference types, negative reference labels, far-reference uncertainty, legacy replay, output caps, and no mutation of archived judgements. The existing feedback tests still pass with version-scoped guidance. Final local checks: **222 tests passed**, ruff lint/format, mypy and diff checks passed (Python 3.13.1). An advanced distance request with no locations receives zero output credit. Browser demo shows the coverage cap even when fixture judges unanimously give full marks.
 
 Browser: actual running synthetic app inspected; matrix and explanations visible. Tests do not establish real-world retrieval accuracy or expert agreement.
 
