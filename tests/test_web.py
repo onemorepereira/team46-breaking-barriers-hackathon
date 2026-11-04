@@ -185,3 +185,20 @@ def test_rejudge_endpoint_streams_the_panel_and_refreshes_the_view(tmp_path, mon
     assert types[0] == "rejudge" and "judging" in types and types.count("judge") == 5
     assert events[-1]["view"]["scorecard"]["valid_judges"] == [5]
     assert client.get("/api/runs").json()["runs"][0]["verdict"] == "scored"  # the cached row was refreshed
+
+
+def test_example_cards_cover_every_continent_with_asia_first_and_are_served():
+    """docs/example-cards AC1, AC6: data, not code; six continents; Asia has the most; prompts unique."""
+    data = json.loads((Path(__file__).parents[1] / "harness/web/static/examples.json").read_text())
+    continents, examples = data["continents"], data["examples"]
+    assert continents[0] == "Asia" and len(continents) == 6
+    keys = {"continent", "country", "task", "place", "theme", "icon", "prompt"}
+    assert all(set(x) == keys and all(isinstance(x[k], str) and x[k] for k in keys) for x in examples)
+    assert {x["continent"] for x in examples} == set(continents)
+    asia = [x for x in examples if x["continent"] == "Asia"]
+    assert len(asia) >= 8 and len(asia) > len(examples) / 2
+    assert len({x["prompt"] for x in examples}) == len(examples)
+    icons = (
+        Path(__file__).parents[1] / "harness/web/static/vendor/tabler-icons/tabler-icons.min.css"
+    ).read_text()
+    assert all(f".ti-{x['icon']}:before" in icons for x in examples)  # every icon is in the vendored font

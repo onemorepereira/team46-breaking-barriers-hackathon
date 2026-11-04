@@ -78,3 +78,20 @@
 .ref-link { font-family: var(--tblr-font-monospace); font-size: .72rem; cursor: pointer; }
 .flash { animation: flash 1.4s ease-out; }
 @keyframes flash { from { background: rgba(253, 136, 0, .25); } to { background: transparent; } }
+
+/* Example prompt cards (continent tabs over a grid) */
+.foundry-example { cursor: pointer; border: 1px solid var(--tblr-border-color); background: var(--tblr-bg-surface);
+  color: inherit; transition: border-color .15s, box-shadow .15s; height: 100%; }
+.foundry-example:hover, .foundry-example:focus-visible { border-color: var(--foundry-cyan-ink); box-shadow: 0 0 0 2px rgba(1, 213, 249, .2); outline: none; }
+.foundry-example.selected { border-color: var(--foundry-orange); box-shadow: inset 3px 0 0 var(--foundry-orange); }
+.foundry-example-region { font-size: .68rem; letter-spacing: .04em; }
+.foundry-example-icon { color: var(--foundry-cyan-ink); font-size: 1.1rem; line-height: 1; }
+.foundry-example-theme { font-weight: 500; }
+.foundry-example-tab { --tblr-btn-color: var(--tblr-secondary); --tblr-btn-border-color: var(--tblr-border-color); }
+.foundry-example-tab.active { --tblr-btn-active-bg: var(--foundry-cyan-ink); --tblr-btn-active-color: #fff;
+  --tblr-btn-active-border-color: var(--foundry-cyan-ink); background: var(--foundry-cyan-ink); color: #fff; border-color: var(--foundry-cyan-ink); }
+/* Phone width: the map card's basemap switcher wraps under the title instead of overflowing the page */
+@media (max-width: 575.98px) {
+  .card-header:has(#basemaps) { flex-wrap: wrap; gap: .5rem; }
+  #basemaps { margin-left: 0; flex-wrap: wrap; }
+}

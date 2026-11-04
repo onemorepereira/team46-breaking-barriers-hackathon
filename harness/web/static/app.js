@@ -494,20 +494,50 @@
     follow(id);
   }
 
+  // ---------- example cards (static/examples.json): continent tabs over a grid; a click fills the prompt ----------
+  function loadExamples() {
+    fetch("/static/examples.json").then((r) => r.json()).then(({ continents, examples }) => {
+      const tabs = $("example-tabs"), grid = $("example-grid");
+      let current = continents.includes("Asia") ? "Asia" : "All";
+      const cards = examples.map((x) => {
+        const card = el("button", { type: "button", class: "card card-sm foundry-example w-100 text-start", title: x.prompt },
+          el("div", { class: "card-body p-2" },
+            el("div", { class: "d-flex align-items-center justify-content-between gap-2 mb-1" },
+              el("span", { class: "text-uppercase text-secondary fw-semibold foundry-example-region", text: `${x.continent} · ${x.country}` }),
+              el("span", { class: "foundry-example-icon", "aria-hidden": "true" }, el("i", { class: `ti ti-${x.icon}` }))),
+            el("div", { class: "fw-semibold", text: x.task }),
+            el("div", { class: "text-secondary small", text: x.place }),
+            el("div", { class: "mt-1" }, el("span", { class: "badge bg-cyan-lt foundry-example-theme", text: x.theme }))));
+        card.addEventListener("click", () => {
+          $("prompt").value = x.prompt;
+          for (const c of cards) c.node.classList.remove("selected");
+          card.classList.add("selected");
+          $("prompt").focus();
+        });
+        return { x, node: card, col: el("div", { class: "col-12 col-sm-6 col-lg-4 col-xl-3" }, card) };
+      });
+      const count = (c) => (c === "All" ? examples.length : examples.filter((x) => x.continent === c).length);
+      const show = () => {
+        for (const b of tabs.children) {
+          const on = b.dataset.continent === current;
+          b.classList.toggle("active", on); b.setAttribute("aria-pressed", String(on));
+        }
+        grid.replaceChildren(...cards.filter((c) => current === "All" || c.x.continent === current).map((c) => c.col));
+      };
+      for (const c of [...continents.filter((k) => count(k) > 0), "All"]) {
+        tabs.append(el("button", { type: "button", class: "btn btn-sm btn-pill foundry-example-tab", "data-continent": c,
+          "aria-pressed": "false", onclick: () => { current = c; show(); } }, c, el("span", { class: "ms-1 opacity-75", text: String(count(c)) })));
+      }
+      show();
+      $("examples").hidden = false;
+    }).catch(() => { /* examples are a convenience; the form works without them */ });
+  }
+
   // ---------- boot ----------
-  const EXAMPLES = [
-    "Find the data centers within the city limits of Richardson, TX. Give each one's location exactly as the tool returned it.",
-    "Find data centers in ZIP code 75080 and give each one's location exactly as the tool returned it.",
-    "Map the farmland in Khammouane province, Laos, and give the location of each farmland area you confirm.",
-    "Find the large warehouses in Nagoya, Japan, and give each one's location exactly as the tool returned it.",
-  ];
   initMap();
   if (!RUN_ID) {
     $("run-form").addEventListener("submit", startRun);
-    const ex = $("examples");
-    ex.append(el("span", { class: "text-secondary", text: "Try:" }));
-    for (const p of EXAMPLES) ex.append(el("a", { href: "#", class: "badge bg-azure-lt text-wrap text-start", text: p.split(/[.,]/)[0],
-      onclick: (e) => { e.preventDefault(); $("prompt").value = p; } }));
+    loadExamples();
   } else {
     fetch(`/api/runs/${RUN_ID}`).then((r) => r.json()).then(renderView)
       .catch((e) => { $("error").hidden = false; $("error").textContent = `Couldn't load the run: ${e}`; });
