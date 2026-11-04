@@ -41,19 +41,19 @@ A tribunal of three judges from three families:
 | --- | --- | --- | --- |
 | Chair | Claude Opus 5.5 | Anthropic | 4.00 / 20.00 |
 | 2 | DeepSeek V3.2 | DeepSeek | 0.62 / 1.85 |
-| 3 | Mistral Large 3 | Mistral | 0.50 / 1.50 |
-| Reserves, in order | Kimi K3 (Moonshot), Qwen3 235B (Alibaba), Sonnet 5.5 (Anthropic) | | 3.30 / 16.50; 0.22 / 0.88; 2.00 / 10.00 |
+| 3 | Kimi K3 | Moonshot | 3.30 / 16.50 |
+| Reserves, in order | Mistral Large 3 (Mistral), Qwen3 235B (Alibaba), Sonnet 5.5 (Anthropic) | | 0.50 / 1.50; 0.22 / 0.88; 2.00 / 10.00 |
 
 - **Why three, from three families:** an odd panel has no ties, and its median is always one judge's real vote. No single vendor can carry a majority. That answers the self-preference risk the GRA paper leaves open, since it rated Gemini with Gemini.
 - **Who was dropped, and why** (from the 7 runs judged by the earlier five-judge panel):
   - **Grok 4.7**: it averaged 143 s per verdict against 11–50 s for the others, so it set the time to a score, and it was the only judge that errored.
-  - **Kimi K3** became a reserve: it's also an agent under test, so it would recuse on every Kimi run, and it's the second most expensive judge.
-  - **Qwen3 235B** stays a reserve only: it was the most lenient judge, at +0.25 points above its peers' median on average.
+  - **Mistral Large 3** and **Qwen3 235B** are reserves: they were the two most lenient judges (+0.14 and +0.25 points above their peers' median on average). Kimi took Mistral's seat at the user's call. It voted closest to its peers (mean bias −0.09), so the tribunal isn't outvoted by lenient seats.
+  - **Kimi K3** judges and is also an agent under test. On a Kimi run it recuses and Mistral sits.
 - **Recusal:** a judge from the agent's own family steps down, and the first reserve from another family takes the seat. The page shows "seated for opus".
-  - Sonnet 5.5 is our default agent, so on a Sonnet run Opus recuses and Kimi sits.
-  - On a Kimi run, all three seated judges sit.
+  - Sonnet 5.5 is our default agent, so on a Sonnet run Opus recuses and Mistral sits.
+  - On a Kimi run, Kimi recuses and Mistral sits.
   - The setting is `recuse_same_family`.
-- **Stand-ins:** if a judge fails (after its one retry), the next reserve takes its seat. The reserve must share a family with neither the agent nor a seated judge. The page shows "stood in for mistral", and the failed attempt stays on the record.
+- **Stand-ins:** if a judge fails (after its one retry), the next reserve takes its seat. The reserve must share a family with neither the agent nor a seated judge. The page shows "stood in for kimi", and the failed attempt stays on the record.
 - **What a judge sees:** a dossier built by code from the archive. It holds the task, the requested area, the tools available, every step in order (reasoning, arguments, outputs labeled `T1`, `T2`…), run totals and the final answer.
   - Tool output is wrapped in `<tool_output>` tags and declared untrusted.
   - Judges never see our measured results, so code and LLMs are two independent lines of evidence.

@@ -85,8 +85,8 @@ Unknown tools fall back to "Called `<name>` with <k>=<v>…: <first 120 chars>".
 ```yaml
 judging:
   rubric: rubrics/geo-dataset-v1.yaml
-  panel: [opus, deepseek, mistral]   # revised 2026-11-04 from five: a tribunal of Anthropic, DeepSeek, Mistral
-  reserves: [kimi, qwen, sonnet]     # sit for a recused judge, or stand in for a failed one
+  panel: [opus, deepseek, kimi]      # revised 2026-11-04 from five: a tribunal of Anthropic, DeepSeek, Moonshot
+  reserves: [mistral, qwen, sonnet]  # sit for a recused judge, or stand in for a failed one
   recuse_same_family: true
   passes: 1
   auto: true                                     # console and `harness run` judge every finished run
@@ -98,7 +98,7 @@ Each `models.<key>` entry gains `family`. Judges are configured models like any 
 - Opus 5.5, the user's preferred judge, chairs the panel.
 - Sonnet 5.5 is a reserve only, because it is our default agent. It and Opus are the same family.
 
-**Recusal:** a judge whose family equals the agent model's family gives its seat to the first reserve of a different family. For a Sonnet run, Opus recuses and Kimi sits in its place; on a Kimi run the three seated judges all sit. The seat list is recorded in the judgement.
+**Recusal:** a judge whose family equals the agent model's family gives its seat to the first reserve of a different family. For a Sonnet run, Opus recuses and Mistral sits in its place; for a Kimi run, Kimi recuses and Mistral sits. The seat list is recorded in the judgement.
 
 **Stand-ins** (added with the tribunal): after the seated judges answer, each one that failed is replaced by the next spare, a reserve sharing a family with neither the agent nor a seated judge. The stand-in's record carries `stood_in_for`, and the failed record stays in the pass. A pass needs three valid votes; with no spare left it is dropped, and the run is not scored.
 
@@ -252,7 +252,7 @@ The prompt covers:
 
 ## Cost
 
-A dossier is about 10–25k tokens. Per pass at 22k in / 3k out: Opus ≈ $0.15, DeepSeek ≈ $0.02, Mistral ≈ $0.02, so ≈ $0.19 (Kimi ≈ $0.12 in Opus's seat on a Sonnet run, ≈ $0.16). A retry adds at most one judge's cost. The spec cap is $1 per pass.
+A dossier is about 10–25k tokens. Per pass at 22k in / 3k out: Opus ≈ $0.15, DeepSeek ≈ $0.02, Kimi ≈ $0.12, so ≈ $0.29. On a Sonnet or Kimi run, Mistral (≈ $0.02) replaces the recused judge: ≈ $0.16 or ≈ $0.19. A retry adds at most one judge's cost. The spec cap is $1 per pass.
 
 ## Traceability
 

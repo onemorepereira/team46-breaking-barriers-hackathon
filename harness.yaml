@@ -47,9 +47,10 @@ judging:
   rubric: rubrics/geo-dataset-v1.yaml
   # A tribunal of three, from three families. Reserves, in order, sit for a recused judge (same family as
   # the agent) or stand in for one that fails, so a pass still has three votes. Grok was dropped (slowest,
-  # 140 s average, and the only judge that errored); Kimi is a reserve because it is also an agent under test.
-  panel: [opus, deepseek, mistral]
-  reserves: [kimi, qwen, sonnet]
+  # 140 s average, and the only judge that errored). Kimi judges as well as being an agent; on Kimi runs it
+  # recuses and Mistral sits. Mistral and Qwen, the two most lenient judges, are reserves.
+  panel: [opus, deepseek, kimi]
+  reserves: [mistral, qwen, sonnet]
   recuse_same_family: true
   passes: 1
   auto: true                     # judge every finished run (harness run, the console)

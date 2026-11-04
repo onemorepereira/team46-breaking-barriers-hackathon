@@ -42,7 +42,7 @@ harness CLI ──▶ AgentCore Runtime ──▶ Strands agent ──▶ Bedroc
 - **OpenTelemetry is the only telemetry API.** The deployed backend is AgentCore Observability (CloudWatch); a CI test proves the exporter can be swapped by config alone[^T177][^V164] **[team]**.
 - **A panel scores every run.** A generalized rubric ([`rubrics/geo-dataset-v1.yaml`](rubrics/geo-dataset-v1.yaml)) scores the workflow and the output, matching the brief's two dimensions[^T116][^V110]:
   - two criteria are measured by code: claim provenance and area compliance;
-  - eight are judged by a tribunal of Claude Opus 5.5, DeepSeek V3.2 and Mistral Large 3, and each criterion's score is the median vote. Reserves (Kimi K3, Qwen3 235B) sit for a recused judge or stand in for one that fails.
+  - eight are judged by a tribunal of Claude Opus 5.5, DeepSeek V3.2 and Kimi K3, and each criterion's score is the median vote. Reserves (Mistral Large 3, Qwen3 235B) sit for a recused judge or stand in for one that fails.
 
   A judge from the agent's own model family recuses itself. Every judgement carries its confidence (judge agreement plus trace integrity). `harness calibrate` proves the panel lowers the right criterion when we plant a defect **[team]**. See [how a run is scored](docs/judging/guide.md).
 - **The console shows the run.** `harness ui` is a FastAPI app[^T99] built on the Tabler dashboard kit and MapLibre. It shows:
