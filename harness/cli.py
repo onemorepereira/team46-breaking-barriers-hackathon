@@ -71,6 +71,15 @@ def cmd_replay(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -
     run = Run.load(_run_store(cfg, index, args.run_id), args.run_id)
     path = write_report(cfg, run)
     print(f"replayed {args.run_id} → {path}")
+    jd = run.judgement
+    if jd and jd.get("revision"):  # a human-prompted revision: show both scores, from the archive alone
+        from harness import feedback, judge
+
+        prev = feedback.previous_judgement(run.store, run.run_id, str(jd["revision"].get("previous")))
+        before = judge.rescore(prev, run).overall if prev else None
+        after = judge.rescore(jd, run).overall
+        rv = jd["revision"]
+        print(f"  revised after {rv.get('reviewer')}'s review {rv.get('review_id')}: {before} → {after}")
     return 0
 
 
@@ -85,10 +94,12 @@ def cmd_compare(cfg: config_mod.Config, index: Index, args: argparse.Namespace) 
     if not suite.get("run_ids"):
         print(f"suite {args.suite_id} has no archived runs.")
         return 1
-    reports = []
+    reports, runs = [], []
     for run_id in suite["run_ids"]:
         try:
-            reports.append(report.analyze(Run.load(open_store(index.run_uri(run_id) or uri), run_id)))
+            run = Run.load(open_store(index.run_uri(run_id) or uri), run_id)
+            reports.append(report.analyze(run))
+            runs.append(run)
         except ArchiveError as e:
             print(f"warning: {e}", file=sys.stderr)
     rows = report.compare_rows(reports)
@@ -96,7 +107,7 @@ def cmd_compare(cfg: config_mod.Config, index: Index, args: argparse.Namespace) 
     out.mkdir(parents=True, exist_ok=True)
     from analysis.judging import panel
 
-    judged = [rep.judgement for rep in reports if rep.judgement]
+    judged = [jd for run in runs if (jd := run.unrevised_judgement)]  # no human-influenced votes
     agreement = panel.corpus_alpha(judged) if judged else None
     html = report.render_compare(args.suite_id, rows, _now(), agreement)
     (out / "compare.html").write_text(html, encoding="utf-8")
@@ -279,6 +290,13 @@ def cmd_calibrate(cfg: config_mod.Config, index: Index, args: argparse.Namespace
     from harness import calibrate
 
     store = _run_store(cfg, index, args.run_id)
+    if args.feedback:
+        fo = calibrate.feedback_check(cfg, Run.load(store, args.run_id), store)
+        print(f"feedback check of {args.run_id} (panel: {', '.join(fo['seats'])}):")
+        for row in fo["rows"]:
+            print(f"  {row['check']:<13} {row['verdict']:<12} {row.get('why', '')}")
+        print(f"cost ${fo['cost_usd']:.3f} → runs/{args.run_id}/calibration-feedback.json")
+        return int(fo["exit_code"])
     out = calibrate.calibrate(cfg, Run.load(store, args.run_id), store, passes=args.passes)
     print(f"calibration of {args.run_id} (panel: {', '.join(out['seats'])}; passes {out['passes']}):")
     for r in out["rows"]:
@@ -307,10 +325,28 @@ def cmd_agreement(cfg: config_mod.Config, index: Index, args: argparse.Namespace
         ids += json.loads(text).get("run_ids", [])
     if args.all:
         ids += index.run_ids()
+    if args.human:
+        from analysis.judging import feedback as fb
+        from harness import feedback
+
+        dstore = feedback.deployment_store(cfg)
+        reviews = feedback.rubric_reviews(dstore, feedback.active_rubric(cfg))
+        if ids:
+            reviews = [rv for rv in reviews if rv["run_id"] in set(ids)]
+        groups = fb.human_agreement(fb.human_scores(reviews))["by_guidance"]
+        if not groups:
+            print("no reviews yet: review runs in the console (Your review) or with `harness review`")
+            return 1
+        for key, g in groups.items():
+            print(
+                f"panel vs reviewers (guidance {key}): {g['runs']} runs, {g['n']} units, alpha {g['alpha']}, "
+                f"95% CI {g['ci95']}, mean abs diff {g['mad']}, exact {g['exact']}"
+            )
+        return 0
     judgements = []
     for rid in dict.fromkeys(ids):
         try:
-            jd = Run.load(_run_store(cfg, index, rid), rid).judgement
+            jd = Run.load(_run_store(cfg, index, rid), rid).unrevised_judgement
         except ArchiveError:
             continue
         if jd:
@@ -333,6 +369,92 @@ def cmd_lgnd_login(cfg: config_mod.Config, index: Index, args: argparse.Namespac
     if args.device:
         return lgnd.login_device(secret, cfg["region"])
     return lgnd.login_browser(secret, cfg["region"])
+
+
+def cmd_review(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
+    """`harness review <run> --reviewer NAME --criterion id=agree | id=score:reason[@T3,M2]` (scripting)."""
+    from harness import feedback
+
+    criteria: dict[str, dict[str, object]] = {}
+    for spec in args.criterion:
+        cid, _, rest = spec.partition("=")
+        if rest == "agree":
+            criteria[cid] = {"agree": True}
+            continue
+        score, _, reason = rest.partition(":")
+        reason, _, refs = reason.partition("@")
+        criteria[cid] = {"score": score, "reason": reason, "refs": [x for x in refs.split(",") if x]}
+    store = _run_store(cfg, index, args.run_id)
+    body = {"reviewer": args.reviewer, "criteria": criteria, "note": args.note or ""}
+    rv = feedback.create_review(cfg, feedback.deployment_store(cfg), Run.load(store, args.run_id), body)
+    print(
+        f"review {rv['id']} of {args.run_id} stored; `harness reconsider {args.run_id} {rv['id']}` to apply"
+    )
+    return 0
+
+
+def cmd_reconsider(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
+    from harness import feedback
+
+    store = _run_store(cfg, index, args.run_id)
+    run = Run.load(store, args.run_id)
+    before = (run.judgement or {}).get("panel", {}).get("overall")
+    jd = feedback.reconsider(
+        cfg, run, store, feedback.deployment_store(cfg), args.review_id, on_event=_print_judge
+    )
+    write_report(cfg, Run.load(store, args.run_id))
+    print(f"{args.run_id}: {before} → {jd['panel']['overall']} after review {args.review_id}")
+    return 0
+
+
+def cmd_guidance(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
+    from harness import feedback
+
+    store = feedback.deployment_store(cfg)
+    if args.action == "list":
+        o = feedback.overview(cfg, store)
+        r = o["rubric"]
+        print(
+            f"guidance for {r['id']} v{r['version']} in {cfg['archive_uri']}: "
+            f"active {o['active'].get('version')}"
+        )
+        print(f"  {o['reviews']} reviews of {o['reviewed_runs']} runs ({o['held_out_runs']} held out)")
+        for v in o["versions"]:
+            ev = (v.get("latest_evaluation") or {}).get("verdict")
+            print(
+                f"  v{v['version']:<3} {v['status']:<8} {v['lessons']} lessons, "
+                f"by {v['created_by']}, eval {ev}"
+            )
+        return 0
+    if args.action == "propose":
+        v = feedback.propose(cfg, store, args.by)
+        print(f"draft v{v['version']}: {len(v['lessons'])} lessons ({v['proposal']['dropped']} dropped)")
+        for x in v["lessons"]:
+            print(f"  {x['id']} {x['criterion']}: {x['text']}")
+        return 0
+    if args.action == "evaluate":
+        est = feedback.estimate(cfg, store, index, args.version)
+        print(f"{est['held_out']} held-out runs, {est['passes']} panel passes, about ${est['estimate_usd']}")
+        if est["passes"] and not args.yes and input("Run it? [y/N] ").strip().lower() != "y":
+            return 1
+
+        def progress(ev: dict[str, object]) -> None:
+            if ev.get("type") == "evaluating":
+                print(
+                    f"  {ev.get('done', '')}/{ev.get('total', '')} "
+                    f"{ev.get('run_id', '')} {ev.get('stage', '')}"
+                )
+
+        rep = feedback.evaluate(cfg, store, index, args.version, on_event=progress)
+        print(f"v{args.version}: {rep['verdict']}" + "".join(f"\n  - {x}" for x in rep.get("reasons") or []))
+        return 0 if rep["verdict"] == "adopt" else 1
+    if args.action == "approve":
+        v = feedback.approve(cfg, store, args.version, args.by, args.reason or "")
+        print(f"v{v['version']} is now active for this deployment")
+        return 0
+    feedback.switch_off(cfg, store, args.by, args.reason or "")
+    print("guidance switched off for this deployment")
+    return 0
 
 
 def cmd_ui(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
@@ -366,10 +488,37 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cal.add_argument("run_id")
     cal.add_argument("--passes", type=int, default=1)
+    cal.add_argument("--feedback", action="store_true", help="check the judges resist wrong reviews instead")
     ag = sub.add_parser("agreement", help="Krippendorff's alpha of the judges across a set of judged runs")
     ag.add_argument("run_ids", nargs="*")
     ag.add_argument("--suite", default=None)
     ag.add_argument("--all", action="store_true", help="every run in out/index.json")
+    ag.add_argument("--human", action="store_true", help="the panel against reviewers (docs/judge-feedback)")
+    rv = sub.add_parser("review", help="review a run's judgement (as the console's Your review card does)")
+    rv.add_argument("run_id")
+    rv.add_argument("--reviewer", required=True)
+    rv.add_argument("--criterion", action="append", default=[], help="id=agree or id=score:reason[@T3,M2]")
+    rv.add_argument("--note", default="")
+    rc = sub.add_parser("reconsider", help="the judges reconsider a run with a review")
+    rc.add_argument("run_id")
+    rc.add_argument("review_id")
+    g = sub.add_parser(
+        "guidance", help="this deployment's judging guidance: list, propose, evaluate, approve, off"
+    )
+    gs = g.add_subparsers(dest="action", required=True)
+    gs.add_parser("list")
+    gp = gs.add_parser("propose")
+    gp.add_argument("--by", required=True)
+    ge = gs.add_parser("evaluate")
+    ge.add_argument("version", type=int)
+    ge.add_argument("--yes", action="store_true", help="don't ask before spending")
+    ga = gs.add_parser("approve")
+    ga.add_argument("version", type=int)
+    ga.add_argument("--by", required=True)
+    ga.add_argument("--reason", default="")
+    go = gs.add_parser("off")
+    go.add_argument("--by", required=True)
+    go.add_argument("--reason", default="")
     c = sub.add_parser("check", help="run the AC2 trace checker on an archived run")
     c.add_argument("run_id")
     r = sub.add_parser("replay", help="rebuild a run's report from the archive only")
@@ -394,10 +543,20 @@ def main(argv: list[str] | None = None) -> int:
             "judge": cmd_judge,
             "calibrate": cmd_calibrate,
             "agreement": cmd_agreement,
+            "review": cmd_review,
+            "reconsider": cmd_reconsider,
+            "guidance": cmd_guidance,
         }[args.command]
         return handler(cfg, index, args)
-    except (ArchiveError, FileNotFoundError, ValueError) as e:
+    except (ArchiveError, FileNotFoundError, ValueError) as e:  # FeedbackError is a ValueError
         print(str(e), file=sys.stderr)
+        return 1
+    except Exception as e:
+        from harness.judge import JudgeError
+
+        if not isinstance(e, JudgeError):
+            raise
+        print(f"judging failed: {e}", file=sys.stderr)
         return 1
 
 

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Guidance · {{ team }}{% endblock %}
+{% block body %}
+<div class="page-header d-print-none">
+  <div class="container-xl">
+    <div class="row g-3 align-items-center">
+      <div class="col">
+        <div class="page-pretitle">Human feedback for the judges</div>
+        <h2 class="page-title">Guidance</h2>
+        <div class="text-secondary mt-1 small" id="g-rubric">Loading…</div>
+      </div>
+      <div class="col-auto d-flex align-items-center gap-2">
+        <span class="text-secondary small">Active guidance</span>
+        <span class="badge bg-secondary-lt fs-5" id="g-active">—</span>
+        <button type="button" class="btn" id="btn-off" disabled><i class="ti ti-power me-1"></i>Switch off</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="page-body">
+  <div class="container-xl">
+    <div class="alert alert-danger" id="g-error" hidden></div>
+    <div class="alert alert-warning" id="g-disabled" hidden><i class="ti ti-alert-triangle me-1"></i>Guidance is switched off in this deployment's configuration (<code>judging.guidance: false</code>): an approved version is recorded but the judges don't use it.</div>
+
+    <div class="row row-cards mb-3">
+      <div class="col-lg-7">
+        <div class="card h-100">
+          <div class="card-header"><h3 class="card-title"><i class="ti ti-users-group me-2"></i>Agreement with reviewers</h3>
+            <div class="card-actions small text-secondary">panel median vs human score, by the guidance the judgement used</div></div>
+          <div class="table-responsive">
+            <table class="table table-sm table-vcenter card-table">
+              <thead><tr><th>Guidance</th><th class="text-end"><span class="text-lowercase" style="text-transform:none">α</span></th><th>95% CI</th><th class="text-end">MAD</th><th class="text-end">Exact match</th><th class="text-end">Runs</th></tr></thead>
+              <tbody id="g-agreement"><tr><td colspan="6" class="text-secondary small">Loading…</td></tr></tbody>
+            </table>
+          </div>
+          <div class="card-footer small text-secondary" id="g-counts"></div>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="card h-100">
+          <div class="card-header"><h3 class="card-title"><i class="ti ti-sparkles me-2"></i>Propose new guidance</h3></div>
+          <div class="card-body">
+            <p class="small text-secondary">The chair judge drafts general lessons from reviewers' disagreements on <strong>training</strong> runs, starting from the active version. The draft changes nothing until someone approves it.</p>
+            <form id="propose-form" class="row g-2 align-items-end" novalidate>
+              <div class="col"><label class="form-label" for="propose-name">Your name</label><input class="form-control" id="propose-name" maxlength="80" placeholder="Ada" autocomplete="name"></div>
+              <div class="col-auto"><button type="submit" class="btn btn-primary" id="btn-propose"><i class="ti ti-sparkles me-1"></i>Propose</button></div>
+            </form>
+            <div class="alert mt-3 mb-0" id="propose-msg" hidden></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title"><i class="ti ti-versions me-2"></i>Versions</h3></div>
+      <div class="table-responsive">
+        <table class="table table-vcenter card-table">
+          <thead><tr><th>Version</th><th>Status</th><th class="text-end">Lessons</th><th>Created</th><th>Latest evaluation</th><th class="text-end">Actions</th></tr></thead>
+          <tbody id="g-versions"><tr><td colspan="6" class="text-secondary small">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3" id="editor" hidden>
+      <div class="card-header">
+        <h3 class="card-title" id="editor-title">Version</h3>
+        <div class="card-actions d-flex gap-2">
+          <button type="button" class="btn btn-sm" id="editor-evaluate"><i class="ti ti-flask me-1"></i>Evaluate</button>
+          <button type="button" class="btn btn-sm" id="editor-approve"><i class="ti ti-circle-check me-1"></i>Approve</button>
+          <button type="button" class="btn btn-sm" id="editor-close" aria-label="Close the version"><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="small text-secondary mb-3" id="editor-meta"></div>
+        <div id="evaluate-panel" class="mb-3" hidden></div>
+        <h4>Lessons</h4>
+        <div id="lessons" class="mb-3"></div>
+        <div class="d-flex gap-2 mb-2" id="editor-actions">
+          <button type="button" class="btn" id="btn-add-lesson"><i class="ti ti-plus me-1"></i>Add lesson</button>
+          <button type="button" class="btn btn-primary" id="btn-save"><i class="ti ti-device-floppy me-1"></i>Save</button>
+        </div>
+        <div class="alert mb-3" id="editor-msg" hidden></div>
+        <h4 class="mt-4">Evaluations</h4>
+        <div id="evaluations" class="text-secondary small">None yet.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h3 class="card-title"><i class="ti ti-history me-2"></i>History</h3></div>
+      <div class="table-responsive">
+        <table class="table table-sm table-vcenter card-table">
+          <thead><tr><th>When</th><th>Action</th><th>Version</th><th>Previous</th><th>By</th><th>Reason</th><th>Evaluation</th></tr></thead>
+          <tbody id="g-log"><tr><td colspan="7" class="text-secondary small">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<dialog class="foundry-dialog" id="action-dialog" aria-labelledby="action-title">
+  <form method="dialog" id="action-form" novalidate>
+    <h3 id="action-title" class="mb-2">Confirm</h3>
+    <p class="small text-secondary" id="action-help"></p>
+    <div class="mb-2"><label class="form-label" for="action-name">Your name</label><input class="form-control" id="action-name" maxlength="80" autocomplete="name"></div>
+    <div class="mb-2"><label class="form-label" for="action-reason" id="action-reason-label">Reason</label><textarea class="form-control" id="action-reason" rows="3" maxlength="4000"></textarea></div>
+    <div class="alert alert-danger small" id="action-error" hidden></div>
+    <div class="d-flex justify-content-end gap-2">
+      <button type="button" class="btn" id="action-cancel">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="action-ok">Confirm</button>
+    </div>
+  </form>
+</dialog>
+{% endblock %}
+{% block scripts %}<script src="/static/guidance.js"></script>{% endblock %}

@@ -189,6 +189,21 @@ class Run:
         return None if rec is None or rec.get("not_scored") else rec
 
     @property
+    def unrevised_judgement(self) -> dict[str, Any] | None:
+        """The first judgement before any human-prompted revision (docs/judge-feedback): agreement among
+        judges must not count votes a reviewer influenced. Follows `revision.previous` into judgements/."""
+        jd = self.judgement
+        seen = 0
+        while jd and jd.get("revision") and seen < 20:
+            prev = (jd["revision"] or {}).get("previous")
+            text = self.store.read_text(f"runs/{self.run_id}/judgements/{prev}.json") if prev else None
+            if not text:
+                return None
+            jd = json.loads(text)
+            seen += 1
+        return jd
+
+    @property
     def not_scored(self) -> dict[str, Any] | None:
         """{"reason", "cause"} when the panel declined the run (an infrastructure error), else None."""
         rec = self._judgement_record

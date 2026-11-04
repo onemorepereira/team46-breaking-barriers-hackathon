@@ -39,6 +39,17 @@ TAGS: list[dict[str, Any]] = [
     {"name": "Runs", "description": "Start a run, list archived runs, and read one in full."},
     {"name": "Live events", "description": "Server-sent events for a run in progress or being judged."},
     {"name": "Judging", "description": "Send a run to the judge tribunal again."},
+    {
+        "name": "Feedback",
+        "description": "Review a judgement and ask the judges to reconsider it "
+        "(docs/judge-feedback). Reviews live in this deployment's archive.",
+    },
+    {
+        "name": "Guidance",
+        "description": "Lessons drawn from reviews, added to every judge's prompt once a user "
+        "approves them. Propose, edit, evaluate on held-out runs, approve, roll "
+        "back or switch off. Scoped to this deployment's archive.",
+    },
     {"name": "Reports", "description": "Static HTML reports, one per run."},
     {
         "name": "Tiles",
@@ -76,7 +87,9 @@ A `text/event-stream` of JSON events (`data: {...}`), in order. The stream ends 
 | `area` | first, for a new run | `label`, `source`, `geometry` (GeoJSON) of the requested area, or a `note` saying why there is none |
 | `rejudge` | first, for a re-judge | nothing else: the run is being judged again, so no `step` events follow |
 | `step` | each model call or tool call, as it ends | `entry`: a plain-English `title` and `detail`, `status`, tokens, the raw span; `chips`: result footprints for the map |
-| `judging` | the run ended; judging starts | `seats`: the judges, with `recused_for` where a reserve sits for a same-family judge |
+| `reconsider` | first, for a reconsideration | `review_id`: the judges are reconsidering the run with that review |
+| `judging` | the run ended; judging starts | `seats`: the judges, with `recused_for` where a reserve sits for a same-family judge; `guidance`: the guidance version in use, or null |
+| `guidance_unavailable` | the deployment archive couldn't be read | `error`: judging goes on without guidance |
 | `judge` | each judge's verdict | `key`, `status`, `score` (0–100), `cost_usd`, `latency_s`, `stood_in_for` |
 | `not_scored` | no model call succeeded | `cause` |
 | `judge_error` | judging failed | `error` |
@@ -138,3 +151,44 @@ class RunsResponse(BaseModel):
     runs: list[RunRow] = Field(description="One page of runs, newest first.")
     next: str | None = Field(None, description="Pass as `before` for the next page; null on the last page.")
     total: int = Field(description="Runs matching the filters, across all pages.")
+
+
+class ReviewCriterion(BaseModel):
+    agree: bool = Field(False, description="True: you agree with the panel's score on this criterion.")
+    score: int | None = Field(
+        None, description="When you disagree: the score you'd give, on the rubric's scale."
+    )
+    reason: str | None = Field(None, description="When you disagree: why, in up to 2,000 characters.")
+    refs: list[str] = Field(default_factory=list, description="Step IDs that show it, e.g. `T3`, `M2`.")
+
+
+class ReviewRequest(BaseModel):
+    reviewer: str = Field(description="Your name, stored with the review.", examples=["Ada"])
+    criteria: dict[str, ReviewCriterion] = Field(
+        description="By judged criterion id. Leave out the ones you don't want to review.",
+        examples=[{"efficiency": {"score": 2, "reason": "A statewide search needs this many steps.",
+                                  "refs": ["T4"]}, "grounding": {"agree": True}}],
+    )  # fmt: skip
+    note: str = Field("", description="An overall note. The judges see it.")
+    measured_note: str = Field("", description="A note on the measured checks. Stored and shown, never sent "
+                                               "to a judge.")  # fmt: skip
+
+
+class Lesson(BaseModel):
+    criterion: str = Field(description="A judged criterion id.", examples=["efficiency"])
+    text: str = Field(description="One or two general sentences, at most 400 characters, naming no run or step.",
+                      examples=["Judge step count against the size of the requested area, not a fixed count."])  # fmt: skip
+    sources: list[str] = Field(default_factory=list, description="Review IDs that support it.")
+
+
+class LessonsRequest(BaseModel):
+    lessons: list[Lesson]
+
+
+class ByRequest(BaseModel):
+    by: str = Field(description="Your name, stored with the change.", examples=["Ada"])
+    reason: str = Field("", description="Why. Required to approve a version not evaluated as `adopt`.")
+
+
+class EvaluateRequest(BaseModel):
+    confirm: bool = Field(False, description="False returns the cost estimate and does nothing; true starts.")

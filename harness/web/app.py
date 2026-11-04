@@ -18,10 +18,12 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from analysis.judging import feedback as fb
 from analysis.trace import ArchiveError, Run
 from core.store import open_store
 from harness import config as config_mod
-from harness import imagery, invoke, rows, tiles
+from harness import feedback, imagery, invoke, rows, tiles
+from harness import judge as judge_mod
 from harness.manifest import Index
 from harness.web import live
 from harness.web.api_docs import (
@@ -30,8 +32,12 @@ from harness.web.api_docs import (
     EVENTS_DOC,
     TAGS,
     TILE_RESPONSES,
+    ByRequest,
+    EvaluateRequest,
     JudgeStarted,
+    LessonsRequest,
     ModelsResponse,
+    ReviewRequest,
     RunRequest,
     RunsResponse,
     RunStarted,
@@ -90,6 +96,10 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
     def run_page(request: Request, run_id: str) -> HTMLResponse:
         load(run_id)
         return page(request, "run.html", run_id=run_id, active="runs")
+
+    @app.get("/guidance", response_class=HTMLResponse, include_in_schema=False)
+    def guidance_page(request: Request) -> HTMLResponse:
+        return page(request, "guidance.html", active="guidance")
 
     @app.get("/api/docs", include_in_schema=False, response_class=HTMLResponse)
     def api_docs(request: Request) -> HTMLResponse:
@@ -172,7 +182,7 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         the requested boundary, result footprints, claimed sites), `scorecard` (every criterion, each judge's
         vote and rationale, the seats, failure modes), `claims`, `final_answer`, `narrative` and
         `trouble_spots`."""
-        return run_view(load(run_id), serve_tiles=bool(tile_cfg["serve"]))
+        return view_of(load(run_id))
 
     @app.post("/api/runs", tags=["Runs"], response_model=RunStarted, summary="Start a run",
               responses={400: ERRORS[400]})  # fmt: skip
@@ -204,6 +214,202 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
             raise HTTPException(409, "this run is still running or being judged")
         live.rejudge(cfg, index, run_id)
         return {"run_id": run_id, "events": f"/api/runs/{run_id}/events"}
+
+    def view_of(run: Run) -> dict[str, Any]:
+        reconsider = bool((cfg.get("judging") or {}).get("reconsider", True))
+        return run_view(
+            run, serve_tiles=bool(tile_cfg["serve"]), deploy_store=deploy(), reconsider=reconsider
+        )
+
+    def deploy() -> Any:
+        return feedback.deployment_store(cfg)
+
+    def feedback_call(fn: Any, *args: Any) -> Any:
+        """Map feedback errors to HTTP: 400 invalid, 404 unknown, 409 state, 502 model or archive failure."""
+        try:
+            return fn(*args)
+        except feedback.NotFound as e:
+            raise HTTPException(404, str(e)) from e
+        except feedback.Conflict as e:
+            raise HTTPException(409, str(e)) from e
+        except fb.FeedbackError as e:
+            return JSONResponse({"error": str(e)}, status_code=400)
+        except judge_mod.JudgeError as e:
+            raise HTTPException(502, str(e)) from e
+
+    @app.get(
+        "/api/runs/{run_id}/reviews",
+        tags=["Feedback"],
+        summary="A run's reviews",
+        responses={404: ERRORS[404]},
+    )
+    def list_reviews(run_id: str) -> dict[str, Any]:
+        """The run's reviews, newest first. `current` is true for a review of the run's current judgement
+        (only those can be reconsidered); `reconsidered` holds the revised judgement's `judged_at`."""
+        return {"reviews": feedback.run_reviews(deploy(), load(run_id))}
+
+    @app.post(
+        "/api/runs/{run_id}/reviews",
+        tags=["Feedback"],
+        summary="Review a judgement",
+        responses={400: ERRORS[400], 404: ERRORS[404], 409: ERRORS[409]},
+    )
+    def post_review(run_id: str, body: ReviewRequest) -> Any:
+        """Store a review of the run's current judgement, criterion by criterion: agree, or the score you'd
+        give with a reason and the steps that show it. Measured criteria can't be reviewed (they're code);
+        use `measured_note`. A run that wasn't scored can't be reviewed (409). The review doesn't change the
+        score by itself: **Ask the judges to reconsider** does."""
+        return feedback_call(feedback.create_review, cfg, deploy(), load(run_id), body.model_dump())
+
+    @app.post(
+        "/api/runs/{run_id}/reviews/{review_id}/reconsider",
+        tags=["Feedback"],
+        response_model=JudgeStarted,
+        summary="Ask the judges to reconsider",
+        responses={404: ERRORS[404], 409: ERRORS[409]},
+    )
+    def post_reconsider(run_id: str, review_id: str) -> Any:
+        """The judges that voted re-score the run, each seeing its own earlier reply and the review, which
+        they check against the steps (it's evidence, not an order). The revised votes become the run's score;
+        the original judgement is kept. Progress streams at the returned `events` URL (`reconsider`, then
+        `judging`, `judge`…, `done`)."""
+        run = load(run_id)
+        state = live.RUNS.get(run_id)
+        if state is not None and not state.done:
+            raise HTTPException(409, "this run is still running or being judged")
+        rv = feedback_call(feedback.get_review, deploy(), review_id)
+        if rv.get("run_id") != run_id:
+            raise HTTPException(404, "that review is of another run")
+        if rv.get("reconsidered"):
+            raise HTTPException(409, "the judges already reconsidered this review")
+        if (run.judgement or {}).get("judged_at") != rv.get("judged_at"):
+            raise HTTPException(409, "this review is of an older judgement; review the current one")
+        if not (cfg.get("judging") or {}).get("reconsider", True):
+            raise HTTPException(409, "reconsideration is switched off for this deployment")
+        live.reconsider_job(cfg, index, run_id, review_id)
+        return {"run_id": run_id, "events": f"/api/runs/{run_id}/events"}
+
+    @app.get(
+        "/api/runs/{run_id}/judgements/{judged_at}",
+        tags=["Feedback"],
+        summary="An earlier judgement",
+        responses={404: ERRORS[404]},
+    )
+    def earlier_judgement(run_id: str, judged_at: str) -> dict[str, Any]:
+        """A judgement this run had before it was revised or re-judged, kept whole, with its scores
+        re-aggregated (`panel`)."""
+        run = load(run_id)
+        jd = feedback.previous_judgement(run.store, run_id, judged_at)
+        if not jd or jd.get("not_scored"):
+            raise HTTPException(404, "no earlier judgement with that time")
+        return {**jd, "panel": judge_mod.rescore(jd, run).as_dict()}
+
+    @app.get("/api/guidance", tags=["Guidance"], summary="Guidance overview")
+    def guidance_overview() -> Any:
+        """For the active rubric: the active version (or none), every version, the change log, how many runs
+        are reviewed and held out, and agreement between the panel and reviewers (Krippendorff's α with a 95%
+        CI, mean absolute difference, exact-match rate), by the guidance the reviewed judgement used."""
+        return feedback_call(feedback.overview, cfg, deploy())
+
+    @app.post(
+        "/api/guidance",
+        tags=["Guidance"],
+        summary="Propose new guidance",
+        responses={
+            409: {"description": "No review of a training run disagrees with the panel yet."},
+            502: {"description": "The proposal model failed or replied unusably twice."},
+        },
+    )
+    def guidance_propose(body: ByRequest) -> Any:
+        """The chair judge drafts general lessons from the reviews of **training** runs (about a third of
+        reviewed runs are held out for evaluation and never shown to it), starting from the active version.
+        The draft is stored as a new version; nothing changes for judging until a user approves it."""
+        return feedback_call(feedback.propose, cfg, deploy(), body.by)
+
+    @app.get(
+        "/api/guidance/{n}", tags=["Guidance"], summary="One guidance version", responses={404: ERRORS[404]}
+    )
+    def guidance_get(n: int) -> Any:
+        """The version in full (lessons with their source reviews, approvals, latest evaluation) and every
+        evaluation report for it, newest first."""
+        r = feedback.active_rubric(cfg)
+        v = feedback_call(feedback.get_version, deploy(), r, n)
+        if isinstance(v, JSONResponse):
+            return v
+        runs_of = {rv["id"]: rv["run_id"] for rv in feedback.all_reviews(deploy())}
+        return {
+            **v,
+            "source_runs": {
+                s: runs_of.get(s) for x in v.get("lessons") or [] for s in x.get("sources") or []
+            },
+            "evaluation_current": feedback.evaluation_counts(v),
+            "evaluations": feedback.evaluations(deploy(), r, n),
+        }
+
+    @app.put(
+        "/api/guidance/{n}",
+        tags=["Guidance"],
+        summary="Edit a draft",
+        responses={400: ERRORS[400], 404: ERRORS[404], 409: {"description": "Not a draft."}},
+    )
+    def guidance_edit(n: int, body: LessonsRequest) -> Any:
+        """Replace a draft's lessons. Only a version that was never approved can be edited; an edit clears
+        its evaluation."""
+        return feedback_call(feedback.edit, cfg, deploy(), n, [x.model_dump() for x in body.lessons])
+
+    @app.post(
+        "/api/guidance/{n}/evaluate",
+        tags=["Guidance"],
+        summary="Evaluate a version",
+        responses={400: ERRORS[400], 404: ERRORS[404], 409: {"description": "Already being evaluated."}},
+    )
+    def guidance_evaluate(n: int, body: EvaluateRequest) -> Any:
+        """Without `confirm`, returns the estimate (held-out runs, panel passes, cost). With `confirm: true`,
+        judges every held-out reviewed run with the live guidance and with this version, compares both with
+        the reviewers, reruns planted-defect calibration, and stores a verdict: `adopt`, `dont_adopt` or
+        `insufficient_evidence` (fewer than 5 held-out runs). Progress streams at `events`."""
+        est = feedback_call(feedback.estimate, cfg, deploy(), index, n)
+        if not body.confirm or isinstance(est, JSONResponse):
+            return est
+        job = live.GUIDANCE_JOBS.get(n)
+        if job is not None and not job.done:
+            raise HTTPException(409, "this version is already being evaluated")
+        live.evaluate_job(cfg, index, n)
+        return {**est, "events": f"/api/guidance/{n}/events"}
+
+    @app.get(
+        "/api/guidance/{n}/events",
+        tags=["Guidance"],
+        summary="Stream an evaluation",
+        response_class=StreamingResponse,
+        responses={200: {"content": {"text/event-stream": {}}}, 404: ERRORS[404]},
+    )
+    async def guidance_events(n: int) -> StreamingResponse:
+        """`evaluating` events (`done` of `total` runs, then the calibration stage), `evaluated` with the
+        verdict, then `done` with the full `report`."""
+        state = live.GUIDANCE_JOBS.get(n)
+        if state is None:
+            raise HTTPException(404, "no evaluation of that version since the console started")
+        return StreamingResponse(
+            stream(state), media_type="text/event-stream", headers={"cache-control": "no-cache"}
+        )
+
+    @app.post(
+        "/api/guidance/{n}/approve",
+        tags=["Guidance"],
+        summary="Approve a version",
+        responses={400: ERRORS[400], 404: ERRORS[404], 409: {"description": "Already active."}},
+    )
+    def guidance_approve(n: int, body: ByRequest) -> Any:
+        """Make the version active for this deployment: every later judging and reconsideration uses it.
+        Approving a retired version rolls back to it. A version whose latest evaluation (of its current
+        lessons) isn't `adopt` needs a `reason`."""
+        return feedback_call(feedback.approve, cfg, deploy(), n, body.by, body.reason)
+
+    @app.post("/api/guidance/off", tags=["Guidance"], summary="Switch guidance off")
+    def guidance_off(body: ByRequest) -> Any:
+        """Judge with no guidance from now on. Approve any version to switch it back on."""
+        return feedback_call(feedback.switch_off, cfg, deploy(), body.by, body.reason)
 
     @app.get("/api/runs/{run_id}/events", tags=["Live events"], summary="Stream a run's events",
              description=EVENTS_DOC, response_class=StreamingResponse,
