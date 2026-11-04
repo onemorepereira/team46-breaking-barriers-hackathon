@@ -16,13 +16,13 @@ models:
 
 narrative_model: sonnet
 max_runs_per_suite: 8
-max_suite_usd: 60   # raised from 50 (user-approved, 2026-11-03): ceiling prices inflate the worst case
+max_suite_usd: 50
 
-# UNVERIFIED conservative CEILINGS (USD per million tokens), not real prices. The AWS Price List API
-# and the public Bedrock pricing page didn't list Claude 5.5 rates on 2026-11-03. Ceilings make the
-# cost guard refuse early, never late. Replace with the figures from https://aws.amazon.com/bedrock/pricing/.
+# USD per million tokens, from the Bedrock pricing page (Global Cross-region Inference table, US West (Oregon)),
+# read on 2026-11-03 from a screenshot the user provided. Our model ID uses the `us.` regional profile, whose rate
+# may differ slightly from the global one.
 prices_per_mtok:
-  sonnet: {in: 15.0, out: 75.0}
+  sonnet: {in: 2.0, out: 10.0}
 
 rubric: null
 scorer: none
