@@ -4,7 +4,7 @@ Team Foundry (Team 46): Aditya Pasarti · Farhan Shahriar · Uday Kandi · Migue
 
 | File | What it is |
 | --- | --- |
-| [`deck.html`](deck.html) | The deck: 8 slides, one self-contained file (no internet needed) |
+| [`deck.html`](deck.html) | The deck: 9 slides, one self-contained file (no internet needed) |
 | [`deck.pdf`](deck.pdf) | The same deck as a PDF, for the judges and as a backup |
 | [`demo.md`](demo.md) | The 2-minute live demo (judging an existing run), its pre-flight checklist and fallbacks |
 | [`claims.md`](claims.md) | Every number in the deck, with its source in the repo |
@@ -50,3 +50,4 @@ with sync_playwright() as p:
 | 6 | It caught our own bugs | 0:45 |
 | 7 | Built to plug in | 0:30 |
 | 8 | Limits and next steps | 0:30 |
+| 9 | Thank you: the team, then questions | 0:15 |

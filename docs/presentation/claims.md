@@ -4,7 +4,8 @@ Every number or factual claim in `deck.html`, with the file it comes from. If a 
 
 | Slide | Claim | Source |
 | --- | --- | --- |
-| 1 | Team Foundry, Team 46: Aditya Pasarti, Farhan Shahriar, Uday Kandi, Miguel Pereira | The team **[team]** |
+| 1, 9 | Team Foundry, Team 46: Aditya Pasarti, Farhan Shahriar, Uday Kandi, Miguel Pereira | The team **[team]** |
+| 9 | Open source, Apache-2.0 | `LICENSE` |
 | 1 | Evaluating agentic workflows is Clay's #1 unmet need (speaker note) | `docs/Clay-Foundry-Vision-Hackathon.md:17` |
 | 1 | "15 data centers" | Run `a5670c6b`: 15/15 claims verified (`docs/console-polish/handoff.md:38`) |
 | 2 | Every model and tool call is an OpenTelemetry span | `README.md`, "What we built"; `docs/eval-harness/handoff.md` |
