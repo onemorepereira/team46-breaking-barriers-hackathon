@@ -1167,7 +1167,10 @@ export default function App() {
                   ))}
                 </div>
               </div>
-              <div className="panel-content">
+              <div
+                className="panel-content"
+                key={`${view?.run.id || "live"}-${tab}`}
+              >
                 {!view ? (
                   <>
                     <div className="section-kicker">Live research</div>
