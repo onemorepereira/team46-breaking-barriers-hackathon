@@ -57,6 +57,7 @@ class Measured:
     conditions_total: int = 0
     conditions_need_review: bool = False
     conditions_error: bool = False
+    conditions: dict[str, Any] | None = None
 
     def score_of(self, criterion_id: str) -> float | None:
         return {
@@ -158,7 +159,7 @@ def measure(run: Run, prov: Provenance | None = None) -> Measured:
         gates.append({"id": "no_answer", "reason": "the run produced no final answer beyond a claims block"})
     if not any(s.attr("harness.tool.status") not in ("error", None) for s in run.tool_results):
         gates.append({"id": "no_tool_data", "reason": "no tool call succeeded"})
-    compliance = conditions.evaluate(run)
+    compliance = conditions.evaluate(run, prov)
     return Measured(
         claims_total=total,
         claims_matched=counts[MATCHED],
@@ -182,4 +183,5 @@ def measure(run: Run, prov: Provenance | None = None) -> Measured:
         conditions_total=compliance["total"] if compliance else 0,
         conditions_need_review=bool(compliance and compliance["needs_review"]),
         conditions_error=bool(compliance and compliance.get("error")),
+        conditions=compliance,
     )

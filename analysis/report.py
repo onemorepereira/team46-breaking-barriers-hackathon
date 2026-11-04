@@ -12,7 +12,7 @@ from jinja2 import Environment, PackageLoader, select_autoescape
 from markdown_it import MarkdownIt
 
 from analysis import check, provenance, signals, summary
-from analysis.judging import conditions, measure, panel, rubric
+from analysis.judging import measure, panel, rubric
 from analysis.judging.explain import explain
 from analysis.trace import Run
 
@@ -58,6 +58,7 @@ class RunReport:
 
 def analyze(run: Run, rubric_path: str | None = None) -> RunReport:
     prov = provenance.grade(run)
+    measured = measure.measure(run, prov)
     return RunReport(
         run=run,
         missing=check.check_run(run),
@@ -66,8 +67,8 @@ def analyze(run: Run, rubric_path: str | None = None) -> RunReport:
         summ=summary.build(run, prov),
         tools=signals.tools_available(run),
         datasets=signals.datasets_accessed(run),
-        measured=measure.measure(run, prov),
-        panel=panel.rescore(run.judgement, run) if run.judgement else None,
+        measured=measured,
+        panel=panel.rescore(run.judgement, run, measured) if run.judgement else None,
         judgement=run.judgement,
         plain_names=(
             rubric.display_names(rubric.parse(run.judgement["rubric"]["snapshot"]), rubric_path)
@@ -85,7 +86,7 @@ def render_run(rep: RunReport, generated_at: str) -> str:
         answer=measure.answer_text(rep.run.final_output),
         claims_json=claims_blocks(rep.run.final_output),
         explanation=explain(rep.run, rep.panel, measured=rep.measured),
-        conditions=conditions.evaluate(rep.run),
+        conditions=rep.measured.conditions,
         source_check_note=provenance.matcher_update_note(rep.judgement),
     )
 

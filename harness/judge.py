@@ -296,6 +296,10 @@ def judge_run(cfg: Config, run: Run, store: Store, passes: int | None = None, cl
         return record
     j = judging_cfg(cfg)
     r = load_rubric(j["rubric"])
+    if any(c.id == "condition_compliance" for c in r.criteria):
+        from harness.conditions import ensure
+
+        ensure(cfg, run, client)
     passes = int(passes or j.get("passes") or 1)
     d = dossier_mod.build(run)
     guidance, guidance_error = active_guidance_or_error(cfg, r)

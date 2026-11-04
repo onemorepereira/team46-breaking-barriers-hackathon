@@ -63,6 +63,7 @@ def _valid(pass_: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) -> PanelResult:
+    check_conditions = any(c.id == "condition_compliance" for c in rubric.criteria)
     usable = [p for p in passes if len(_valid(p)) >= MIN_VALID]
     valid_counts = [len(_valid(p)) for p in passes]
     gates = list(measured.gates)
@@ -80,6 +81,8 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
                     (
                         f"{measured.conditions_supported}/{measured.conditions_total}"
                         if measured.conditions_total
+                        else "not applicable"
+                        if measured.condition_compliance is None
                         else "no location evidence"
                     )
                     if c.id == "condition_compliance"
@@ -145,7 +148,7 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
         dims = {d: None for d in dims}  # a dimension isn't scored on measured criteria alone
     # A good process cannot average away a missing required spatial constraint.
     output = dims.get("output")
-    if measured.condition_compliance is not None and output is not None:
+    if check_conditions and measured.condition_compliance is not None and output is not None:
         dims["output"] = min(output, round(measured.condition_compliance * 100, 1))
     present = [v for v in dims.values() if v is not None]
     overall = round(sum(present) / len(present), 1) if present else None
@@ -173,12 +176,12 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
     mad_all = round(sum(mads) / len(mads), 3) if mads else None
     seated = [sum(1 for j in p.get("judges", []) if not j.get("stood_in_for")) for p in passes]
     conf, reasons = confidence(measured, valid_counts, within, bool(usable), seated)
-    if measured.conditions_need_review:
+    if check_conditions and measured.conditions_need_review:
         if conf == "High":
             conf = "Medium"
         reasons.append("Some request conditions lack supporting evidence; review the conditions table")
     verdict = "FAILED" if gates else ("scored" if usable else "not scored")
-    if measured.conditions_error and not gates:
+    if check_conditions and measured.conditions_error and not gates:
         overall, status, verdict, conf = None, "insufficient", "not scored", "Low"
         reasons.append("Request condition extraction failed; evaluation is incomplete")
     return PanelResult(
@@ -284,7 +287,9 @@ def corpus_alpha(judgements: list[dict[str, Any]], samples: int = 1000, seed: in
     return out
 
 
-def rescore(judgement: dict[str, Any], run: Any) -> PanelResult:
+def rescore(judgement: dict[str, Any], run: Any, measured: Measured | None = None) -> PanelResult:
     """Re-aggregate an archived judgement with current code against the rubric it was judged with (replay)."""
     r = parse(judgement["rubric"]["snapshot"])
-    return aggregate(r, judgement.get("passes") or [], measure_mod.measure(run))
+    return aggregate(
+        r, judgement.get("passes") or [], measured if measured is not None else measure_mod.measure(run)
+    )
