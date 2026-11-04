@@ -105,3 +105,35 @@ def test_point_in_polygon_with_hole_and_multipolygon():
 def test_coordinate_claims():
     assert geometry.coordinate_pair("32.965, -96.7121") == (32.965, -96.7121)
     assert geometry.coordinate_pair("naip/obs:1") is None and geometry.coordinate_pair("200, 10") is None
+
+
+def test_misses_are_not_cached_and_fallbacks_are_tried(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_get(url):
+        calls.append(url)
+        if "countrycodes=la" in url:
+            return []  # the transient miss from the live run
+        return [
+            {
+                "lat": "17.5",
+                "lon": "105.3",
+                "osm_type": "relation",
+                "osm_id": 1,
+                "geojson": {"type": "Polygon", "coordinates": [SQUARE]},
+            }
+        ]
+
+    monkeypatch.setattr(geo, "_get_json", fake_get)
+    monkeypatch.setattr(geo, "_last_nominatim", 0.0)
+    spec = geo.AreaSpec("region", "Khammouane Province, Laos", None, "la")
+    area = geo.resolve_area(spec, tmp_path)
+    assert area.geometry["type"] == "Polygon"
+    assert "countrycodes=la" in calls[0] and "countrycodes" not in calls[1]
+    assert not any(json.loads(p.read_text()) == [] for p in tmp_path.glob("*.json"))  # the miss wasn't cached
+
+
+def test_candidate_queries_strip_admin_words():
+    cands = geo._candidates(geo.AreaSpec("region", "Khammouane Province, Laos", None, "la"))
+    assert {"q": "Khammouane, Laos", "countrycodes": "la"} in cands
+    assert {"state": "Khammouane", "country": "Laos"} in cands

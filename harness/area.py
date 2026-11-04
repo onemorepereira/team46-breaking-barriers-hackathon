@@ -134,7 +134,36 @@ def _nominatim(params: dict[str, str], cache_dir: Path) -> list[dict[str, Any]]:
             time.sleep(wait)
         result = _get_json(f"{NOMINATIM}?{urllib.parse.urlencode(params)}")
         _last_nominatim = time.monotonic()
+    if not result:
+        return []  # never cache a miss: it may be transient, and a cached [] would stick forever
     return list(_store(cache_dir, key, result))
+
+
+ADMIN_WORDS = r"\b(province|prefecture|district|county|state|region|city|municipality|city limits|limits)\b"
+
+
+def _candidates(spec: AreaSpec) -> list[dict[str, str]]:
+    """Queries to try in order until one finds the place (romanizations and admin words vary)."""
+    cc = {"countrycodes": spec.country_code} if spec.country_code else {}
+    out: list[dict[str, str]] = []
+    if spec.kind == "postal_code" and spec.postal_code:
+        out.append({"postalcode": spec.postal_code, **cc})
+    if spec.query:
+        out.append({"q": spec.query, **cc})
+        if cc:
+            out.append({"q": spec.query})
+        parts = [p.strip() for p in spec.query.split(",") if p.strip()]
+        bare = re.sub(ADMIN_WORDS, "", parts[0], flags=re.I).strip() if parts else ""
+        if bare and bare != parts[0]:
+            out.append({"q": ", ".join([bare, *parts[1:]]), **cc})
+        if bare and len(parts) > 1:
+            field = "state" if spec.kind == "region" else "city"
+            out.append({field: bare, "country": parts[-1]})
+    unique: list[dict[str, str]] = []
+    for c in out:
+        if c not in unique:
+            unique.append(c)
+    return unique
 
 
 def _zcta(zip5: str, cache_dir: Path) -> dict[str, Any] | None:
@@ -172,14 +201,11 @@ def resolve_area(spec: AreaSpec, cache_dir: Path) -> Area | None:
             geom = _zcta(zip5, cache_dir)
             if geom:
                 return Area(label, "postal_code", "US Census TIGERweb, 2020 ZCTA", geom, None)
-        params = {"postalcode": spec.postal_code}
-    else:
-        params = {"q": spec.query or ""}
-    if spec.country_code:
-        params["countrycodes"] = spec.country_code
-    hits = _nominatim(params, cache_dir)
-    if not hits and spec.kind == "postal_code" and spec.query:
-        hits = _nominatim({"q": spec.query}, cache_dir)  # free-text fallback for postal codes
+    hits: list[dict[str, Any]] = []
+    for params in _candidates(spec):
+        hits = _nominatim(params, cache_dir)
+        if hits:
+            break
     if not hits:
         raise AreaError(f"No location found for {label!r}.")
     hit = hits[0]
