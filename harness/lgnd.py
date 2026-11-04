@@ -12,21 +12,24 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from agent.lgnd_auth import HTTP_TIMEOUT_S, LGND_RESOURCE, post_form
+from agent.lgnd_auth import HTTP_TIMEOUT_S, LGND_RESOURCE, USER_AGENT, post_form
 
 RESOURCE_METADATA = "https://geo.lgnd.ai/.well-known/oauth-protected-resource/mcp"
 SCOPES = "openid profile email offline_access"
 
 
 def _get_json(url: str) -> dict[str, Any]:
-    with urllib.request.urlopen(url, timeout=HTTP_TIMEOUT_S) as resp:  # noqa: S310 - fixed https endpoints
+    req = urllib.request.Request(url, headers={"user-agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:  # noqa: S310 - fixed https endpoints
         result: dict[str, Any] = json.loads(resp.read())
         return result
 
 
 def _post_json(url: str, body: dict[str, Any]) -> dict[str, Any]:
     req = urllib.request.Request(
-        url, data=json.dumps(body).encode(), headers={"content-type": "application/json"}
+        url,
+        data=json.dumps(body).encode(),
+        headers={"content-type": "application/json", "user-agent": USER_AGENT},
     )
     with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:  # noqa: S310
         result: dict[str, Any] = json.loads(resp.read())

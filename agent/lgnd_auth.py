@@ -15,12 +15,16 @@ from typing import Any
 log = logging.getLogger("harness.lgnd")
 LGND_RESOURCE = "https://geo.lgnd.ai/mcp"
 HTTP_TIMEOUT_S = 10
+# Cloudflare in front of LGND's OAuth server rejects Python's default urllib User-Agent (error 1010).
+USER_AGENT = "team46-eval-harness/0.1"
 
 
 def post_form(url: str, fields: dict[str, str]) -> dict[str, Any]:
     data = urllib.parse.urlencode(fields).encode()
     req = urllib.request.Request(
-        url, data=data, headers={"content-type": "application/x-www-form-urlencoded"}
+        url,
+        data=data,
+        headers={"content-type": "application/x-www-form-urlencoded", "user-agent": USER_AGENT},
     )
     with urllib.request.urlopen(req, timeout=HTTP_TIMEOUT_S) as resp:  # noqa: S310 - fixed https endpoints
         result: dict[str, Any] = json.loads(resp.read())
