@@ -219,12 +219,13 @@ td { color: var(--ink); }
     </div>
     <div class="card">
       <h3>Judges agree like experts do</h3>
-      <div class="big cyan">α 0.50</div>
-      <p style="margin-top:14px">Agreement between our judges across real runs (95% CI 0.12–0.67, 7 runs).</p>
-      <p style="margin-top:14px">Human experts in the paper Clay shared: <b>α ≈ 0.56</b>.</p>
+      <div class="big cyan">0.50</div>
+      <p style="margin-top:6px; font-size:24px; color:var(--ink-3); letter-spacing:.06em; text-transform:uppercase">agreement score</p>
+      <p style="margin-top:18px">Human experts in the same kind of study: <b>0.56</b>.</p>
+      <p style="margin-top:18px; font-size:20px; color:var(--ink-3)">Krippendorff's α: 1 = perfect, 0 = chance. <span style="white-space:nowrap">95% CI 0.12–0.67</span> over 7 runs.</p>
     </div>
   </div>
-  <div class="note">Calibration: we plant one defect at a time and check the right criterion drops. All three did. Agreement: Krippendorff's alpha 0.50 across our runs, close to the 0.56 human experts reached in the GRA paper. Be honest: the CI is wide because there are 7 runs. (~45 s)</div>
+  <div class="note">Calibration: we plant one defect at a time and check the right criterion drops. All three did. Agreement: an agreement score of 0.50 across our runs (Krippendorff's alpha: 1 is perfect, 0 is chance), close to the 0.56 human experts reached in the GRA paper. Be honest: the CI is wide because there are 7 runs. (~45 s)</div>
 </section>
 
 <!-- 6 · It caught our own bugs -->

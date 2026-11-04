@@ -20,7 +20,7 @@ Every number or factual claim in `deck.html`, with the file it comes from. If a 
 | 4 | Judges never see the measured results | `docs/judging/handoff.md`, "Decisions made in this pass" |
 | 5 | Planted defects: no area 2→0, made-up site 2→0, answer removed 2→0 | `docs/judging/handoff.md:61–63` (live, run `5769706d`) |
 | 5 | The first calibration pass caught a bug in our evidence builder | `docs/judging/handoff.md:55` |
-| 5 | α = 0.50, 95% CI 0.12–0.67, 7 runs | `docs/judging/handoff.md:116` (0.502) |
+| 5 | Agreement score 0.50 (Krippendorff's α), 95% CI 0.12–0.67, 7 runs | `docs/judging/handoff.md:116` (0.502) |
 | 5 | Human experts' α ≈ 0.56 in the paper Clay shared (GRA) | `docs/judging/paper-notes.md:17` |
 | 6 | Before: FAILED, no answer, $1.50 | `docs/console-polish/handoff.md:39` (run `fdacf7cf`) |
 | 6 | After: 85.4 High, 0 errors, 15/15, 8/8, $0.81 | `docs/console-polish/handoff.md:38` (run `a5670c6b`) |
