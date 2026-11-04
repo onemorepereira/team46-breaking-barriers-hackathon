@@ -178,10 +178,21 @@ class Run:
         return ""
 
     @cached_property
-    def judgement(self) -> dict[str, Any] | None:
-        """runs/<id>/judgement.json from `harness judge` (docs/judging), or None if never judged."""
+    def _judgement_record(self) -> dict[str, Any] | None:
         text = self.store.read_text(f"runs/{self.run_id}/judgement.json")
         return json.loads(text) if text else None
+
+    @property
+    def judgement(self) -> dict[str, Any] | None:
+        """runs/<id>/judgement.json (docs/judging); None if never judged, or not scored."""
+        rec = self._judgement_record
+        return None if rec is None or rec.get("not_scored") else rec
+
+    @property
+    def not_scored(self) -> dict[str, Any] | None:
+        """{"reason", "cause"} when the panel declined the run (an infrastructure error), else None."""
+        rec = self._judgement_record
+        return rec.get("not_scored") if rec else None
 
     def tool_result_text(self, span: Span) -> str | None:
         """The full, raw tool result from tool_results/<ref>.a<attempt>.txt (design ADR-AC6)."""

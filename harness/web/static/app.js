@@ -256,6 +256,10 @@
     const conf = $("k-confidence");
     conf.replaceChildren(k.confidence ? el("span", { class: `badge bg-${k.confidence === "High" ? "success" : k.confidence === "Medium" ? "warning" : "danger"}-lt`, title: "Confidence = how far the judges agree on this evidence, plus trace integrity. It is not ground truth." }, icon("users-group", "me-1"), `${k.confidence} confidence`) : "");
     setText("k-confidence-why", (k.confidence_reasons || []).join("; "));
+    if (k.verdict === "not scored") {
+      $("k-verdict").title = k.not_scored_cause || "";
+      setText("k-confidence-why", `No model call succeeded, so there was nothing to judge: ${k.not_scored_cause || "unknown cause"}`);
+    }
     for (const d of ["workflow", "output"]) {
       const v = k[d];
       $(`k-${d}`).style.width = `${v || 0}%`;
@@ -445,6 +449,9 @@
         progress("The judge panel is scoring the run…");
       } else if (ev.type === "judge") {
         judgeResult(ev);
+      } else if (ev.type === "not_scored") {
+        setText("panel-note", "Not scored: the agent never got a model reply, so the panel wasn't asked.");
+        $("error").hidden = false; $("error").textContent = `Not scored (infrastructure error): ${ev.cause}`;
       } else if (ev.type === "judge_error") {
         $("error").hidden = false; $("error").textContent = `Judging failed: ${ev.error}`;
       } else if (ev.type === "done") {

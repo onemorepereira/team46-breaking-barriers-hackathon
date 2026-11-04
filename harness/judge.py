@@ -239,7 +239,17 @@ def _judge_summary(r: Rubric, j: dict[str, Any]) -> dict[str, Any]:
 
 def judge_run(cfg: Config, run: Run, store: Store, passes: int | None = None, client: Any = None,
               on_event: Event | None = None) -> dict[str, Any]:  # fmt: skip
-    """Judge an archived run and write runs/<id>/judgement.json. Returns the judgement."""
+    """Judge an archived run and write runs/<id>/judgement.json. Returns the judgement.
+
+    A run whose model calls all failed (an infrastructure error) is not sent to the panel: the record
+    says "not scored" with the cause, replaces any earlier judgement, and stays out of agreement."""
+    cause = measure.infrastructure_failure(run)
+    if cause:
+        record = not_scored(run, cause)
+        store.write_text(f"runs/{run.run_id}/judgement.json", json.dumps(record, indent=1))
+        if on_event:
+            on_event({"type": "not_scored", "cause": cause})
+        return record
     j = judging_cfg(cfg)
     r = load_rubric(j["rubric"])
     passes = int(passes or j.get("passes") or 1)
@@ -251,6 +261,17 @@ def judge_run(cfg: Config, run: Run, store: Store, passes: int | None = None, cl
     judgement = assemble(r, run, pass_results, panel_seats)
     store.write_text(f"runs/{run.run_id}/judgement.json", json.dumps(judgement, indent=1))
     return judgement
+
+
+def not_scored(run: Run, cause: str) -> dict[str, Any]:
+    """The judgement record for a run the panel can't judge (Run.judgement reads it as None)."""
+    return {
+        "schema_version": 1,
+        "run_id": run.run_id,
+        "judged_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "not_scored": {"reason": "infrastructure", "cause": cause},
+        "judging_cost_usd": 0.0,
+    }
 
 
 def assemble(

@@ -19,7 +19,7 @@
     if (!runs.length) { message("No runs yet. Start one from the console.", "text-secondary"); return; }
     body.replaceChildren(...runs.map((r) => {
       const score = r.verdict === "FAILED" ? el("span", { class: "badge bg-danger-lt", text: "FAILED" })
-        : r.score === null ? el("span", { class: "text-secondary small", text: r.verdict })
+        : r.score === null ? el("span", { class: "text-secondary small", text: r.verdict, title: r.not_scored_cause || null })
         : el("span", { class: `badge bg-${tone(r.score)}-lt`, text: Math.round(r.score) });
       const tr = el("tr", { style: "cursor:pointer" },
         el("td", { class: "text-secondary small text-nowrap", text: (r.started_at || "").replace("T", " ").replace("Z", "") }),

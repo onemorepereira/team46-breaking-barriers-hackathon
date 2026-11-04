@@ -107,6 +107,20 @@ def located_results(run: Run, prov: Provenance, geom: dict[str, Any] | None) -> 
     return out
 
 
+def infrastructure_failure(run: Run) -> str | None:
+    """Why the run can't be judged, when no model call ever succeeded (expired credentials, throttling,
+    a model the account can't use). The agent was never given a chance, so the panel isn't asked and
+    the run is "not scored", not FAILED. None when at least one model call returned."""
+    models = run.model_results
+    if any(s.attr("harness.stop_reason") != "error" and not s.attr("harness.model.error") for s in models):
+        return None
+    for s in models:
+        if s.attr("harness.model.error"):
+            return str(s.attr("harness.model.error"))
+    error = (run.result or {}).get("error") or run.manifest.get("error")
+    return str(error) if error else "the agent made no successful model call"
+
+
 def answer_text(final_output: str) -> str:
     """The final answer without its fenced JSON blocks."""
     return FENCE_RE.sub("", final_output or "").strip()

@@ -63,6 +63,7 @@ Eight criteria are **judged** by a panel of five LLMs from five different model 
 2. **Measured criteria:** the share × 100, or N/A when there's nothing to measure (no area, no coordinates).
 3. **Dimensions:** the mean of their criteria. **Overall:** the mean of the two dimensions.
 4. **Fatal gates** override everything: no final answer, or no successful tool call. The run scores **FAILED** (0 overall, 0 on every output criterion), and its workflow scores stay visible for diagnosis.
+   - **Not scored** is different from FAILED. If no model call succeeded at all (expired credentials, throttling, a model the account can't use), the agent never got a chance, so the panel isn't asked. The run shows **not scored** with the cause, costs nothing to judge, replaces any earlier judgement, and stays out of agreement (`measure.infrastructure_failure`).
 5. **Failure modes** (`retry_loop`, `parametric_guess`, `scope_violation` and so on) are listed when most judges tag them.
 
 ## How much to trust the score

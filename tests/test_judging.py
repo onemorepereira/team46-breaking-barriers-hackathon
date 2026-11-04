@@ -511,3 +511,34 @@ def test_calibrate_skips_a_perturbation_that_changes_nothing(tmp_path):
     v = {r["perturbation"]: r for r in out["rows"]}
     assert v["unscoped"]["verdict"] == "skipped" and "changes nothing" in v["unscoped"]["why"]
     assert sum(1 for model, _, _ in fake.calls if model == "qwen") == 3  # base + 2 testable, not 4 panels
+
+
+def test_infrastructure_failure_is_not_scored_and_replaces_a_stale_judgement(tmp_path):
+    """No model call succeeded (expired credentials): the panel isn't asked, and the run stays out of α."""
+    b = RunBuilder(root=tmp_path, model_key="kimi", model_id="us.moonshotai.kimi-k3")
+    b.run_start()
+    b.strands("invoke_agent Strands Agents", status="ERROR")
+    b.model("", reasoning=None, in_tok=0, out_tok=0, stop_reason="error")
+    expired = "An error occurred (ExpiredTokenException) when calling the ConverseStream operation"
+    b.lines[-1]["attributes"]["harness.model.error"] = expired
+    b.run_end(status="error")
+    b.write(final_output="", status="error")
+    run = Run.load(FileStore(f"file://{tmp_path}"), "run-0001")
+    assert measure.infrastructure_failure(run) == expired
+    (tmp_path / "runs/run-0001/judgement.json").write_text(json.dumps({"run_id": "run-0001", "passes": []}))
+
+    fake, events = FakeBedrock({}), []
+    rec = judge.judge_run(CFG, run, run.store, client=fake, on_event=events.append)
+    assert fake.calls == [] and rec["judging_cost_usd"] == 0.0
+    assert events == [{"type": "not_scored", "cause": expired}]
+    again = Run.load(run.store, "run-0001")
+    assert again.judgement is None and again.not_scored == {"reason": "infrastructure", "cause": expired}
+
+    from harness.web import view
+
+    assert view.run_row(again)["verdict"] == "not scored"
+    assert view.run_view(again)["kpis"]["not_scored_cause"] == expired
+
+
+def test_a_run_with_one_good_model_call_is_still_judged(tmp_path):
+    assert measure.infrastructure_failure(lgnd_run(tmp_path)) is None

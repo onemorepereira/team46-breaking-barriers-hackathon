@@ -118,7 +118,8 @@ def run_view(run: Run) -> dict[str, Any]:
     snap = run.manifest.get("snapshot") or {}
     kpis = {
         "score": card["overall"] if card else None,
-        "verdict": card["verdict"] if card else "not judged",
+        "verdict": card["verdict"] if card else "not scored" if run.not_scored else "not judged",
+        "not_scored_cause": (run.not_scored or {}).get("cause"),
         "confidence": card["confidence"] if card else None,
         "confidence_reasons": card["confidence_reasons"] if card else [],
         "workflow": card["dimensions"]["workflow"] if card else None,
@@ -197,7 +198,8 @@ def run_row(run: Run) -> dict[str, Any]:
         "prompt": " ".join(prompt.split())[:140],
         "prompt_file": run.manifest.get("prompt_file"),
         "score": p.overall if p else None,
-        "verdict": p.verdict if p else "not judged",
+        "verdict": p.verdict if p else "not scored" if run.not_scored else "not judged",
+        "not_scored_cause": (run.not_scored or {}).get("cause"),
         "confidence": p.confidence if p else None,
         "cost_usd": sig.estimated_cost_usd,
         "judging_cost_usd": jd.get("judging_cost_usd") if jd else None,

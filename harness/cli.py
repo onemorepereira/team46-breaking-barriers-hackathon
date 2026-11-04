@@ -227,6 +227,8 @@ def cmd_judge(cfg: config_mod.Config, index: Index, args: argparse.Namespace) ->
     run = Run.load(store, args.run_id)
     jd = judge.judge_run(cfg, run, store, passes=args.passes, on_event=_print_judge)
     write_report(cfg, Run.load(store, args.run_id))
+    if jd.get("not_scored"):
+        return 1
     p = jd["panel"]
     print(
         f"{args.run_id}: {p['verdict']} overall {p['overall']} (workflow {p['dimensions']['workflow']}, "
@@ -247,6 +249,8 @@ def _print_judge(ev: dict[str, object]) -> None:
     elif ev.get("type") == "judge":
         tail = f"{ev.get('score')}" if ev.get("status") == "ok" else f"failed: {ev.get('error')}"
         print(f"  pass {ev.get('pass')} {ev.get('key')}: {tail} ({ev.get('latency_s')} s)")
+    elif ev.get("type") == "not_scored":
+        print(f"not scored: no model call succeeded, so there is nothing to judge ({ev.get('cause')})")
 
 
 def cmd_calibrate(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:

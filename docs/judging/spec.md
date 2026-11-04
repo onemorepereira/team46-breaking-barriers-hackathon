@@ -56,6 +56,7 @@ ADB needs to know whether it can trust a dataset an agent built. Today our harne
   - a run with no successful tool call.
 
   The workflow scores are still shown for diagnosis. The page shows **FAILED** with the gate's reason.
+  A run in which no model call succeeded is an infrastructure failure, not an agent failure: it is not sent to the panel, `judgement.json` records `not_scored` with the cause, and the page and the runs table show **not scored**. Such runs are excluded from corpus α.
 - [ ] **AC7 Agreement and confidence.** Each judgement reports:
   - per-criterion spread (max − min) and unanimity;
   - **within-one**: the share of criteria where all judges are within one point of each other;

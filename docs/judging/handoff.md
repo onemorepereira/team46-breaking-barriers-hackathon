@@ -90,6 +90,8 @@
 
 On `daa193db`, Kimi was the agent, so Kimi recused and Opus sat. `harness check` reported 0 missing fields and 16/16 claims matched.
 
+**Infrastructure failures are not scored** (2026-11-04, after run `25b41808`): that Kimi run started on expired credentials, made no model call, and the panel scored it FAILED 0 for $0.06. Runs whose model calls all failed now skip the panel and show **not scored** with the cause (test `test_infrastructure_failure_is_not_scored_and_replaces_a_stale_judgement`; 124 tests pass). Its re-run, `53fd4e2a` (Kimi, ZIP 75080), scored **95.8**, High: workflow 100, output 91.7, 10/10 claims verified and inside the ZIP. Result relevance got a median of 1: imagery checks confirmed none of the ten candidates, and 3 of 5 judges flagged overconfidence.
+
 **Agreement across runs:** `harness agreement --all` gives Krippendorff's α (ordinal) = **0.502**, 95% CI 0.12–0.67, over 7 judged runs, 56 run × criterion units and 6 distinct judges. That is moderate agreement, close to the paper's α ≈ 0.56 among human experts. Two things widen the CI:
 - most votes are 2, a ceiling effect that depresses α;
 - there are only 7 runs.

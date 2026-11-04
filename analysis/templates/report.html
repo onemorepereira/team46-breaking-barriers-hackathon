@@ -39,7 +39,8 @@
 
 <h2>Panel score</h2>
 {% set p = r.panel %}
-{% if p is none %}<p class="muted">Not judged. Run <code>harness judge {{ r.run.run_id }}</code> to score it with the judge panel.</p>
+{% if p is none and r.run.not_scored %}<p class="muted">Not scored: no model call succeeded, so the panel had nothing to judge ({{ r.run.not_scored.cause }}). Fix the cause and run it again.</p>
+{% elif p is none %}<p class="muted">Not judged. Run <code>harness judge {{ r.run.run_id }}</code> to score it with the judge panel.</p>
 {% else %}
 {% if p.gates %}<div class="banner">FAILED: {% for g in p.gates %}{{ g.reason }}{% if not loop.last %}; {% endif %}{% endfor %}</div>{% endif %}
 <div class="grid">
