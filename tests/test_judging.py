@@ -206,7 +206,9 @@ def test_median_dimensions_and_majority_failure_modes(tmp_path):
 def test_lower_median_with_four_valid_judges(tmp_path):
     m = measure.measure(lgnd_run(tmp_path))
     votes = {"a": 2, "b": 2, "c": 1, "d": 1}
-    p = panel.aggregate(RUBRIC, passes_with({**votes}) + [], m)
+    passes = passes_with({**votes})
+    passes[0]["judges"].append({"key": "e", "status": "error", "error": "throttled"})  # failed, no stand-in
+    p = panel.aggregate(RUBRIC, passes, m)
     assert next(c for c in p.criteria if c.id == "grounding").median == 1  # lower median, an actual vote
     assert p.confidence == "Medium" and "4 of 5 judges valid" in p.confidence_reasons
 
@@ -542,3 +544,35 @@ def test_infrastructure_failure_is_not_scored_and_replaces_a_stale_judgement(tmp
 
 def test_a_run_with_one_good_model_call_is_still_judged(tmp_path):
     assert measure.infrastructure_failure(lgnd_run(tmp_path)) is None
+
+
+TRIBUNAL = {**CFG, "judging": {**CFG["judging"], "panel": ["opus", "deepseek", "mistral"],
+                               "reserves": ["kimi", "qwen", "sonnet"]}}  # fmt: skip
+
+
+def test_tribunal_seats_three_and_a_reserve_stands_in_for_a_failed_judge(tmp_path):
+    """harness.yaml's tribunal: three families; Kimi sits for Opus on Sonnet runs; a failure is covered."""
+    assert [s.key for s in judge.seats(TRIBUNAL, "sonnet")] == ["kimi", "deepseek", "mistral"]
+    assert [s.key for s in judge.seats(TRIBUNAL, "kimi")] == ["opus", "deepseek", "mistral"]
+    seated = judge.seats(TRIBUNAL, "kimi")
+    assert [s.key for s in judge.spare_seats(TRIBUNAL, "kimi", seated)] == [
+        "qwen"
+    ]  # kimi, sonnet share a family
+
+    run = lgnd_run(tmp_path)  # a Sonnet run: kimi sits for opus; qwen is the only spare
+    fake, events = FakeBedrock({"mistral": RuntimeError("throttled")}), []
+    jd = judge.judge_run(TRIBUNAL, run, run.store, client=fake, on_event=events.append)
+    judges = jd["passes"][0]["judges"]
+    assert [(j["key"], j["status"], j.get("stood_in_for")) for j in judges] == [
+        ("kimi", "ok", None), ("deepseek", "ok", None), ("mistral", "error", None), ("qwen", "ok", "mistral"),
+    ]  # fmt: skip
+    assert jd["panel"]["valid_judges"] == [3] and jd["panel"]["status"] == "scored"
+    assert jd["panel"]["confidence"] == "High"  # the stand-in restored a full tribunal
+    assert [e.get("key") for e in events if e["type"] == "judge"][-1] == "qwen"
+
+
+def test_a_tribunal_short_a_vote_is_not_scored_by_two(tmp_path):
+    run = lgnd_run(tmp_path, model_key="kimi")  # spares: qwen only
+    fake = FakeBedrock({"mistral": RuntimeError("down"), "qwen": RuntimeError("down")})
+    jd = judge.judge_run(TRIBUNAL, run, run.store, client=fake)
+    assert jd["panel"]["valid_judges"] == [2] and jd["panel"]["status"] != "scored"

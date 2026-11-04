@@ -13,7 +13,7 @@ from analysis.judging.alpha import alpha
 from analysis.judging.measure import Measured
 from analysis.judging.rubric import Rubric, parse
 
-MIN_VALID = 3  # fewer valid judges in a pass and the pass is dropped
+MIN_VALID = 3  # a full tribunal: fewer valid judges in a pass (after reserves stand in) and it is dropped
 
 
 @dataclass
@@ -159,7 +159,8 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
     shares = [sum(w) / len(w) for w in pass_within.values() if w]
     within = sum(shares) / len(shares) if shares else None
     mad_all = round(sum(mads) / len(mads), 3) if mads else None
-    conf, reasons = confidence(measured, valid_counts, within, bool(usable))
+    seated = [sum(1 for j in p.get("judges", []) if not j.get("stood_in_for")) for p in passes]
+    conf, reasons = confidence(measured, valid_counts, within, bool(usable), seated)
     verdict = "FAILED" if gates else ("scored" if usable else "not scored")
     return PanelResult(
         status,
@@ -179,9 +180,12 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
 
 
 def confidence(
-    m: Measured, valid_counts: list[int], within: float | None, scored: bool
+    m: Measured, valid_counts: list[int], within: float | None, scored: bool, seated: list[int] | None = None
 ) -> tuple[str, list[str]]:
-    """High / Medium / Low with reasons (spec AC7): agreement on the evidence, not ground truth."""
+    """High / Medium / Low with reasons (spec AC7): agreement on the evidence, not ground truth.
+
+    `seated` is each pass's number of seats. A pass short one vote (a judge failed and no reserve could
+    stand in) is Medium; short two or more is Low."""
     low, med = [], []
     if not m.trace_integrity:
         low.append(
@@ -192,11 +196,14 @@ def confidence(
     if not scored:
         low.append("not enough valid judges to score")
     if valid_counts and any(v < MIN_VALID for v in valid_counts):
-        med.append("a judging pass was dropped (fewer than 3 valid judges)")
-    if valid_counts and min(valid_counts) < 4:
-        low.append(f"only {min(valid_counts)} valid judges in a pass")
-    elif valid_counts and min(valid_counts) < 5:
-        med.append(f"{min(valid_counts)} of 5 judges valid")
+        med.append(f"a judging pass was dropped (fewer than {MIN_VALID} valid judges)")
+    for v, n in zip(valid_counts, seated or valid_counts, strict=False):
+        if v >= MIN_VALID and n - v >= 2:
+            low.append(f"only {v} of {n} judges valid in a pass")
+            break
+        if v >= MIN_VALID and n - v == 1:
+            med.append(f"{v} of {n} judges valid")
+            break
     if within is not None and within < 0.5:
         low.append(f"judges within one point on only {within:.0%} of criteria")
     elif within is not None and within < 0.8:
@@ -206,7 +213,8 @@ def confidence(
     if med:
         return "Medium", med
     return "High", [
-        f"trace intact, no gate, 5 valid judges, judges within one point on {within:.0%} of criteria"
+        f"trace intact, no gate, {min(valid_counts) if valid_counts else 0} valid judges in every pass, "
+        f"judges within one point on {within:.0%} of criteria"
     ]
 
 

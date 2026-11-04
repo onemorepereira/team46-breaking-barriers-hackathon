@@ -70,6 +70,7 @@ def scorecard(run: Run) -> dict[str, Any] | None:
                 "family": j["family"],
                 "status": j["status"],
                 "recused_for": j.get("recused_for"),
+                "stood_in_for": j.get("stood_in_for"),
                 "error": j.get("error"),
                 "cost_usd": j.get("cost_usd"),
                 "latency_s": j.get("latency_s"),

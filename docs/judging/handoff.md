@@ -4,7 +4,7 @@
 - **A scoring framework for agent-built geospatial datasets.** It has three parts:
   - a generalized rubric (`rubrics/geo-dataset-v1.yaml`) with 4 workflow criteria and 6 output criteria;
   - two criteria measured by code: claim provenance and area compliance;
-  - eight criteria judged by a five-judge, five-family Bedrock panel: Opus 5.5, Grok 4.7, Kimi K3, DeepSeek V3.2 and Mistral Large 3. A same-family judge recuses itself.
+  - eight criteria judged by a Bedrock panel, first of five judges (Opus 5.5, Grok 4.7, Kimi K3, DeepSeek V3.2, Mistral Large 3) and now a three-judge tribunal (Opus, DeepSeek, Mistral; see "Tribunal of three" below). A same-family judge recuses itself.
 - **Aggregation** takes each criterion's median vote, then applies fatal gates (FAILED), majority failure modes, and a confidence label built from agreement and trace integrity. Krippendorff's α is computed across runs, and calibration plants defects.
 - **The Team Foundry console** is a FastAPI app (T99) built on Tabler and MapLibre, with vendored assets. It has:
   - a live, plain-language trace with the raw span one click away;
@@ -92,6 +92,19 @@ On `daa193db`, Kimi was the agent, so Kimi recused and Opus sat. `harness check`
 
 **Infrastructure failures are not scored** (2026-11-04, after run `25b41808`): that Kimi run started on expired credentials, made no model call, and the panel scored it FAILED 0 for $0.06. Runs whose model calls all failed now skip the panel and show **not scored** with the cause (test `test_infrastructure_failure_is_not_scored_and_replaces_a_stale_judgement`; 124 tests pass). Its re-run, `53fd4e2a` (Kimi, ZIP 75080), scored **95.8**, High: workflow 100, output 91.7, 10/10 claims verified and inside the ZIP. Result relevance got a median of 1: imagery checks confirmed none of the ten candidates, and 3 of 5 judges flagged overconfidence.
 
+**Tribunal of three** (2026-11-04, the user's call): the panel is now Opus 5.5, DeepSeek V3.2 and Mistral Large 3, with reserves Kimi K3, Qwen3 235B and Sonnet 5.5. The judges dropped were chosen from per-judge stats over the 7 runs judged by the five-judge panel:
+
+| Judge | Avg latency | Avg cost | Errors | Mean bias vs. peers' median |
+| --- | --- | --- | --- | --- |
+| Grok | **143 s** | $0.083 | **1** | −0.13 |
+| Kimi | 50 s | $0.086 | 0 | −0.09 (also an agent: recuses on Kimi runs) |
+| Qwen | 11 s | $0.004 | 0 | **+0.25** (most lenient) |
+| Opus | 30 s | $0.246 | 0 | −0.50 (strictest, 3 runs) |
+| DeepSeek | 13 s | $0.009 | 0 | +0.13 |
+| Mistral | 18 s | $0.012 | 0 | +0.14 |
+
+Grok is out, Kimi and Qwen are reserves. A reserve now also **stands in** for a judge that fails, so every pass keeps three votes (tests `test_tribunal_seats_three_and_a_reserve_stands_in_for_a_failed_judge`, `test_a_tribunal_short_a_vote_is_not_scored_by_two`). Confidence is now relative to the seats: one seat short is Medium, two short is Low. Archived five-judge judgements keep their labels. Judging cost per pass drops from about $0.38 to $0.16–0.19. **Live:** console run `3d7ac12a` (Sonnet, ZIP 75080) seated Kimi for Opus, then DeepSeek and Mistral. It scored 100, High (Kimi 87.5, DeepSeek 100, Mistral 100), with judging at $0.10 and the slowest verdict at 15 s, down from Grok's 85–140 s.
+
 **Agreement across runs:** `harness agreement --all` gives Krippendorff's α (ordinal) = **0.502**, 95% CI 0.12–0.67, over 7 judged runs, 56 run × criterion units and 6 distinct judges. That is moderate agreement, close to the paper's α ≈ 0.56 among human experts. Two things widen the CI:
 - most votes are 2, a ceiling effect that depresses α;
 - there are only 7 runs.
@@ -109,8 +122,8 @@ Minors were fixed too: claim-to-area matching by position, the scale max, no dim
 **Deploy:** no AgentCore redeploy was needed. `git diff a68daf2 -- agent/ infra/ Dockerfile`, the tool clients and `prompts/agent/` are all empty. Judging and the console run in the harness, on the operator's machine, against the archive. The live AgentCore run `daa193db` above used the deployed runtime unchanged.
 
 **Decisions made in this pass [team]:**
-- **The panel** is Opus (chair), Grok, Kimi, DeepSeek and Mistral, with reserves Qwen, then Sonnet. Sonnet is a reserve only, because it's the default agent and shares Opus's family.
-- **Recusal is on** (`recuse_same_family: true`). On Sonnet runs, Opus sits out and Qwen takes its seat. If you want Opus on every run, set it to false, and the panel then has a same-family judge. **This is the call most worth a second look.**
+- **The panel** is a tribunal of Opus (chair), DeepSeek and Mistral, with reserves Kimi, Qwen, then Sonnet (revised from five judges; see above). Sonnet is a reserve only, because it's the default agent and shares Opus's family.
+- **Recusal is on** (`recuse_same_family: true`). On Sonnet runs, Opus sits out and Kimi takes its seat. If you want Opus on every run, set it to false, and the panel then has a same-family judge. **This is the call most worth a second look.**
 - **Per-run α is not shown** (design review pass 1). Agreement per run is within-one and MAD; α is reported across runs.
 - **Judges never see the measured results**, so code and LLMs give two independent lines of evidence.
 

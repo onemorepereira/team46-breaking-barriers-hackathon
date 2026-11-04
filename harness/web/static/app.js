@@ -340,17 +340,21 @@
   }
 
   // ---------- judges ----------
-  function judgeRows(seats) {
-    const body = $("judges");
-    body.replaceChildren(...seats.map((s) => el("tr", { id: `judge-${s.key}` },
-      el("td", {}, el("strong", { text: s.key }), s.recused_for ? el("div", { class: "small text-secondary", text: `seated for ${s.recused_for} (same family as the agent)` }) : null),
+  function seatRow(s) {
+    const note = s.recused_for ? `seated for ${s.recused_for} (same family as the agent)`
+      : s.stood_in_for ? `stood in for ${s.stood_in_for}, which failed` : null;
+    return el("tr", { id: `judge-${s.key}` },
+      el("td", {}, el("strong", { text: s.key }), note ? el("div", { class: "small text-secondary", text: note }) : null),
       el("td", { class: "text-secondary", text: s.family }),
       el("td", { class: "text-end" }, el("span", { class: "spinner-border spinner-border-sm text-secondary" })),
-      el("td", { class: "text-end", text: "" }), el("td", { class: "text-end", text: "" }))));
+      el("td", { class: "text-end", text: "" }), el("td", { class: "text-end", text: "" }));
+  }
+  function judgeRows(seats) {
+    $("judges").replaceChildren(...seats.map(seatRow));
   }
   function judgeResult(j) {
-    const row = $(`judge-${j.key}`);
-    if (!row) return;
+    let row = $(`judge-${j.key}`);
+    if (!row) { row = seatRow(j); $("judges").append(row); }  // a reserve standing in for a failed judge
     const cells = row.children;
     cells[2].replaceChildren(j.status === "ok" ? el("span", { class: `badge bg-${scoreClass(j.score)}-lt`, text: Math.round(j.score) })
       : el("span", { class: "badge bg-danger-lt", title: j.error || "", text: "failed" }));

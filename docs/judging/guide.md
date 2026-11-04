@@ -12,7 +12,7 @@ The overall score is the mean of the two. Two criteria are **measured by code**:
 - whether each claimed value appears in the tool result it cites;
 - whether each claimed location is inside the requested area.
 
-Eight criteria are **judged** by a panel of five LLMs from five different model families. Each panel score is the median of the five votes. Next to the score sits a **confidence** label (High, Medium or Low). It says how far the judges agreed and whether the trace is intact. It does **not** say the answer is true: that would need an answer key, which is our main open gap ([gaps.md](gaps.md)).
+Eight criteria are **judged** by a tribunal of three LLMs from three different model families. Each panel score is the median of the three votes. Next to the score sits a **confidence** label (High, Medium or Low). It says how far the judges agreed and whether the trace is intact. It does **not** say the answer is true: that would need an answer key, which is our main open gap ([gaps.md](gaps.md)).
 
 ## The rubric
 
@@ -35,31 +35,36 @@ Eight criteria are **judged** by a panel of five LLMs from five different model 
 
 ## The panel
 
+A tribunal of three judges from three families:
+
 | Seat | Model | Family | $/Mtok in / out |
 | --- | --- | --- | --- |
 | Chair | Claude Opus 5.5 | Anthropic | 4.00 / 20.00 |
-| 2 | Grok 4.7 | xAI | 2.20 / 6.60 |
-| 3 | Kimi K3 | Moonshot | 3.30 / 16.50 |
-| 4 | DeepSeek V3.2 | DeepSeek | 0.62 / 1.85 |
-| 5 | Mistral Large 3 | Mistral | 0.50 / 1.50 |
-| Reserves | Qwen3 235B (Alibaba), then Sonnet 5.5 (Anthropic) | | 0.22 / 0.88; 2.00 / 10.00 |
+| 2 | DeepSeek V3.2 | DeepSeek | 0.62 / 1.85 |
+| 3 | Mistral Large 3 | Mistral | 0.50 / 1.50 |
+| Reserves, in order | Kimi K3 (Moonshot), Qwen3 235B (Alibaba), Sonnet 5.5 (Anthropic) | | 3.30 / 16.50; 0.22 / 0.88; 2.00 / 10.00 |
 
-- **Why five, from five families:** an odd panel has no ties, and its median is always one judge's real vote. No single vendor can carry a majority. That answers the self-preference risk the GRA paper leaves open, since it rated Gemini with Gemini.
+- **Why three, from three families:** an odd panel has no ties, and its median is always one judge's real vote. No single vendor can carry a majority. That answers the self-preference risk the GRA paper leaves open, since it rated Gemini with Gemini.
+- **Who was dropped, and why** (from the 7 runs judged by the earlier five-judge panel):
+  - **Grok 4.7**: it averaged 143 s per verdict against 11–50 s for the others, so it set the time to a score, and it was the only judge that errored.
+  - **Kimi K3** became a reserve: it's also an agent under test, so it would recuse on every Kimi run, and it's the second most expensive judge.
+  - **Qwen3 235B** stays a reserve only: it was the most lenient judge, at +0.25 points above its peers' median on average.
 - **Recusal:** a judge from the agent's own family steps down, and the first reserve from another family takes the seat. The page shows "seated for opus".
-  - Sonnet 5.5 is our default agent, so on a Sonnet run Opus recuses and Qwen sits.
-  - On a Kimi run, Kimi recuses and Qwen sits.
+  - Sonnet 5.5 is our default agent, so on a Sonnet run Opus recuses and Kimi sits.
+  - On a Kimi run, all three seated judges sit.
   - The setting is `recuse_same_family`.
+- **Stand-ins:** if a judge fails (after its one retry), the next reserve takes its seat. The reserve must share a family with neither the agent nor a seated judge. The page shows "stood in for mistral", and the failed attempt stays on the record.
 - **What a judge sees:** a dossier built by code from the archive. It holds the task, the requested area, the tools available, every step in order (reasoning, arguments, outputs labeled `T1`, `T2`…), run totals and the final answer.
   - Tool output is wrapped in `<tool_output>` tags and declared untrusted.
   - Judges never see our measured results, so code and LLMs are two independent lines of evidence.
 - **What a judge returns:** JSON with, for each criterion, a rationale, the step IDs it relied on, and a score.
   - A malformed reply is retried once; a second failure means the judge failed.
-  - A run is scored only if at least three judges are valid.
+  - A pass counts only with all three votes, after any stand-in. If the reserves run out, the run is not scored.
   - Unknown step IDs and unknown failure-mode tags are dropped and counted.
 
 ## From votes to a score
 
-1. **Per judged criterion:** the median vote, or the lower median if only 3–4 judges are valid. The score is median ÷ 2 × 100.
+1. **Per judged criterion:** the median vote (the lower median for an even count, from older five-judge records). The score is median ÷ 2 × 100.
 2. **Measured criteria:** the share × 100, or N/A when there's nothing to measure (no area, no coordinates).
 3. **Dimensions:** the mean of their criteria. **Overall:** the mean of the two dimensions.
 4. **Fatal gates** override everything: no final answer, or no successful tool call. The run scores **FAILED** (0 overall, 0 on every output criterion), and its workflow scores stay visible for diagnosis.
@@ -70,8 +75,8 @@ Eight criteria are **judged** by a panel of five LLMs from five different model 
 
 | Check | Where | Meaning |
 | --- | --- | --- |
-| **Confidence** (per run) | KPI strip, report | **High**: trace intact, no gate, 5 valid judges, judges within 1 point on ≥ 80% of criteria. **Low**: trace broken, a gate fired, < 4 valid judges, or < 50% within 1 point. **Medium**: otherwise |
-| **Within-one, MAD** (per run) | Judge agreement tile | How tightly the five votes cluster |
+| **Confidence** (per run) | KPI strip, report | **High**: trace intact, no gate, every seat's vote valid (stand-ins count), judges within 1 point on ≥ 80% of criteria. **Low**: trace broken, a gate fired, two or more seats short, or < 50% within 1 point. **Medium**: otherwise, for example one seat short |
+| **Within-one, MAD** (per run) | Judge agreement tile | How tightly the votes cluster |
 | **Krippendorff's α** (across runs) | `harness agreement --all`, `harness compare` | Chance-corrected agreement between judges, with a cluster-bootstrap 95% CI. For scale: domain experts reached α ≈ 0.56 on a similar task (GRA §4.1.4) |
 | **Repeat stability** | `harness judge <run> --passes 3` | Each criterion's mean ± std over three panel passes |
 | **Calibration** | `harness calibrate <run>` | Plants one defect at a time and checks the panel notices it (below) |

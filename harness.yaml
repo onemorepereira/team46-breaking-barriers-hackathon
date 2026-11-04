@@ -41,12 +41,15 @@ models:
     family: alibaba
     agent: false
 
-# The judge panel (docs/judging): five families, so no vendor carries a majority; a judge sharing the agent's
-# family recuses and the first reserve of another family takes the seat.
+# The judge panel (docs/judging): one judge per family, so no vendor carries a majority; a judge sharing the
+# agent's family recuses and the first reserve of another family takes the seat.
 judging:
   rubric: rubrics/geo-dataset-v1.yaml
-  panel: [opus, grok, kimi, deepseek, mistral]
-  reserves: [qwen, sonnet]
+  # A tribunal of three, from three families. Reserves, in order, sit for a recused judge (same family as
+  # the agent) or stand in for one that fails, so a pass still has three votes. Grok was dropped (slowest,
+  # 140 s average, and the only judge that errored); Kimi is a reserve because it is also an agent under test.
+  panel: [opus, deepseek, mistral]
+  reserves: [kimi, qwen, sonnet]
   recuse_same_family: true
   passes: 1
   auto: true                     # judge every finished run (harness run, the console)

@@ -12,7 +12,7 @@ import re
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -40,7 +40,8 @@ class Seat:
     key: str
     model_id: str
     family: str
-    recused_for: str | None = None  # the panel judge this reserve replaced
+    recused_for: str | None = None  # the panel judge this reserve replaced (same family as the agent)
+    stood_in_for: str | None = None  # the seated judge that failed, whose seat this reserve took
 
 
 def judging_cfg(cfg: Config) -> dict[str, Any]:
@@ -83,6 +84,24 @@ def seats(cfg: Config, agent_key: str | None, agent_model_id: str | None = None)
             out.append(Seat(sub, models[sub]["id"], family_of(cfg, sub), recused_for=k))
         else:
             out.append(Seat(k, models[k]["id"], fam))
+    return out
+
+
+def spare_seats(cfg: Config, agent_key: str | None, panel_seats: list[Seat],
+                agent_model_id: str | None = None) -> list[Seat]:  # fmt: skip
+    """Reserves not already seated, in order, that share a family with neither the agent nor a seated
+    judge. They take the seat of a judge that fails, so the tribunal still has an odd number of votes."""
+    j = judging_cfg(cfg)
+    models = cfg["models"] or {}
+    taken = {family_of(cfg, agent_key, agent_model_id)} | {s.family for s in panel_seats}
+    used = {s.key for s in panel_seats}
+    out = []
+    for k in j.get("reserves") or []:
+        fam = family_of(cfg, k)
+        if k in used or fam in taken:
+            continue
+        taken.add(fam)
+        out.append(Seat(k, models[k]["id"], fam))
     return out
 
 
@@ -210,7 +229,9 @@ def judge_once(cfg: Config, client: Any, seat: Seat, system: str, dossier_text: 
 
 
 def run_panel(cfg: Config, r: Rubric, d: dossier_mod.Dossier, panel_seats: list[Seat], passes: int = 1,
-              client: Any = None, on_event: Event | None = None) -> list[dict[str, Any]]:  # fmt: skip
+              client: Any = None, on_event: Event | None = None,
+              spares: list[Seat] | None = None) -> list[dict[str, Any]]:  # fmt: skip
+    """Each pass: the seated judges in parallel, then a spare for each judge that failed (in order)."""
     client = client or _bedrock(cfg)
     system, text = system_prompt(r), dossier_mod.render(d)
     results: list[dict[str, Any]] = []
@@ -225,6 +246,15 @@ def run_panel(cfg: Config, r: Rubric, d: dossier_mod.Dossier, panel_seats: list[
                 judges.append(j)
                 if on_event:
                     on_event({"type": "judge", "pass": n + 1, **_judge_summary(r, j)})
+        bench = list(spares or [])
+        for failed in [j for j in judges if j["status"] != "ok"]:
+            if not bench:
+                break
+            seat = replace(bench.pop(0), stood_in_for=failed["key"])
+            j = judge_once(cfg, client, seat, system, text, r, d.known_refs)
+            judges.append(j)
+            if on_event:
+                on_event({"type": "judge", "pass": n + 1, **_judge_summary(r, j)})
         results.append({"pass": n + 1, "judges": judges})
     return results
 
@@ -234,7 +264,7 @@ def _judge_summary(r: Rubric, j: dict[str, Any]) -> dict[str, Any]:
     mean = round(sum(scores.values()) / len(scores) / r.max_score * 100, 1) if scores else None
     return {"key": j["key"], "model_id": j["model_id"], "family": j["family"], "status": j["status"],
             "score": mean, "cost_usd": j.get("cost_usd"), "latency_s": j.get("latency_s"),
-            "error": j.get("error")}  # fmt: skip
+            "error": j.get("error"), "stood_in_for": j.get("stood_in_for")}  # fmt: skip
 
 
 def judge_run(cfg: Config, run: Run, store: Store, passes: int | None = None, client: Any = None,
@@ -257,7 +287,8 @@ def judge_run(cfg: Config, run: Run, store: Store, passes: int | None = None, cl
     panel_seats = seats(cfg, run.manifest.get("model_key"), run.manifest.get("model_id"))
     if on_event:
         on_event({"type": "judging", "seats": [asdict(s) for s in panel_seats], "passes": passes})
-    pass_results = run_panel(cfg, r, d, panel_seats, passes, client, on_event)
+    spares = spare_seats(cfg, run.manifest.get("model_key"), panel_seats, run.manifest.get("model_id"))
+    pass_results = run_panel(cfg, r, d, panel_seats, passes, client, on_event, spares)
     judgement = assemble(r, run, pass_results, panel_seats)
     store.write_text(f"runs/{run.run_id}/judgement.json", json.dumps(judgement, indent=1))
     return judgement

@@ -8,7 +8,7 @@
 | --- | --- | --- |
 | An LLM harness performs the task by calling geospatial tools via MCP over public data (V108, V162) | **Done** | Strands on AgentCore, using RODA and LGND Geo MCP (`agent/`, `tools/`) |
 | Traces captured and summarized into a human-readable view (V109, T114–T115) | **Done** | `harness.*` OpenTelemetry spans archived to S3. Plain-language timeline in the console (`analysis/timeline.py`). Narrative generated from the trace (`harness/narrative.py`) |
-| Scored on two dimensions: workflow signals from the traces, and output quality against a rubric (V110, T116–T118, V163) | **Done** | Rubric `rubrics/geo-dataset-v1.yaml`: 4 workflow criteria and 6 output criteria, scored by measured checks plus a 5-judge panel ([guide](guide.md)) |
+| Scored on two dimensions: workflow signals from the traces, and output quality against a rubric (V110, T116–T118, V163) | **Done** | Rubric `rubrics/geo-dataset-v1.yaml`: 4 workflow criteria and 6 output criteria, scored by measured checks plus a three-judge tribunal ([guide](guide.md)) |
 | A per-run evaluation report (V112, T119) | **Done** | `out/<run>/report.html` (static), plus the console run page |
 | Tracing tool and model swappable, behind an abstraction (V113, V164, T10) | **Done** | OpenTelemetry exporter-swap CI test (AC4). Models are config keys (`harness.yaml`). Judges are config keys too |
 | Recorded traces replay through scoring (V114, V165, T121) | **Done** | `harness replay` re-grades and re-aggregates archived judgements without calling a model. The console renders archived runs offline (vendored assets) |

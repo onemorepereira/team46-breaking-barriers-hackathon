@@ -248,7 +248,8 @@ def _print_judge(ev: dict[str, object]) -> None:
         print(f"panel: {', '.join(names)}; passes {ev.get('passes')}")
     elif ev.get("type") == "judge":
         tail = f"{ev.get('score')}" if ev.get("status") == "ok" else f"failed: {ev.get('error')}"
-        print(f"  pass {ev.get('pass')} {ev.get('key')}: {tail} ({ev.get('latency_s')} s)")
+        sub = f" (standing in for {ev['stood_in_for']})" if ev.get("stood_in_for") else ""
+        print(f"  pass {ev.get('pass')} {ev.get('key')}{sub}: {tail} ({ev.get('latency_s')} s)")
     elif ev.get("type") == "not_scored":
         print(f"not scored: no model call succeeded, so there is nothing to judge ({ev.get('cause')})")
 

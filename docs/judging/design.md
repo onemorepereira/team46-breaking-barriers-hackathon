@@ -13,7 +13,7 @@ archive (spans, run.json, tool_results/)        rubrics/geo-dataset-v1.yaml
    ├─► analysis.judging.dossier  ── task, area, tools, steps (T#/M#) with usage, final answer, run totals
    │        │
    │        ▼     (measured results are not in the dossier)
-   │   harness.judge ── 5 judges in parallel (Bedrock Converse) ── recusal ── retry once on bad JSON
+   │   harness.judge ── 3 judges in parallel (Bedrock Converse) ── recusal ── stand-ins ── retry once on bad JSON
    │        │
    │        ▼
    │   analysis.judging.panel ── median per criterion, majority failure modes, α, spread, confidence
@@ -85,8 +85,8 @@ Unknown tools fall back to "Called `<name>` with <k>=<v>…: <first 120 chars>".
 ```yaml
 judging:
   rubric: rubrics/geo-dataset-v1.yaml
-  panel: [opus, grok, kimi, deepseek, mistral]   # five families: Anthropic, xAI, Moonshot, DeepSeek, Mistral
-  reserves: [qwen, sonnet]                       # take a recused seat, in order
+  panel: [opus, deepseek, mistral]   # revised 2026-11-04 from five: a tribunal of Anthropic, DeepSeek, Mistral
+  reserves: [kimi, qwen, sonnet]     # sit for a recused judge, or stand in for a failed one
   recuse_same_family: true
   passes: 1
   auto: true                                     # console and `harness run` judge every finished run
@@ -94,11 +94,13 @@ judging:
 Each `models.<key>` entry gains `family`. Judges are configured models like any other, so swapping a judge is a config change. Prices come from the AWS Price List API (us-west-2, standard tier, read 2026-11-04): Kimi K3 $3.30/$16.50, Grok 4.7 $2.20/$6.60, DeepSeek V3.2 $0.62/$1.85, Mistral Large 3 $0.50/$1.50, Qwen3 235B $0.22/$0.88 per Mtok. Opus 5.5 ($4/$20) is from the pricing-page screenshot the user supplied, because the API doesn't list it.
 
 **Why this panel [team]:**
-- Five families, so no vendor can carry a majority.
+- One judge per family, so no vendor can carry a majority.
 - Opus 5.5, the user's preferred judge, chairs the panel.
 - Sonnet 5.5 is a reserve only, because it is our default agent. It and Opus are the same family.
 
-**Recusal:** a judge whose family equals the agent model's family gives its seat to the first reserve of a different family. For a Sonnet run, Opus recuses and Qwen sits in its place; for a Kimi run, Kimi recuses. The seat list is recorded in the judgement.
+**Recusal:** a judge whose family equals the agent model's family gives its seat to the first reserve of a different family. For a Sonnet run, Opus recuses and Kimi sits in its place; on a Kimi run the three seated judges all sit. The seat list is recorded in the judgement.
+
+**Stand-ins** (added with the tribunal): after the seated judges answer, each one that failed is replaced by the next spare, a reserve sharing a family with neither the agent nor a seated judge. The stand-in's record carries `stood_in_for`, and the failed record stays in the pass. A pass needs three valid votes; with no spare left it is dropped, and the run is not scored.
 
 **Call:**
 - Converse with system = `prompts/judge/system.md` rendered with the rubric, and user = the dossier.
@@ -130,8 +132,8 @@ Each `models.<key>` entry gains `family`. Judges are configured models like any 
   - `mad` is the mean absolute deviation from the median;
   - **corpus α** (`panel.corpus_alpha(judgements)`) is Krippendorff's ordinal α with seats (by judge key) as coders and run × criterion as units. A 1,000-sample cluster bootstrap that resamples whole runs (a run's criteria are correlated) gives a 95% CI. It's computed in `analysis/judging/alpha.py`, a small coincidence-matrix implementation checked against Krippendorff's published example (nominal 0.743, ordinal 0.815, interval 0.849). It's shown in `harness compare` and `harness agreement`, never per run (8 units are too few). α is N/A with no variance.
 - **Confidence (AC7):**
-  - **High**: checks pass (trace integrity and no gate), 5 valid judges in every pass (no pass dropped), and within-one ≥ 0.8;
-  - **Low**: checks fail, fewer than 4 valid judges in some pass (the minimum across passes counts), or within-one < 0.5;
+  - **High**: checks pass (trace integrity and no gate), every seat valid in every pass (stand-ins count; no pass dropped), and within-one ≥ 0.8;
+  - **Low**: checks fail, a pass two or more seats short, or within-one < 0.5;
   - **Medium**: otherwise.
 
   Reasons are listed. The UI notes that confidence is agreement on the evidence, not ground truth.
@@ -192,7 +194,7 @@ No build step. Static assets are `harness/web/static/` (the logo crops from the 
   - **Left (8 columns), map card:** basemap switcher with Sentinel-2 cloudless 2023 (EOX WMTS), USGS Imagery (The National Map) and NAIP (US, ImageServer `{bbox-epsg-3857}`). The area outline is dashed cyan. Chip footprints are filled cyan inside the area and orange outside. Pins mark coordinate claims. Popups show the tile, label, similarity and step ref. A legend and the attribution are on the map.
   - **Right (4 columns), Scorecard card:**
     - a Chart.js radar of criterion scores;
-    - a per-criterion table with the median, a dot strip of the five judges' votes (agreement at a glance) and the measured value;
+    - a per-criterion table with the median, a dot strip of the judges' votes (agreement at a glance) and the measured value;
     - majority failure modes as badges;
     - the gate banner.
 - **Timeline card:** Tabler steps list. Each entry has an icon (model, LGND, RODA), the sentence, status, latency and tokens, and a "raw" toggle (`<pre>` of the span JSON). Clicking a tool entry with results fits the map to them.
@@ -250,7 +252,7 @@ The prompt covers:
 
 ## Cost
 
-A dossier is about 10–25k tokens. Per pass at 22k in / 3k out: Opus ≈ $0.15, Kimi ≈ $0.12, Grok ≈ $0.07, DeepSeek ≈ $0.02, Mistral ≈ $0.02, so ≈ $0.38. A retry adds at most one judge's cost. The spec cap is $1 per pass.
+A dossier is about 10–25k tokens. Per pass at 22k in / 3k out: Opus ≈ $0.15, DeepSeek ≈ $0.02, Mistral ≈ $0.02, so ≈ $0.19 (Kimi ≈ $0.12 in Opus's seat on a Sonnet run, ≈ $0.16). A retry adds at most one judge's cost. The spec cap is $1 per pass.
 
 ## Traceability
 

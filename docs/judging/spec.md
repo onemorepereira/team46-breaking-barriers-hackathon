@@ -18,7 +18,7 @@ ADB needs to know whether it can trust a dataset an agent built. Today our harne
 ## Goals
 
 - Every run gets a score: per criterion, per dimension (workflow, output) and overall.
-- The score is produced by a panel of five LLM judges from five model families. With an odd panel, the median is always one judge's actual vote, so there are no ties **[team]**.
+- The score is produced by a tribunal of three LLM judges from three model families (revised 2026-11-04 from five; see the guide for who was dropped and why). With an odd panel, the median is always one judge's actual vote, so there are no ties **[team]**.
 - Each score says how confident it is: how far the judges agree, and whether the deterministic checks pass.
 - Judges can be tested. Planted defects must lower the criterion they target.
 - The console shows the run in plain language, with the map, tiles, score, cost and counts up front.
@@ -46,7 +46,7 @@ ADB needs to know whether it can trust a dataset an agent built. Today our harne
 
   Both are replayable from the archive alone.
 - [ ] **AC3 Evidence dossier.** Judges see a dossier built by code from the archive: the task, the search area, the tools available, every step in order (reasoning, tool calls with arguments, tool results with their `[ref Tn]` labels, truncated to a stated cap), the final answer, and each step's usage (tokens, latency) with run totals (steps, tokens, cost). Judges do not see the measured results, so their scores don't double-count them. Tool output is marked as untrusted data. Only executed work counts: the dossier contains nothing the agent didn't do [GRA §3].
-- [ ] **AC4 Panel.** `harness judge <run_id>` sends the dossier to five judges in parallel and writes `runs/<id>/judgement.json` to the archive. Each judge returns, for every judged criterion, a score (0, 1 or 2), the step references it relied on, and a rationale. It also returns failure-mode tags from a fixed list.
+- [ ] **AC4 Panel.** `harness judge <run_id>` sends the dossier to the three seated judges in parallel (a reserve stands in for one that fails) and writes `runs/<id>/judgement.json` to the archive. Each judge returns, for every judged criterion, a score (0, 1 or 2), the step references it relied on, and a rationale. It also returns failure-mode tags from a fixed list.
   - If a judge shares a model family with the agent under test, it recuses itself and a reserve judge takes its place (self-preference [GRA §6]).
   - A judge reply that isn't valid JSON is retried once. If it is still invalid, the judge is recorded as failed. Fewer than three valid judges means the run is not scored.
   - References to steps that don't exist are dropped and counted.
@@ -69,14 +69,14 @@ ADB needs to know whether it can trust a dataset an agent built. Today our harne
   With N passes:
   - the headline score uses the mean of the pass medians;
   - within-one is averaged across passes;
-  - "5 valid judges" must hold in every pass, with no pass dropped, for High. The Low rule uses the minimum count across passes;
+  - "every seat valid" (stand-ins count) must hold in every pass, with no pass dropped, for High. The Low rule uses the minimum count across passes;
   - failure modes take a majority of all votes pooled across passes;
   - corpus α uses pass 1 only;
   - a pass with fewer than 3 valid judges is dropped, and the run is not scored if no pass remains.
 
   | Confidence | When |
   | --- | --- |
-  | **High** | Checks pass, 5 judges are valid, and within-one ≥ 80% |
+  | **High** | Checks pass, every seat's vote is valid, and within-one ≥ 80% |
   | **Low** | Checks fail, fewer than 4 judges are valid, or within-one < 50% |
   | **Medium** | Otherwise |
 

@@ -16,7 +16,7 @@ Track 1 evaluates an agent doing an ADB-style "how to use AI / build datasets" t
 
 ## What we built
 
-A working Track 1 evaluation harness, on branch `design/eval-harness` **[team]**. An agent finds sites from a prompt, for example data centers in Richardson, TX, or farmland in Khammouane, Laos. Every model and tool decision is recorded. Each run is then checked, graded, **scored by a five-judge panel**, summarized and reported from the archive alone, and shown in the **Team Foundry console** **[team]**.
+A working Track 1 evaluation harness, on branch `design/eval-harness` **[team]**. An agent finds sites from a prompt, for example data centers in Richardson, TX, or farmland in Khammouane, Laos. Every model and tool decision is recorded. Each run is then checked, graded, **scored by a three-judge tribunal**, summarized and reported from the archive alone, and shown in the **Team Foundry console** **[team]**.
 
 - Harness: [spec](docs/eval-harness/spec.md), [design](docs/eval-harness/design.md), [spike results](docs/eval-harness/spikes.md), [handoff and verification](docs/eval-harness/handoff.md).
 - Scoring and console: [**how a run is scored**](docs/judging/guide.md), [spec](docs/judging/spec.md), [design](docs/judging/design.md), [paper notes (GRA)](docs/judging/paper-notes.md), [gaps against the briefs](docs/judging/gaps.md), [handoff](docs/judging/handoff.md).
@@ -29,7 +29,7 @@ harness CLI ──▶ AgentCore Runtime ──▶ Strands agent ──▶ Bedroc
    │                                       └─▶ LGND Geo MCP server (NAIP imagery search and checks)
    │                                  every span ──▶ S3 archive (JSONL)  +  CloudWatch (AgentCore Observability)
    ├─ reads the archive ──▶ check · claim provenance · area compliance · signals · summary · report · replay · compare
-   ├─ judge panel ──▶ evidence dossier ──▶ 5 judges, 5 model families (Bedrock) ──▶ median · agreement · confidence
+   ├─ judge panel ──▶ evidence dossier ──▶ 3 judges, 3 model families (Bedrock) ──▶ median · agreement · confidence
    └─ Team Foundry console (FastAPI) ──▶ live steps in plain English · satellite map and tiles · KPIs · scorecard
 ```
 
@@ -42,7 +42,7 @@ harness CLI ──▶ AgentCore Runtime ──▶ Strands agent ──▶ Bedroc
 - **OpenTelemetry is the only telemetry API.** The deployed backend is AgentCore Observability (CloudWatch); a CI test proves the exporter can be swapped by config alone[^T177][^V164] **[team]**.
 - **A panel scores every run.** A generalized rubric ([`rubrics/geo-dataset-v1.yaml`](rubrics/geo-dataset-v1.yaml)) scores the workflow and the output, matching the brief's two dimensions[^T116][^V110]:
   - two criteria are measured by code: claim provenance and area compliance;
-  - eight are judged by Claude Opus 5.5, Grok 4.7, Kimi K3, DeepSeek V3.2 and Mistral Large 3, and each criterion's score is the median vote.
+  - eight are judged by a tribunal of Claude Opus 5.5, DeepSeek V3.2 and Mistral Large 3, and each criterion's score is the median vote. Reserves (Kimi K3, Qwen3 235B) sit for a recused judge or stand in for one that fails.
 
   A judge from the agent's own model family recuses itself. Every judgement carries its confidence (judge agreement plus trace integrity). `harness calibrate` proves the panel lowers the right criterion when we plant a defect **[team]**. See [how a run is scored](docs/judging/guide.md).
 - **The console shows the run.** `harness ui` is a FastAPI app[^T99] built on the Tabler dashboard kit and MapLibre. It shows:
@@ -81,7 +81,7 @@ uv run harness compare <suite-id>                             # side-by-side tab
 uv run harness replay <run-id>                                # rebuild a report from the archive only
 uv run harness check <run-id>                                 # are all decisions recorded?
 uv run harness ui                                             # Team Foundry console at http://127.0.0.1:8787
-uv run harness judge <run-id> [--passes 3]                    # score a run with the 5-judge panel
+uv run harness judge <run-id> [--passes 3]                    # score a run with the judge tribunal
 uv run harness calibrate <run-id>                             # plant known defects; check the panel sees them
 uv run harness agreement --all                                # Krippendorff's alpha across judged runs
 uv run harness lgnd-login                                     # one-time browser login to LGND Geo
@@ -122,7 +122,7 @@ From the Verify stage on Nov 4; the evidence is in the [handoff](docs/eval-harne
 1. **One loop, end to end.** An agent calls geospatial tools over MCP, and every run ends in a report[^T34][^V162].
 2. **Trace everything, including the model's decisions.** Trace capture is our top priority **[team]**. Every run keeps its traces and inputs[^V34], and never gets judged on its final output alone[^T176]. See [Traceability](#traceability).
 3. **Summarize the run.** A readable account, generated from the trace, of what the agent did and where it struggled[^T115].
-4. **Score two things.** The workflow, from the traces[^T117], and the output, against a rubric[^T31][^T118]. ADB's rubric hasn't arrived[^V191], so a generalized rubric stands in and ADB's drops in as a file **[team]**. Two criteria are measured by code; eight are judged by a five-model, cross-family panel. Its median vote, agreement and confidence come with every score **[team]**.
+4. **Score two things.** The workflow, from the traces[^T117], and the output, against a rubric[^T31][^T118]. ADB's rubric hasn't arrived[^V191], so a generalized rubric stands in and ADB's drops in as a file **[team]**. Two criteria are measured by code; eight are judged by a three-model, cross-family tribunal. Its median vote, agreement and confidence come with every score **[team]**.
 5. **Keep observation pluggable.** The model and the tracing tool both stay swappable[^T10][^V113]. OpenTelemetry is the linchpin that proves it: a CI test sends the same agent spans to two different exporters, changing only config **[team]**. See [OpenTelemetry](#opentelemetry-the-pluggability-contract).
 6. **Never fail the demo.** Recorded traces replay through the scorer and still produce a full report[^T121][^V114].
 7. **Ship it open.** Apache-2.0[^V33], in an open-source repo Clay can access after the event[^V166]. Infrastructure as code with CDK, public before judging **[team]**.
@@ -138,7 +138,7 @@ From the Verify stage on Nov 4; the evidence is in the [handoff](docs/eval-harne
 | Prompts | Find data centers near Dallas, TX, as an open and a strict variant; claims cite one verbatim value from one tool result **[team]** | Teams bring synthetic prompts[^T31] |
 | Trace capture | Top priority; OpenTelemetry; covers model decisions **[team]** | Record every step: tool calls, arguments, sequence, failures/retries, latency, cost[^T114] |
 | Summary | Generated from the trace **[team]** | Readable summary of what the agent did[^T115] |
-| Workflow and output scoring | Generalized rubric, with 2 measured and 8 judged criteria; 5 judges from 5 model families, median vote, same-family recusal, agreement and confidence, and calibration by planted defects **[team]** | Workflow: tool-call correctness and sequencing, error recovery, steps/cost[^T117]; output: quality vs. a rubric[^T118] |
+| Workflow and output scoring | Generalized rubric, with 2 measured and 8 judged criteria; 3 judges from 3 model families, median vote, same-family recusal, reserves that stand in for a failed judge, agreement and confidence, and calibration by planted defects **[team]** | Workflow: tool-call correctness and sequencing, error recovery, steps/cost[^T117]; output: quality vs. a rubric[^T118] |
 | UI | Team Foundry console on FastAPI with Tabler, MapLibre and vendored assets **[team]** | FastAPI, the thin API behind the UI[^T99]; minimal UI to launch a run and read the report[^V130] |
 | Report & replay | Built: a static HTML report per run, offline replay, and a suite comparison table **[team]** | Per-run report[^T119]; replay recorded traces through scoring[^T121] |
 
@@ -233,7 +233,7 @@ Every acronym and product name used above, in alphabetical order.
 | CDK | AWS Cloud Development Kit: infrastructure written as code (Python or TypeScript) **[ext]** |
 | Claim provenance | Our check that every dataset, fact or number the agent reports links back to a tool result **[team]** |
 | Dossier | The code-built evidence the judges read: task, area, tools, each step and its output, totals and the final answer **[team]** |
-| Judge panel | Five LLMs from five model families that score a run against the rubric; the median vote counts **[team]** |
+| Judge panel | Three LLMs from three model families (the tribunal) that score a run against the rubric; the median vote counts **[team]** |
 | Krippendorff's α | A chance-corrected measure of agreement between raters; 1 means perfect agreement, 0 means chance **[ext]** |
 | Clay | An applied-AI initiative hosted at Renaissance Philanthropy, and our nonprofit for the event **[event]**; also its open Earth-observation foundation model[^T23] |
 | Exporter | The OpenTelemetry component that sends traces to a backend; swapping it changes where traces go **[ext]** |
