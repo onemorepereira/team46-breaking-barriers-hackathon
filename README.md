@@ -37,6 +37,19 @@ harness CLI ──▶ AgentCore Runtime ──▶ Strands agent ──▶ Bedroc
 - **OpenTelemetry is the only telemetry API.** The deployed backend is AgentCore Observability (CloudWatch); a CI test proves the exporter can be swapped by config alone[^T177][^V164] **[team]**.
 - **Infrastructure is code.** A CDK stack creates the S3 archive, the arm64 agent image, a least-privilege role, the AgentCore runtime, the LGND login secret and an optional budget alert **[team]**. CI runs ruff, mypy, pytest (67 tests) and a gitleaks secret scan **[team]**.
 
+### Code layout
+
+Each layer may import only the ones listed, and `tests/test_layers.py` enforces it **[team]**:
+
+| Layer | Holds | May import |
+| --- | --- | --- |
+| `core/` | archive store, span schema, geometry, prompt loader | nothing first-party |
+| `prompts/` | every text sent to a model, as Markdown (`agent/`, `harness/`, `tasks/`) | n/a (data) |
+| `tools/` | one package per MCP server (`roda/`, `lgnd/`): descriptors, result parsers, client, auth; `registry.py`; test fakes | `core` |
+| `agent/` | the Strands agent, hooks, telemetry, archive processor, entry points | `core`, `tools` |
+| `analysis/` | pure grading of archived runs | `core`, `tools` descriptors and result parsers |
+| `harness/` | CLI, config, invoking runs, UI, area resolution, narrative, display imagery | `core`, `analysis`, `tools` (never `agent`) |
+
 ### Quickstart
 
 Needs `uv`, AWS credentials for the sandbox account, and podman or Docker for deploys **[team]**.

@@ -1,7 +1,7 @@
 # Layering refactor — Spec (Define-lite)
 
 **Track:** Quick   **Product stage:** Introduction
-**Status:** Draft   **Last updated:** 2026-11-04
+**Status:** Built   **Last updated:** 2026-11-04
 
 ## Problem
 
