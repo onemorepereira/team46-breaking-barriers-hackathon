@@ -1331,3 +1331,11 @@
 .licence-list p {
   font-size: 10px !important;
 }
+/* MapLibre's asynchronously loaded stylesheet sets position:relative. Keep the
+   canvas anchored to the evidence panel, even after that stylesheet arrives. */
+.evidence-map > .map-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
