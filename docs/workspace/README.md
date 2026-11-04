@@ -60,3 +60,5 @@ The second run was also re-judged through the new UI: all three judges returned 
 Both panels scored 100 under the current starting rubric. These smoke results demonstrate integration, not independent vineyard identification, completeness, expert agreement or calibrated accuracy. Imagery dates are historical (2020–2022); the answers preserve the uncertainty and current-status limitations. Licence blockers remain visible. The UI exposes reference accuracy only when the backend has a tied reference set. No fabricated human review was added to the event archive during QA.
 
 Local checks: 301 Python tests passed, one infrastructure-only test module skipped because it requires the optional CDK group; four frontend contract tests passed; TypeScript build, Python lint/format/type checks passed. GitHub CI also runs the optional infrastructure checks, frontend rebuild consistency and secret scanning. The finished-source ZIP contains tracked source and built assets only, excluding credentials, local configuration, dependencies, traces and private outputs.
+
+Review fixes after PR #12's code review: [review-fixes.md](review-fixes.md).

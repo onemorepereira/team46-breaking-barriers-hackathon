@@ -62,3 +62,47 @@ test("review payload distinguishes agreeing from suggested scores and requires a
   );
   assert.throws(() => reviewPayload("Ada", "", "note", "1", "note", ""));
 });
+test("the base path is the part before the last /workspace segment", () => {
+  assert.equal(basePath("/workspaces/team46/workspace/"), "/workspaces/team46");
+  assert.equal(
+    basePath("/proxy/8787/workspaces/x/workspace"),
+    "/proxy/8787/workspaces/x",
+  );
+  assert.equal(basePath("/proxy/8787/runs"), "/proxy/8787");
+  assert.equal(basePath("/runs"), "");
+});
+test("a suggested score must be a number: an empty or non-numeric score is refused, not saved as 0", () => {
+  assert.throws(
+    () => reviewPayload("Ada", "grounding", "disagree", "", "why", ""),
+    /score/,
+  );
+  assert.throws(
+    () => reviewPayload("Ada", "grounding", "disagree", "x", "why", ""),
+    /score/,
+  );
+  assert.equal(
+    (
+      reviewPayload("Ada", "grounding", "disagree", "0", "why", "")
+        .criteria as any
+    ).grounding.score,
+    0,
+  );
+});
+test("candidates skip features with no geometry instead of throwing", () => {
+  const view: any = {
+    map: {
+      claims: {
+        features: [
+          { geometry: null, properties: {} },
+          { properties: {} },
+          { geometry: { coordinates: [null, null] }, properties: {} },
+          { geometry: { coordinates: [3, 4] }, properties: { claim: "ok" } },
+        ],
+      },
+    },
+  };
+  const sites = candidatesOf(view);
+  assert.equal(sites.length, 1);
+  assert.equal(sites[0].id, 0);
+  assert.equal(sites[0].name, "ok");
+});

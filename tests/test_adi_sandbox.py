@@ -50,3 +50,47 @@ def test_workshop_proxy_rewrites_application_urls_not_external_or_escaped_eviden
         rewrite(b"https://example.com/", "javascript", "/static/app.js", "/proxy/8787")
         == b"https://example.com/"
     )
+
+
+def _run_proxy(content_type: str, chunks: list[bytes], path: str = "/x") -> bytes:
+    import asyncio
+
+    from scripts.adi_proxy import WorkshopProxy
+
+    async def app(scope, receive, send):
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [(b"content-type", content_type.encode()), (b"content-length", b"999")],
+            }
+        )
+        for i, c in enumerate(chunks):
+            await send({"type": "http.response.body", "body": c, "more_body": i < len(chunks) - 1})
+
+    sent: list[dict] = []
+
+    async def send(m):
+        sent.append(m)
+
+    asyncio.run(WorkshopProxy(app, 8787)({"type": "http", "path": path}, None, send))
+    return b"".join(m.get("body", b"") for m in sent if m["type"] == "http.response.body")
+
+
+def test_proxy_rewrites_across_chunk_boundaries_and_split_utf8():
+    html = 'São Paulo — <a href="/runs">runs</a>'.encode()
+    split = html.index("—".encode()) + 1  # inside the 3-byte em dash
+    cut = html.index(b'href="/') + 4  # inside the URL pattern
+    out = _run_proxy("text/html; charset=utf-8", [html[:split], html[split:cut], html[cut:]]).decode()
+    assert "São Paulo — " in out and 'href="/proxy/8787/runs"' in out
+
+
+def test_proxy_rewrites_event_streams_one_whole_event_at_a_time():
+    ev1 = 'data: {"events": "/api/runs/1/events", "label": "Nîmes"}\n\n'.encode()
+    ev2 = b'data: {"tile_url": "/tiles/chip/1/x.jpg"}\n\n'
+    body = ev1 + ev2
+    mid = ev1.index("î".encode()) + 1  # inside the 2-byte character
+    pieces = [body[:20], body[20:mid], body[mid : len(ev1) + 15], body[len(ev1) + 15 :]]
+    out = _run_proxy("text/event-stream", pieces).decode()
+    assert '"events": "/proxy/8787/api/runs/1/events"' in out and "Nîmes" in out
+    assert '"tile_url": "/proxy/8787/tiles/chip/1/x.jpg"' in out

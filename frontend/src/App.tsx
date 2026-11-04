@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import MarkdownIt from "markdown-it";
+import { markdownLibs, renderMarkdown } from "./markdown";
 import { Icon } from "./Icon";
 import EvidenceMap from "./Map";
 import {
@@ -15,9 +15,6 @@ import {
 } from "./api";
 import "./index.css";
 import "./workspace.css";
-const markdown = new MarkdownIt({ html: false, linkify: false }).enable(
-  "table",
-);
 const examples = [
   {
     label: "Solar farms",
@@ -39,13 +36,21 @@ const examples = [
   },
 ];
 function Text({ value }: { value: unknown }) {
-  return (
-    <div
-      className="markdown"
-      dangerouslySetInnerHTML={{
-        __html: markdown.render(typeof value === "string" ? value : ""),
-      }}
-    />
+  const text = typeof value === "string" ? value : "";
+  const [html, setHtml] = useState<string | null>(null);
+  useEffect(() => {
+    let live = true;
+    markdownLibs()
+      .then((libs) => live && setHtml(renderMarkdown(libs, text)))
+      .catch(() => live && setHtml(null)); // plain text below if the renderer can't load
+    return () => {
+      live = false;
+    };
+  }, [text]);
+  return html === null ? (
+    <div className="markdown markdown-plain">{text}</div>
+  ) : (
+    <div className="markdown" dangerouslySetInnerHTML={{ __html: html }} />
   );
 }
 function Empty({
@@ -339,9 +344,26 @@ export default function App() {
     setError("");
     setLoading(true);
     try {
-      const data = await request<View>(`/api/runs/${encodeURIComponent(id)}`);
+      let data: View;
+      try {
+        data = await request<View>(`/api/runs/${encodeURIComponent(id)}`);
+      } catch (e) {
+        // Not archived yet: a run that started moments ago (refresh, back/forward, shared link).
+        const live = await request<{ done: boolean }>(
+          `/api/runs/${encodeURIComponent(id)}/progress`,
+        ).catch(() => null);
+        if (ticket !== requestId.current) return;
+        if (!live) throw e;
+        resume(id, updateUrl);
+        return;
+      }
       if (ticket !== requestId.current) return;
       stream.current?.close();
+      if (data.run.status === "running") {
+        setView(data);
+        resume(id, updateUrl);
+        return;
+      }
       setBusy(false);
       setView(data);
       setPrompt(data.run.prompt);
@@ -409,11 +431,26 @@ export default function App() {
     setPhase("Ready to explore");
     if (updateUrl) window.history.pushState({}, "", window.location.pathname);
   }
+  function resume(id: string, updateUrl: boolean) {
+    active.current = id;
+    setBusy(true);
+    setSelected(null);
+    setEvents([]);
+    setPhase("Following a run in progress");
+    if (updateUrl)
+      window.history.pushState(
+        {},
+        "",
+        `${window.location.pathname}?run=${encodeURIComponent(id)}`,
+      );
+    follow(id);
+  }
   function follow(id: string) {
     stream.current?.close();
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
     let failures = 0;
+    let cursor = "";
     // Short requests survive workshop/CloudFront buffering; the backend reads the same
     // archived/live events as SSE. Polling does not trigger inference.
     stream.current = {
@@ -425,13 +462,19 @@ export default function App() {
     async function poll() {
       if (stopped || active.current !== id) return;
       try {
-        const snapshot = await request<{ events: any[]; done: boolean }>(
-          `/api/runs/${encodeURIComponent(id)}/progress`,
+        const snapshot = await request<{
+          events: any[];
+          done: boolean;
+          cursor: string;
+        }>(
+          `/api/runs/${encodeURIComponent(id)}/progress${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
         );
         if (stopped || active.current !== id) return;
         failures = 0;
         setError("");
-        setEvents(snapshot.events);
+        cursor = snapshot.cursor || cursor; // each poll returns only events since the last one
+        if (snapshot.events.length)
+          setEvents((prev) => [...prev, ...snapshot.events]);
         for (const ev of snapshot.events) {
           if (ev.type === "area")
             setPhase(
@@ -490,6 +533,8 @@ export default function App() {
   }
   async function start() {
     if (!prompt.trim() || busy) return;
+    const ticket = ++requestId.current; // a load still in flight must not overwrite this run
+    stream.current?.close();
     setError("");
     setBusy(true);
     setView(null);
@@ -501,6 +546,7 @@ export default function App() {
         prompt: prompt.trim(),
         model: model || undefined,
       });
+      if (ticket !== requestId.current) return;
       active.current = data.run_id;
       window.history.pushState(
         {},

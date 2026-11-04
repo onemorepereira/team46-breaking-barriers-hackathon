@@ -33,7 +33,8 @@ jobs:
       - run: pnpm --dir frontend install --frozen-lockfile --ignore-scripts
       - run: pnpm --dir frontend test
       - run: pnpm --dir frontend build
-      - run: git diff --exit-code -- harness/web/static/workspace
+      - name: Built workspace is up to date (changed, deleted or new untracked files)
+        run: test -z "$(git status --porcelain -- harness/web/static/workspace)" || { git status --porcelain -- harness/web/static/workspace; exit 1; }
   secrets:
     runs-on: ubuntu-latest
     steps:
