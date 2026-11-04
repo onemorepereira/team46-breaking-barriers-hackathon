@@ -24,8 +24,9 @@ export type View = {
   source_check_note?: string;
 };
 export function basePath(path = window.location.pathname): string {
-  const workspace = path.indexOf("/workspace");
-  if (workspace >= 0) return path.slice(0, workspace);
+  // The last `/workspace` segment is the app's own mount; anything before it is the deploy prefix.
+  const mount = path.match(/^(.*)\/workspace(?:\/|$)/);
+  if (mount) return mount[1];
   return path.match(/^\/proxy\/\d+/)?.[0] || "";
 }
 export function endpoint(path: string): string {
@@ -122,19 +123,20 @@ export function reviewPayload(
     throw new Error("Enter your name so the review has an author.");
   if (decision === "disagree" && !note.trim())
     throw new Error("Explain your suggested score.");
-  const criteria: Record<string, unknown> = {};
-  if (criterion && decision !== "note")
-    criteria[criterion] =
+  const value = score.trim() === "" ? NaN : Number(score);
+  if (decision === "disagree" && !Number.isInteger(value))
+    throw new Error("Choose the score you would give.");
+  const criteria: Record<string, unknown> = {
+    [criterion]:
       decision === "agree"
         ? { agree: true }
         : {
             agree: false,
-            score: Number(score),
+            score: value,
             reason: note.trim(),
             refs: refText.split(/[\s,]+/).filter(Boolean),
-          };
-  if (!Object.keys(criteria).length && !note.trim())
-    throw new Error("Add a review note or choose a criterion.");
+          },
+  };
   return {
     reviewer: reviewer.trim(),
     criteria,

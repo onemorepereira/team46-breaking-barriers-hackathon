@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 import re
 from typing import Any
 
@@ -33,7 +34,19 @@ def rewrite(data: bytes, content_type: str, path: str, prefix: str) -> bytes:
     return text.encode("utf-8")
 
 
+REWRITE_TYPES = ("text/html", "javascript", "json", "text/event-stream")
+
+
 class WorkshopProxy:
+    """Rewrites root-relative URLs to sit under /proxy/<port>/.
+
+    Bodies arrive in chunks (FileResponse and StreamingResponse send about 64 KB at a time), so rewriting
+    per chunk could split a multi-byte character (UnicodeDecodeError) or a URL pattern (left unrewritten).
+    Instead, HTML, JavaScript and JSON bodies are buffered whole and rewritten once; an event stream is
+    rewritten one complete event at a time (events end with a blank line), with UTF-8 decoded
+    incrementally so a character split across chunks is carried over intact.
+    """
+
     def __init__(self, app: Any, port: int, lgnd_enabled: bool = False):
         self.app = app
         self.notice = (
@@ -50,13 +63,22 @@ class WorkshopProxy:
         )
         self.prefix = f"/proxy/{port}"
 
+    def _finish(self, body: bytes, content_type: str, path: str) -> bytes:
+        body = rewrite(body, content_type, path, self.prefix)
+        if "text/html" in content_type and not path.startswith("/workspace"):
+            body = re.sub(rb"(<body[^>]*>)", lambda m: m[1] + self.notice.encode(), body, count=1)
+        return body
+
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
         content_type = ""
+        buffered: list[bytes] = []
+        decoder = codecs.getincrementaldecoder("utf-8")()
+        pending = ""
 
         async def proxy_send(message):
-            nonlocal content_type
+            nonlocal content_type, pending
             if message["type"] == "http.response.start":
                 headers = message.get("headers", [])
                 content_type = next((v.decode() for k, v in headers if k.lower() == b"content-type"), "")
@@ -70,28 +92,24 @@ class WorkshopProxy:
                     )
                     for k, v in headers
                 ]
-                message = {**message, "headers": headers}
-            elif message["type"] == "http.response.body" and message.get("body"):
-                if any(t in content_type for t in ("text/html", "javascript", "json", "text/event-stream")):
-                    message = {
-                        **message,
-                        "body": rewrite(message["body"], content_type, scope["path"], self.prefix),
-                    }
-            if (
-                message["type"] == "http.response.body"
-                and "text/html" in content_type
-                and not scope["path"].startswith("/workspace")
-            ):
-                message = {
-                    **message,
-                    "body": re.sub(
-                        rb"(<body[^>]*>)",
-                        lambda m: m[1] + self.notice.encode(),
-                        message.get("body", b""),
-                        count=1,
-                    ),
-                }
-            await send(message)
+                await send({**message, "headers": headers})
+                return
+            if message["type"] != "http.response.body" or not any(t in content_type for t in REWRITE_TYPES):
+                await send(message)
+                return
+            more = bool(message.get("more_body"))
+            chunk = message.get("body", b"")
+            if "text/event-stream" in content_type:
+                pending += decoder.decode(chunk, final=not more)
+                cut = pending.rfind("\n\n") + 2 if more else len(pending)  # whole events only
+                ready, pending = pending[:cut], pending[cut:]
+                body = self._finish(ready.encode("utf-8"), content_type, scope["path"]) if ready else b""
+                await send({**message, "body": body})
+                return
+            buffered.append(chunk)
+            if more:
+                return  # send once, whole, when the last chunk arrives
+            await send({**message, "body": self._finish(b"".join(buffered), content_type, scope["path"])})
 
         await self.app(scope, receive, proxy_send)
 

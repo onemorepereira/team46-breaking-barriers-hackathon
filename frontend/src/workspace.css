@@ -1349,3 +1349,6 @@
     bottom: auto;
   }
 }
+
+/* the agent answer before (or without) the vendored Markdown renderer */
+.markdown-plain { white-space: pre-wrap; }

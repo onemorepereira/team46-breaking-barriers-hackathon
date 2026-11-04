@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { endpoint, type View } from "./api";
+import { candidatesOf, endpoint, type View } from "./api";
 let loading: Promise<any> | null = null;
 function library(): Promise<any> {
   if ((window as any).maplibregl)
@@ -149,39 +149,33 @@ export default function EvidenceMap({
       });
     }
     m.getSource("chips")?.setData(view?.map.chips || empty);
-    const seen = new Set<string>();
-    (view?.map.claims?.features || []).forEach((f: any) => {
-      const c = f.geometry?.coordinates;
-      if (!c || seen.has(c.join(","))) return;
-      seen.add(c.join(","));
-      const i = seen.size - 1;
+    // One list for markers and the location panel, so marker i is always candidate i (same
+    // dedup and finite-coordinate filter).
+    candidatesOf(view).forEach((c) => {
       const el = document.createElement("button");
-      el.className = `evidence-marker ${f.properties.inside === false ? "outside" : ""}`;
-      el.textContent = String(i + 1);
-      el.setAttribute(
-        "aria-label",
-        `Open location ${i + 1}: ${f.properties.claim || "reported site"}`,
-      );
-      el.onclick = () => onSelect(i);
+      el.className = `evidence-marker ${c.inside === false ? "outside" : ""}`;
+      el.textContent = String(c.id + 1);
+      el.setAttribute("aria-label", `Open location ${c.id + 1}: ${c.name}`);
+      el.onclick = () => onSelect(c.id);
       markers.current.push(
-        new lib.Marker({ element: el }).setLngLat(c).addTo(m),
+        new lib.Marker({ element: el }).setLngLat(c.coordinates).addTo(m),
       );
     });
     const bounds = new lib.LngLatBounds();
     function include(coords: any): void {
       if (
         Array.isArray(coords) &&
-        typeof coords[0] === "number" &&
-        typeof coords[1] === "number"
+        Number.isFinite(coords[0]) &&
+        Number.isFinite(coords[1])
       ) {
         bounds.extend(coords as [number, number]);
       } else if (Array.isArray(coords)) coords.forEach(include);
     }
-    if (view?.map.area) include(view.map.area.geometry.coordinates);
+    include(view?.map.area?.geometry?.coordinates);
     [
       ...(view?.map.claims?.features || []),
       ...(view?.map.chips?.features || []),
-    ].forEach((f: any) => include(f.geometry.coordinates));
+    ].forEach((f: any) => include(f?.geometry?.coordinates));
     if (!bounds.isEmpty())
       m.fitBounds(bounds, { padding: 70, maxZoom: 14, duration: 800 });
   }, [view, ready]);

@@ -63,3 +63,58 @@ def test_progress_snapshot_uses_existing_events_without_starting_work(tmp_path, 
     assert [e["type"] for e in result["events"]] == ["area", "judge", "done"]
     assert result["events"][-1]["view"]["run"]["id"] == "ui-test"
     assert client.get("/api/runs/not-live/progress").status_code == 404
+
+
+def test_progress_cursor_returns_only_new_events_and_done_means_drained(tmp_path, monkeypatch):
+    import json
+
+    from harness.web import live
+
+    trace = tmp_path / "live.jsonl"
+    trace.write_text("")
+    state = live.RunState("ui-cursor", trace)
+    state.area_event = {"type": "area", "label": "Testville"}
+    monkeypatch.setitem(live.RUNS, "ui-cursor", state)
+    client = TestClient(create_app(cfg_for(tmp_path)))
+    first = client.get("/api/runs/ui-cursor/progress").json()
+    assert [e["type"] for e in first["events"]] == ["area"] and first["done"] is False
+    state.push({"type": "judge", "key": "a", "status": "ok"})
+    second = client.get(f"/api/runs/ui-cursor/progress?cursor={first['cursor']}").json()
+    assert [e["type"] for e in second["events"]] == ["judge"]  # no repeat of the area event
+    third = client.get(f"/api/runs/ui-cursor/progress?cursor={second['cursor']}").json()
+    assert third["events"] == [] and third["cursor"] == second["cursor"]
+    state.push({"type": "judge", "key": "b", "status": "ok"})
+    state.done = True
+    state.final = {"type": "done"}
+    last = client.get(f"/api/runs/ui-cursor/progress?cursor={third['cursor']}").json()
+    assert [e["type"] for e in last["events"]] == ["judge", "done"] and last["done"] is True
+    assert client.get("/api/runs/ui-cursor/progress?cursor=nope").status_code == 400
+    del json
+
+
+def test_progress_reads_done_before_events(tmp_path, monkeypatch):
+    """A worker that writes its last event and sets done between our reads must not be reported
+    done without that event (the reply would then end the client's polling)."""
+    from harness.web import app as app_mod
+    from harness.web import live
+
+    trace = tmp_path / "live.jsonl"
+    trace.write_text("")
+    state = live.RunState("ui-race", trace)
+    monkeypatch.setitem(live.RUNS, "ui-race", state)
+    real = live.read_new
+
+    def racing_read(st, pos):
+        out = real(st, pos)
+        st.push({"type": "judge", "key": "late", "status": "ok"})  # lands after we read the file...
+        st.done, st.final = True, {"type": "done"}  # ...and the run ends
+        return out
+
+    monkeypatch.setattr(app_mod.live, "read_new", racing_read)
+    client = TestClient(create_app(cfg_for(tmp_path)))
+    first = client.get("/api/runs/ui-race/progress").json()
+    assert first["done"] is False  # done was read before the run ended, so this poll can't claim it
+    monkeypatch.setattr(app_mod.live, "read_new", real)
+    nxt = client.get(f"/api/runs/ui-race/progress?cursor={first['cursor']}").json()
+    seen = [e["type"] for e in first["events"] + nxt["events"]]
+    assert seen == ["judge", "done"] and nxt["done"] is True  # every event once, done last

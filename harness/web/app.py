@@ -442,23 +442,34 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         return feedback_call(feedback.switch_off, cfg, deploy(), body.by, body.reason)
 
     @app.get("/api/runs/{run_id}/progress", tags=["Live events"])
-    def run_progress(run_id: str) -> dict[str, Any]:
-        """Short-request progress snapshot for authenticated proxies that buffer SSE.
+    def run_progress(run_id: str, cursor: str = Query("", description="`cursor` from the last poll")) -> Any:
+        """Short-request progress for authenticated proxies that buffer SSE: the events since `cursor`
+        (all of them without one), and a new `cursor` for the next poll.
 
-        Shares the same run state as the event stream; polling never starts a model or tool call.
+        Shares the same run state as the event stream; polling never starts a model or tool call. `done`
+        is read *before* the events, so a `done: true` reply always carries every event written before
+        the run ended (the same drain guarantee as the event stream).
         """
         state = live.RUNS.get(run_id)
         if state is None:
             raise HTTPException(404, "no live run with that ID since the console started")
-        events, _ = live.read_new(state, 0)
+        try:
+            pos, sent_extra = (int(x) for x in cursor.split(".")) if cursor else (0, 0)
+            if pos < 0 or sent_extra < 0:
+                raise ValueError
+        except ValueError:
+            return JSONResponse({"error": "invalid cursor: pass the `cursor` from the last poll"}, 400)
+        done = state.done  # first: everything below was written before this was observed
+        events, pos = live.read_new(state, pos)
         with state.lock:
-            extra = list(state.extra)
-        if state.area_event is not None:
+            extra = state.extra[sent_extra:]
+            sent_extra += len(extra)
+        if not cursor and state.area_event is not None:
             events.insert(0, state.area_event)
         events.extend(extra)
-        if state.done:
+        if done:
             events.append(state.final or {"type": "done", "status": "unknown"})
-        return {"events": events, "done": state.done}
+        return {"events": events, "done": done, "cursor": f"{pos}.{sent_extra}"}
 
     @app.get("/api/runs/{run_id}/events", tags=["Live events"], summary="Stream a run's events",
              description=EVENTS_DOC, response_class=StreamingResponse,
