@@ -47,7 +47,7 @@
 ## Real gaps (what we'd do next)
 
 1. **ADB's own rubric, task and input dataset (V191, T31).** These never arrived. Our rubric is a generalized stand-in for agentic geospatial dataset builds, and the code only names the measured criteria, so ADB's rubric drops in as a YAML file. **Owner:** Clay/ADB.
-2. **A reference answer key for output correctness (V62: "known task + known input + a reference").** We score process and grounding, and we check claims against tool outputs, not against the world. The paper makes the same point: "process alignment rather than outcome correctness" (GRA §6). The cheapest strong fix:
+2. **[Started 2026-11-04: [ADB alignment](../adb-alignment/spec.md).** Reference sets and recall, precision and count ratio under the LGND/Ode benchmark's rule now exist, with a first set from USPVDB, Pecos County, TX. Sets for ADB places (Nagoya, Manila) need LGND's prepared data.] **A reference answer key for output correctness (V62: "known task + known input + a reference").** We score process and grounding, and we check claims against tool outputs, not against the world. The paper makes the same point: "process alignment rather than outcome correctness" (GRA §6). The cheapest strong fix:
    - switch to a target with an open answer key, such as solar farms checked against USGS USPVDB or Global Renewables Watch (V96, V194–V195);
    - add a measured **recall/precision vs answer key** criterion.
 

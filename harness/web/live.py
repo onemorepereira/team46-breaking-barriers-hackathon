@@ -144,6 +144,7 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str,
                 serve_tiles=state.serve_tiles,
                 deploy_store=_deploy_or_none(cfg),
                 reconsider=_reconsider(cfg),
+                narrative_model=cfg.get("narrative_model"),
             )
             state.final = {"type": "done", "status": outcome.status, "error": outcome.error, "view": view}
             finished = run
@@ -200,8 +201,13 @@ def rejudge(cfg: config_mod.Config, index: Index, run_id: str) -> RunState:
             judge_into(cfg, state, run, store)
             run = Run.load(store, run_id)
             write_report(cfg, run, archive_tiles=False)
-            view = run_view(run, serve_tiles=state.serve_tiles, deploy_store=_deploy_or_none(cfg),
-                            reconsider=_reconsider(cfg))  # fmt: skip
+            view = run_view(
+                run,
+                serve_tiles=state.serve_tiles,
+                deploy_store=_deploy_or_none(cfg),
+                reconsider=_reconsider(cfg),
+                narrative_model=cfg.get("narrative_model"),
+            )
             state.final = {"type": "done", "status": run.status, "error": None, "view": view}
             finished = run
         except Exception as e:  # noqa: BLE001
@@ -240,7 +246,11 @@ def reconsider_job(cfg: config_mod.Config, index: Index, run_id: str, review_id:
                 "status": run.status,
                 "error": None,
                 "view": run_view(
-                    run, serve_tiles=state.serve_tiles, deploy_store=deploy, reconsider=_reconsider(cfg)
+                    run,
+                    serve_tiles=state.serve_tiles,
+                    deploy_store=deploy,
+                    reconsider=_reconsider(cfg),
+                    narrative_model=cfg.get("narrative_model"),
                 ),
             }
         except Exception as e:  # noqa: BLE001 - the judgement stays as it was

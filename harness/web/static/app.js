@@ -516,7 +516,7 @@
     for (const hook of FOUNDRY.onView) hook(v);  // feedback.js: the review card
   }
   // For feedback.js (the review card): re-render after a reconsideration, and update the judge panel live.
-  const FOUNDRY = Object.assign(window.FOUNDRY || (window.FOUNDRY = {}), { onView: [], renderView, renderScorecard, judgeRows, judgeResult, el, icon, apiError });
+  const FOUNDRY = Object.assign(window.FOUNDRY || (window.FOUNDRY = {}), { onView: [], renderView, renderScorecard, judgeRows, judgeResult, el, icon, apiError, map: () => (mapReady ? map : null) });
 
   // ---------- live ----------
   function progress(text, on = true) { show("progress", on); setText("progress-text", text); }

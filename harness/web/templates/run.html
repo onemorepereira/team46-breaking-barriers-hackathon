@@ -72,6 +72,7 @@
             <div class="small mb-1 d-flex"><span>Output</span><span class="ms-auto" id="k-output-v">—</span></div>
             <div class="progress progress-sm"><div class="progress-bar bg-orange" id="k-output" style="width:0"></div></div>
             <div class="text-secondary small mt-2" id="k-confidence-why"></div>
+            <div class="small mt-1" id="k-presentable"></div>
           </div>
         </div>
       </div>
@@ -141,6 +142,25 @@
             </div>
           </div>
           <div class="card-footer small" id="modes"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- reference check and data licences (adb.js, docs/adb-alignment) -->
+    <div class="row row-cards mb-3">
+      <div class="col-lg-6" id="reference-col" hidden>
+        <div class="card h-100" id="reference-card">
+          <div class="card-header"><h3 class="card-title"><i class="ti ti-target-arrow me-2"></i>Against the reference</h3><div class="card-actions small text-secondary" id="reference-sub"></div></div>
+          <div class="card-body" id="reference-body"></div>
+        </div>
+      </div>
+      <div class="col-lg-6" id="licences-col">
+        <div class="card h-100" id="licences-card">
+          <div class="card-header"><h3 class="card-title"><i class="ti ti-license me-2"></i>Data and licences</h3><div class="card-actions" id="licences-badge"></div></div>
+          <div class="table-responsive"><table class="table table-vcenter card-table table-sm">
+            <thead><tr><th>Source</th><th>Used as</th><th>Licence</th><th class="text-end">Share</th></tr></thead>
+            <tbody id="licences-body"><tr><td colspan="4" class="text-secondary small">Loading…</td></tr></tbody>
+          </table></div>
         </div>
       </div>
     </div>
@@ -221,4 +241,5 @@
 <script>window.FOUNDRY = {runId: {{ run_id | tojson }}};</script>
 <script src="/static/app.js"></script>
 <script src="/static/feedback.js"></script>
+<script src="/static/adb.js"></script>
 {% endblock %}

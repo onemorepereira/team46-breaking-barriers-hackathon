@@ -181,7 +181,10 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         judge agreement), `timeline` (each step in plain English, with the raw span), `map` (GeoJSON:
         the requested boundary, result footprints, claimed sites), `scorecard` (every criterion, each judge's
         vote and rationale, the seats, failure modes), `claims`, `final_answer`, `narrative` and
-        `trouble_spots`."""
+        `trouble_spots`. Also `reference` (the score against a tied reference set: site recall, cell
+        precision, count ratio and lift under the benchmark's 160 m any-touch rule, or null) and `licences`
+        (every data source, boundary, model and reference the run used, with its licence and whether it may be
+        shown to third parties; `kpis.presentable` sums it up). See docs/adb-alignment."""
         return view_of(load(run_id))
 
     @app.post("/api/runs", tags=["Runs"], response_model=RunStarted, summary="Start a run",
@@ -218,7 +221,11 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
     def view_of(run: Run) -> dict[str, Any]:
         reconsider = bool((cfg.get("judging") or {}).get("reconsider", True))
         return run_view(
-            run, serve_tiles=bool(tile_cfg["serve"]), deploy_store=deploy(), reconsider=reconsider
+            run,
+            serve_tiles=bool(tile_cfg["serve"]),
+            deploy_store=deploy(),
+            reconsider=reconsider,
+            narrative_model=cfg.get("narrative_model"),
         )
 
     def deploy() -> Any:

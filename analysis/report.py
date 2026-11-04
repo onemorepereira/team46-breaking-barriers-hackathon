@@ -11,7 +11,8 @@ from typing import Any
 from jinja2 import Environment, PackageLoader, select_autoescape
 from markdown_it import MarkdownIt
 
-from analysis import check, provenance, signals, summary
+from analysis import check, licences, provenance, signals, summary
+from analysis import reference as ref_mod
 from analysis.judging import measure, panel
 from analysis.trace import Run
 
@@ -52,10 +53,28 @@ class RunReport:
     measured: measure.Measured
     panel: panel.PanelResult | None
     judgement: dict[str, Any] | None
+    reference: dict[str, Any] | None = None
+    licences: dict[str, Any] | None = None
 
 
-def analyze(run: Run) -> RunReport:
+def reference_of(run: Run, m: measure.Measured, prov: provenance.Provenance,
+                 repo_sha: str | None = None) -> dict[str, Any] | None:  # fmt: skip
+    claims = [(x.lat, x.lon) for x in m.located if x.source == "claim"]
+    return ref_mod.from_run(run, claims, prov.claims_block_missing, repo_sha)
+
+
+def licences_of(
+    run: Run, reference: dict[str, Any] | None, narrative_model: str | None = None
+) -> dict[str, Any]:
+    judges = [str(s.get("key")) for s in (run.judgement or {}).get("seats", []) if s.get("key")]
+    ref = reference if reference and not reference.get("error") else None
+    return licences.for_run(run, ref, judges, narrative_model)
+
+
+def analyze(run: Run, repo_sha: str | None = None, narrative_model: str | None = None) -> RunReport:
     prov = provenance.grade(run)
+    m = measure.measure(run, prov)
+    ref = reference_of(run, m, prov, repo_sha)
     return RunReport(
         run=run,
         missing=check.check_run(run),
@@ -64,9 +83,11 @@ def analyze(run: Run) -> RunReport:
         summ=summary.build(run, prov),
         tools=signals.tools_available(run),
         datasets=signals.datasets_accessed(run),
-        measured=measure.measure(run, prov),
+        measured=m,
         panel=panel.rescore(run.judgement, run) if run.judgement else None,
         judgement=run.judgement,
+        reference=ref,
+        licences=licences_of(run, ref, narrative_model),
     )
 
 
@@ -85,6 +106,7 @@ COMPARE_COLUMNS = [
     "input_tokens", "output_tokens", "estimated_cost_usd", "runtime_s", "matched", "mismatch", "unsourced",
     "claims_block_missing", "claims_in_area", "search_footprint", "score", "workflow_score", "output_score",
     "confidence", "within_one", "judging_cost_usd", "datasets_accessed",
+    "concept", "place", "role", "site_recall", "cell_precision", "count_ratio",
 ]  # fmt: skip
 
 
@@ -113,17 +135,118 @@ def compare_rows(reports: list[RunReport]) -> list[dict[str, Any]]:
                 "within_one": rep.panel.within_one if rep.panel else None,
                 "judging_cost_usd": (rep.judgement or {}).get("judging_cost_usd"),
                 "datasets_accessed": "; ".join(d["dataset"] for d in rep.datasets),
+                **_meta_cols(rep),
             }
         )
     return rows
+
+
+def _meta_cols(rep: RunReport) -> dict[str, Any]:
+    meta = rep.run.manifest.get("suite_meta") or {}
+    ref = rep.reference if rep.reference and not rep.reference.get("error") else {}
+    return {
+        "concept": meta.get("concept"),
+        "place": meta.get("place"),
+        "role": meta.get("role"),
+        "site_recall": ref.get("site_recall"),
+        "cell_precision": ref.get("cell_precision"),
+        "count_ratio": ref.get("count_ratio"),
+    }
+
+
+def _mean(vals: list[Any]) -> float | None:
+    xs = [float(v) for v in vals if v is not None]
+    return round(sum(xs) / len(xs), 3) if xs else None
+
+
+CONCEPT_COLUMNS = [
+    "kind",
+    "concept",
+    "model_key",
+    "runs",
+    "score",
+    "site_recall",
+    "cell_precision",
+    "count_ratio",
+    "n_home",
+    "n_transfer",
+    "score_home",
+    "score_transfer",
+    "score_gap",
+    "recall_home",
+    "recall_transfer",
+    "recall_gap",
+]
+
+
+def concept_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Per asset class (the benchmark reports per class, not one aggregate): docs/adb-alignment AC9."""
+    by: dict[str, list[dict[str, Any]]] = {}
+    for r in rows:
+        if r.get("concept"):
+            by.setdefault(str(r["concept"]), []).append(r)
+    return [
+        {
+            "kind": "concept",
+            "concept": c,
+            "runs": len(rs),
+            "score": _mean([r["score"] for r in rs]),
+            "site_recall": _mean([r["site_recall"] for r in rs]),
+            "cell_precision": _mean([r["cell_precision"] for r in rs]),
+            "count_ratio": _mean([r["count_ratio"] for r in rs]),
+        }
+        for c, rs in sorted(by.items())
+    ]
+
+
+def transfer_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Per (concept, model): home minus transfer, each side the mean over its runs that have a value."""
+    by: dict[tuple[str, str], dict[str, list[dict[str, Any]]]] = {}
+    for r in rows:
+        if r.get("concept") and r.get("role") in ("home", "transfer"):
+            by.setdefault((str(r["concept"]), str(r["model_key"])), {}).setdefault(str(r["role"]), []).append(
+                r
+            )
+    out = []
+    for (c, mk), sides in sorted(by.items()):
+        if not sides.get("home") or not sides.get("transfer"):
+            continue
+        h, t = sides["home"], sides["transfer"]
+        sh, st = _mean([r["score"] for r in h]), _mean([r["score"] for r in t])
+        rh, rt = _mean([r["site_recall"] for r in h]), _mean([r["site_recall"] for r in t])
+        out.append(
+            {
+                "kind": "transfer",
+                "concept": c,
+                "model_key": mk,
+                "n_home": sum(1 for r in h if r["score"] is not None),
+                "n_transfer": sum(1 for r in t if r["score"] is not None),
+                "score_home": sh,
+                "score_transfer": st,
+                "score_gap": None if sh is None or st is None else round(sh - st, 3),
+                "recall_home": rh,
+                "recall_transfer": rt,
+                "recall_gap": None if rh is None or rt is None else round(rh - rt, 3),
+            }
+        )
+    return out
+
+
+def concepts_csv(rows: list[dict[str, Any]]) -> str:
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=CONCEPT_COLUMNS)
+    w.writeheader()
+    w.writerows([*concept_rows(rows), *transfer_rows(rows)])
+    return buf.getvalue()
 
 
 def render_compare(
     suite_id: str, rows: list[dict[str, Any]], generated_at: str, agreement: dict[str, Any] | None = None
 ) -> str:
     return _env.get_template("compare.html").render(
-        suite_id=suite_id, rows=rows, columns=COMPARE_COLUMNS, generated_at=generated_at, agreement=agreement
-    )
+        suite_id=suite_id, rows=rows, columns=COMPARE_COLUMNS, generated_at=generated_at, agreement=agreement,
+        concepts=concept_rows(rows), transfers=transfer_rows(rows),
+    )  # fmt: skip
 
 
 def compare_csv(rows: list[dict[str, Any]]) -> str:
