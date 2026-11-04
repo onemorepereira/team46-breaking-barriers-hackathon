@@ -8,6 +8,7 @@ Standard library only; bound to 127.0.0.1.
 from __future__ import annotations
 
 import json
+import os
 import threading
 import time
 import uuid
@@ -27,25 +28,26 @@ PAGE = Path(__file__).with_name("ui.html")
 
 
 class RunState:
-    def __init__(self, run_id: str, live: Path, city: dict[str, Any] | None = None) -> None:
+    def __init__(self, run_id: str, live: Path) -> None:
         self.run_id = run_id
         self.live = live
         self.done = False
         self.final: dict[str, Any] | None = None
-        self.city = city  # {"label", "feature"} when a city-limits check was requested
+        self.area: geo.Area | None = None  # the search area read from the prompt, when it has one
+        self.area_event: dict[str, Any] | None = None  # sent first on the stream once resolved
         self.chip_checks: dict[str, bool] = {}
 
     def annotate(self, ev: dict[str, Any]) -> None:
-        """Mark each chip inside/outside the official city limits (ground truth, not the agent's view)."""
-        if not self.city:
+        """Mark each chip inside/outside the prompt's area (ground truth, not the agent's view)."""
+        geom = self.area.geometry if self.area else None
+        if not geom:
             return
-        geom = self.city["feature"]["geometry"]
         for c in ev.get("chips", []):
             try:
-                c["in_city"] = geo.contains(geom, float(c["lon"]), float(c["lat"]))
+                c["in_area"] = geo.contains(geom, float(c["lon"]), float(c["lat"]))
             except (TypeError, ValueError, KeyError):
                 continue
-            self.chip_checks[str(c["node"])] = bool(c["in_city"])
+            self.chip_checks[str(c["node"])] = bool(c["in_area"])
 
 
 RUNS: dict[str, RunState] = {}
@@ -141,12 +143,24 @@ def span_event(span: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str, city: str = "") -> str:
-    city_state = None
-    if city.strip():
-        name, st = geo.parse_city(city)
-        feature = geo.fetch_boundary(name, st, Path(cfg["out_dir"]) / "boundaries")
-        city_state = {"label": f"{name}, {st}", "feature": feature}
+def resolve_prompt_area(cfg: config_mod.Config, prompt: str) -> tuple[geo.Area | None, dict[str, Any]]:
+    """Read the search area from the prompt and resolve its boundary; never blocks the run on failure."""
+    try:
+        model_key = cfg.get("narrative_model") or next(iter(cfg["models"]))
+        spec = geo.extract_area(prompt, cfg["models"][model_key]["id"], cfg["region"])
+        area = geo.resolve_area(spec, Path(cfg["out_dir"]) / "geo-cache")
+        if area is None:
+            return None, {
+                "type": "area",
+                "label": None,
+                "note": "The prompt names no place, so there is no area check.",
+            }
+        return area, area.as_event()
+    except Exception as e:  # noqa: BLE001 - the run continues without an area check
+        return None, {"type": "area", "label": None, "note": f"Couldn't resolve the prompt's area: {e}"}
+
+
+def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str) -> str:
     out = Path(cfg["out_dir"]) / "ui"
     out.mkdir(parents=True, exist_ok=True)
     prompt_file = out / f"prompt-{uuid.uuid4().hex[:8]}.md"
@@ -155,13 +169,17 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str, cit
     live = Path(cfg["out_dir"]) / plan.run_id / "live.jsonl"
     live.parent.mkdir(parents=True, exist_ok=True)
     live.touch()
-    state = RunState(plan.run_id, live, city_state)
+    state = RunState(plan.run_id, live)
     RUNS[plan.run_id] = state
 
     def work() -> None:
         from harness.cli import write_report
 
         env = {"HARNESS_EXPORTER": "console", "HARNESS_CONSOLE_PATH": str(live.resolve())}
+        if not os.environ.get("HARNESS_TEST_SCRIPT"):
+            state.area, state.area_event = resolve_prompt_area(cfg, prompt)
+        else:
+            state.area_event = {"type": "area", "label": None, "note": "Scripted test run: no area check."}
         try:
             outcome = invoke.execute(cfg, index, plan, extra_env=env)
             run = Run.load(open_store(plan.archive_uri), plan.run_id)
@@ -171,34 +189,34 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str, cit
                 {"claim": c.claim, "value": c.value, "ref": c.ref, "status": c.status}
                 for c in rep.prov.claims
             ]
-            city_check = None
-            if state.city:
-                geom = state.city["feature"]["geometry"]
+            area_check = None
+            if state.area and state.area.geometry:
+                geom = state.area.geometry
                 for c in claims:
                     pair = geo.coordinate_pair(c["value"])
                     if pair:
-                        c["in_city"] = geo.contains(geom, pair[1], pair[0])
-                located = [c for c in claims if "in_city" in c]
-                city_check = {
-                    "city": state.city["label"],
-                    "geoid": state.city["feature"].get("properties", {}).get("GEOID"),
-                    "source": "US Census TIGERweb, Incorporated Places",
+                        c["in_area"] = geo.contains(geom, pair[1], pair[0])
+                located = [c for c in claims if "in_area" in c]
+                area_check = {
+                    "area": state.area.label,
+                    "kind": state.area.kind,
+                    "source": state.area.source,
                     "chips_inside": sum(state.chip_checks.values()),
                     "chips_total": len(state.chip_checks),
-                    "claims_inside": sum(1 for c in located if c["in_city"]),
+                    "claims_inside": sum(1 for c in located if c["in_area"]),
                     "claims_located": len(located),
                     "chips": state.chip_checks,
                     "claims": located,
                 }
-                (Path(cfg["out_dir"]) / plan.run_id / "city_check.json").write_text(
-                    json.dumps(city_check, indent=1), encoding="utf-8"
+                (Path(cfg["out_dir"]) / plan.run_id / "area_check.json").write_text(
+                    json.dumps(area_check, indent=1), encoding="utf-8"
                 )
             state.final = {
                 "type": "done",
                 "status": outcome.status,
                 "error": outcome.error,
                 "claims": claims,
-                "city_check": city_check,
+                "area_check": area_check,
                 "block_missing": rep.prov.claims_block_missing,
                 "signals": rep.sig.as_dict(),
                 "missing_fields": len(rep.missing),
@@ -262,12 +280,9 @@ def make_handler(cfg: config_mod.Config, index: Index) -> type[BaseHTTPRequestHa
                 if not prompt:
                     self._json(400, {"error": "Type a prompt first."})
                     return
-                city = str(body.get("city", ""))
-                self._json(200, {"run_id": start_run(cfg, index, prompt, model, city)})
-            except (invoke.RunRefused, geo.BoundaryError) as e:
+                self._json(200, {"run_id": start_run(cfg, index, prompt, model)})
+            except invoke.RunRefused as e:
                 self._json(400, {"error": str(e)})
-            except OSError as e:
-                self._json(502, {"error": f"Couldn't fetch the city boundary from Census TIGERweb: {e}"})
 
         def _events(self, run_id: str) -> None:
             state = RUNS.get(run_id)
@@ -280,14 +295,11 @@ def make_handler(cfg: config_mod.Config, index: Index) -> type[BaseHTTPRequestHa
             self.end_headers()
             pos = 0
             try:
-                if state.city:
-                    boundary = {
-                        "type": "boundary",
-                        "city": state.city["label"],
-                        "feature": state.city["feature"],
-                    }
-                    self.wfile.write(f"data: {json.dumps(boundary)}\n\n".encode())
+                sent_area = False
                 while True:
+                    if not sent_area and state.area_event is not None:
+                        self.wfile.write(f"data: {json.dumps(state.area_event)}\n\n".encode())
+                        sent_area = True
                     with state.live.open("r", encoding="utf-8") as f:
                         f.seek(pos)
                         chunk = f.read()
