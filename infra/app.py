@@ -11,6 +11,7 @@ from aws_cdk import aws_budgets as budgets
 from aws_cdk import aws_ecr_assets as ecr_assets
 from aws_cdk import aws_iam as iam
 from aws_cdk import aws_s3 as s3
+from aws_cdk import aws_secretsmanager as secretsmanager
 from constructs import Construct
 
 REPO = Path(__file__).resolve().parents[1]
@@ -58,6 +59,11 @@ class HarnessStack(cdk.Stack):
                 resources=["*"],
             )
         )  # fmt: skip
+        lgnd_secret = secretsmanager.Secret(
+            self, "LgndGeoLogin", description="LGND Geo OAuth refresh token; set by `harness lgnd-login`"
+        )
+        lgnd_secret.grant_read(role)
+        lgnd_secret.grant_write(role)  # the agent saves rotated refresh tokens
         runtime = agentcore.CfnRuntime(
             self,
             "Runtime",
@@ -76,6 +82,8 @@ class HarnessStack(cdk.Stack):
                 "AWS_GENAI_CONTENT_EXTRACTION_OPT_OUT": "true",
                 "OTEL_SEMCONV_STABILITY_OPT_IN": "gen_ai_latest_experimental,gen_ai_tool_definitions",
                 "OTEL_TRACES_SAMPLER": "always_on",
+                "HARNESS_LGND_URL": "https://geo.lgnd.ai/mcp",
+                "HARNESS_LGND_SECRET_ID": lgnd_secret.secret_arn,
             },
         )
         runtime.node.add_dependency(role)
@@ -101,6 +109,7 @@ class HarnessStack(cdk.Stack):
             )  # fmt: skip
         cdk.CfnOutput(self, "ArchiveUri", value=f"s3://{bucket.bucket_name}")
         cdk.CfnOutput(self, "RuntimeArn", value=runtime.attr_agent_runtime_arn)
+        cdk.CfnOutput(self, "LgndSecretArn", value=lgnd_secret.secret_arn)
 
 
 app = cdk.App()

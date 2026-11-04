@@ -70,9 +70,14 @@ def _mcp_tools(stack: ExitStack, timeout_s: int) -> tuple[list[Any], dict[str, s
     lgnd_url = os.environ.get("HARNESS_LGND_URL")
     if lgnd_url:
         try:
-            token = os.environ.get("HARNESS_LGND_TOKEN")
-            headers = {"authorization": f"Bearer {token}"} if token else None
-            lgnd = MCPClient(url=lgnd_url, headers=headers)
+            from agent.lgnd_auth import access_token
+
+            secret_id = os.environ.get("HARNESS_LGND_SECRET_ID", "")
+            region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-west-2"
+            token = access_token(secret_id, region) if secret_id else None
+            if not token:
+                raise RuntimeError("no LGND login; run `harness lgnd-login`")
+            lgnd = MCPClient(url=lgnd_url, headers={"authorization": f"Bearer {token}"})
             stack.enter_context(lgnd)
             servers.append(("lgnd", lgnd))
         except Exception as e:  # noqa: BLE001 - LGND is optional; record and continue with RODA

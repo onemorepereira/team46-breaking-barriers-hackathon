@@ -198,6 +198,16 @@ def cmd_suite(cfg: config_mod.Config, index: Index, args: argparse.Namespace, ba
     return 0 if not failed else 1
 
 
+def cmd_lgnd_login(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
+    from harness import lgnd
+
+    secret = args.secret or cfg.get("lgnd_secret_id")
+    if not secret:
+        print("lgnd_secret_id is not set in harness.yaml; deploy with CDK first (output LgndSecretArn).")
+        return 2
+    return lgnd.login(secret, cfg["region"])
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="harness", description="Track 1 evaluation harness")
     p.add_argument("--config", default=None, help="path to harness.yaml (default: ./harness.yaml)")
@@ -208,6 +218,10 @@ def build_parser() -> argparse.ArgumentParser:
     what.add_argument("--suite", help="suite file, e.g. suites/dallas-dc-v1.yaml")
     run.add_argument("--model", default=None, help="model key from harness.yaml models")
     run.add_argument("--backend", choices=["agentcore", "local"], default=None)
+    lg = sub.add_parser(
+        "lgnd-login", help="one-time OAuth device login to LGND Geo; saves to Secrets Manager"
+    )
+    lg.add_argument("--secret", default=None, help="secret ID (default: lgnd_secret_id in harness.yaml)")
     c = sub.add_parser("check", help="run the AC2 trace checker on an archived run")
     c.add_argument("run_id")
     r = sub.add_parser("replay", help="rebuild a run's report from the archive only")
@@ -222,9 +236,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         cfg = config_mod.load(args.config)
         index = Index(cfg["out_dir"])
-        handler = {"run": cmd_run, "check": cmd_check, "replay": cmd_replay, "compare": cmd_compare}[
-            args.command
-        ]
+        handler = {
+            "run": cmd_run,
+            "check": cmd_check,
+            "replay": cmd_replay,
+            "compare": cmd_compare,
+            "lgnd-login": cmd_lgnd_login,
+        }[args.command]
         return handler(cfg, index, args)
     except (ArchiveError, FileNotFoundError, ValueError) as e:
         print(str(e), file=sys.stderr)
