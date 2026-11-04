@@ -1,4 +1,4 @@
 suite: dallas-dc-v1                 # suite ID becomes dallas-dc-v1-<UTC yyyymmddThhmm>
 prompts: [prompts/dallas-dc.md, prompts/dallas-dc-strict.md]
-models: [haiku, sonnet]
+models: [sonnet]
 backend: agentcore
