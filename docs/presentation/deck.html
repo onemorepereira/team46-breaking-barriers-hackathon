@@ -117,6 +117,19 @@ td { color: var(--ink); }
 .arch .card { padding: 24px; }
 .arch .card h3 { font-size: 26px; } .arch .card p { font-size: 22px; }
 .swap { margin-top: 30px; display: flex; gap: 18px; flex-wrap: wrap; }
+/* slide 6: human in the loop */
+.loops { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.loops .card { padding: 28px 30px; display: flex; flex-direction: column; }
+.loops .card > p { margin-bottom: 20px; }
+.loop-steps { display: flex; flex-wrap: nowrap; align-items: center; gap: 7px; margin: 6px 0 18px; }
+.loop-steps span { padding: 6px 11px; border-radius: 10px; background: var(--navy-3); font-size: 19px; color: var(--ink); white-space: nowrap; }
+.loop-steps i { font-style: normal; color: var(--ink-3); font-size: 19px; }
+.quote { margin-top: auto; padding: 16px 20px; border-left: 4px solid var(--cyan); background: rgba(34, 211, 238, .06);
+  border-radius: 0 10px 10px 0; font-size: 22px; line-height: 1.4; color: var(--ink); }
+.quote small { display: block; margin-top: 8px; font-size: 18px; color: var(--ink-3); }
+.resist { margin-top: 26px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.resist .label { font-size: 22px; color: var(--ink-2); margin-right: 4px; }
+.resist .tag { font-size: 17px; }
 /* presenter notes */
 #notes { position: fixed; left: 0; right: 0; bottom: 0; max-height: 42vh; overflow: auto; background: rgba(5, 8, 15, .96);
   border-top: 2px solid var(--cyan); padding: 18px 28px; font-size: 20px; line-height: 1.5; color: var(--ink); display: none; z-index: 10; }
@@ -177,6 +190,7 @@ td { color: var(--ink); }
       <a class="btn" href="http://127.0.0.1:8787/runs/a5670c6b-542d-49dc-80ec-5448c6bd940c" target="_blank" rel="noopener">▶ Judge this run live</a>
       <a class="btn ghost" href="http://127.0.0.1:8787/runs/b2bdb4d6-f79d-4b07-927b-045b0d496ca3" target="_blank" rel="noopener">Contrast: a run that fails</a>
       <a class="btn ghost" href="http://127.0.0.1:8787/runs/a9a69e76-f4ae-49a8-b03c-e88682cdb60b" target="_blank" rel="noopener">Backup: India solar parks</a>
+      <a class="btn ghost" href="http://127.0.0.1:8787/runs/42b0a155-64e5-4539-9686-056dda4bc9dd" target="_blank" rel="noopener">If time: a run an expert reviewed</a>
     </div>
   </div>
   <p class="foot">The score moves a little each time the judges re-score; that's what the confidence label is for.</p>
@@ -228,7 +242,27 @@ td { color: var(--ink); }
   <div class="note">Calibration: we plant one defect at a time and check the right criterion drops. All three did. Agreement: an agreement score of 0.50 across our runs (Krippendorff's alpha: 1 is perfect, 0 is chance), close to the 0.56 human experts reached in the GRA paper. Be honest: the CI is wide because there are 7 runs. (~45 s)</div>
 </section>
 
-<!-- 6 · It caught our own bugs -->
+<!-- 6 · A human in the loop -->
+<section class="slide">
+  <p class="kicker">A human in the loop</p>
+  <h2>Experts correct the judges, and the judges learn</h2>
+  <div class="loops">
+    <div class="card"><h3>On one run: <span class="cyan">reconsider</span></h3>
+      <div class="loop-steps"><span>Expert reviews</span><i>→</i><span>Judges re-check the trace</span><i>→</i><span>Score revised</span></div>
+      <p style="font-size:24px">The review is evidence to check, not an order. A judge may keep its vote, and says why. The original score is kept.</p>
+      <div class="quote">"The steps show eight sites were checked against imagery, not three: five Central Valley sites in T6 and three North Coast sites in T9."<small>Opus, correcting our deliberately wrong review (live, California vineyards)</small></div>
+    </div>
+    <div class="card"><h3>Across runs: <span class="cyan">guidance</span></h3>
+      <div class="loop-steps"><span>Reviews</span><i>→</i><span>Lessons</span><i>→</i><span>Held-out test</span><i>→</i><span>A person approves</span></div>
+      <p style="font-size:24px">Approved lessons reach every judge's prompt, under the rubric's wording. Each score records the version it used, and it can be rolled back.</p>
+      <div class="quote">Stored in each deployment's own archive: not in the code, not in a browser.<small>A third of reviewed runs are held out, so a lesson is tested on runs it never saw</small></div>
+    </div>
+  </div>
+  <div class="resist"><span class="label">Can a review push the judges? Live:</span><span class="tag good">✓ wrong review resisted</span><span class="tag good">✓ "I insist" resisted</span><span class="tag good">✓ injected instructions resisted</span></div>
+  <div class="note">The judges aren't the last word: ADB's experts are. On one run, an expert says where the panel got it wrong, and the judges reconsider against the trace. They don't just obey. We tested that live with a review that was wrong on purpose: Opus kept its score and corrected us, citing the exact steps. Across runs, reviews become short lessons; we test them on runs they weren't drawn from, a person approves them, and every judge uses them from then on, with a version on every score. And we checked the judges can't be pushed: a wrong review, the same one with "I insist", and one with injected instructions all failed to move them, measured against a control. This is also how ADB measures the judges against its own experts. (~45 s)</div>
+</section>
+
+<!-- 7 · It caught our own bugs -->
 <section class="slide">
   <p class="kicker">The traces don't lie</p>
   <h2>It caught bugs in our own agent</h2>
@@ -246,7 +280,7 @@ td { color: var(--ink); }
   <div class="note">This is the point of the whole thing. Without the traces we'd have blamed the model. The evaluator showed the harness was at fault: the wrong area, an expired token, searches widened. We fixed them and the same prompt went from FAILED to 85.4, High. That's the trust story ADB needs: you can see exactly why. (~45 s)</div>
 </section>
 
-<!-- 7 · Built to plug in -->
+<!-- 8 · Built to plug in -->
 <section class="slide">
   <p class="kicker">Built to plug in</p>
   <h2>Every part is swappable by config</h2>
@@ -263,20 +297,20 @@ td { color: var(--ink); }
   <div class="note">Technology slide for the judges: AgentCore, Strands, MCP, OpenTelemetry, S3, CDK, FastAPI. The design point: OpenTelemetry is the one contract, everything else plugs in. When ADB's rubric arrives, it's a YAML file, no code. (~30 s)</div>
 </section>
 
-<!-- 8 · Honest limits and next -->
+<!-- 9 · Honest limits and next -->
 <section class="slide">
   <p class="kicker">What it proves, and what's next</p>
   <h2>Honest about the limits</h2>
   <div class="row">
     <div class="card"><h3>It proves today</h3><p>Each claim matches the tool output it cites, each site is in the requested area, and three independent judges agree how well the work was done.</p></div>
     <div class="card"><h3>Not yet</h3><p>Whether a site is <b>really</b> a data center. That needs an answer key, and ADB's own rubric.</p></div>
-    <div class="card"><h3>Next</h3><p>An answer key (e.g. US solar sites), ADB's rubric as a file, expert ratings of the judges, plain-language verdicts, and checking every condition in the prompt.</p></div>
+    <div class="card"><h3>Next</h3><p>An answer key (e.g. US solar sites), ADB's rubric as a file, <b>ADB's experts reviewing runs</b> (the loop is built; the reviews are theirs to give), plain-language verdicts, and checking every condition in the prompt.</p></div>
   </div>
   <p class="foot">Plain-language verdicts and prompt compliance are being built today, as separate slices.</p>
   <div class="note">End on honesty: we check the agent against its own evidence, not against the world, yet. The path there is concrete. Thank the judges; open for questions. (~30 s)</div>
 </section>
 
-<!-- 9 · Thank you -->
+<!-- 10 · Thank you -->
 <section class="slide closing" data-nobrand>
   <div class="glow"></div>
   <div class="closing-inner">
