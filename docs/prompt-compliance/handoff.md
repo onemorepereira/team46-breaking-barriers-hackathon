@@ -34,4 +34,6 @@ Tests cover known distances and the date line, extraction once, omitted distance
 
 Browser: actual running synthetic app inspected; matrix and explanations visible. Tests do not establish real-world retrieval accuracy or expert agreement.
 
-**Still pending:** a fresh live event-sandbox run of Miguel's ZIP/protected-area example, live planted-defect calibration under rubric v2, and three-real-archive readability/human checks. These require the appropriate AWS/LGND environment and real archives. They are not claimed complete. This branch is ready for code/UI integration review, not yet a validated scientific benchmark.
+**Live ZIP case now checked (November 4):** event run `d0bfb674-ac6c-4058-bfc8-fa92bccfd224` completed with real Kimi/RODA/LGND and three valid judges. The refreshed matcher-3 report has 14/14 source values matched, but no adequate located evidence for protected-area designation/proximity. Condition coverage remains 3/6, output is capped at 50, overall is 68.8 and confidence Medium. The parser correction is documented in [value matching](../value-matching/handoff.md#live-lgnd-follow-up-matcher-version-3). A separate Sonnet Napa imagery run (`a6d3001c-5768-446c-9f33-c93b2e866c6c`) also completed end to end.
+
+**Still pending:** live planted-defect calibration under rubric v2 and three-real-archive readability/human checks. Successful cloud execution does not establish retrieval accuracy or expert agreement. This branch is ready for code/UI integration review, not yet a validated scientific benchmark.
