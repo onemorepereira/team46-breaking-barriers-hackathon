@@ -32,8 +32,8 @@ body { overflow: hidden; }
 .brand img { height: 22px; }
 .pageno { position: absolute; right: 96px; bottom: 34px; color: var(--ink-3); font-size: 18px; font-variant-numeric: tabular-nums; }
 .kicker { color: var(--cyan); font-size: 22px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; margin: 0 0 18px; }
-h1 { font-size: 72px; line-height: 1.05; margin: 0 0 28px; letter-spacing: -.02em; font-weight: 800; }
-h2 { font-size: 54px; line-height: 1.1; margin: 0 0 36px; letter-spacing: -.015em; font-weight: 800; }
+h1 { font-size: 72px; line-height: 1.2; margin: 0 0 28px; letter-spacing: -.02em; font-weight: 800; }
+h2 { font-size: 54px; line-height: 1.16; margin: 0 0 36px; letter-spacing: -.015em; font-weight: 800; }
 p, li { font-size: 30px; line-height: 1.4; color: var(--ink-2); margin: 0; }
 .lead { font-size: 34px; color: var(--ink); max-width: 1250px; }
 b, strong { color: var(--ink); }
@@ -43,7 +43,7 @@ b, strong { color: var(--ink); }
 .card { background: var(--navy-2); border: 1px solid var(--line); border-radius: 16px; padding: 30px 32px; flex: 1; }
 .card h3 { margin: 0 0 12px; font-size: 32px; color: var(--ink); }
 .card p { font-size: 26px; }
-.big { font-size: 96px; font-weight: 800; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.big { font-size: 96px; font-weight: 800; line-height: 1.2; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .tag { display: inline-block; font-size: 20px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
   padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); }
 .tag.good { color: var(--good); border-color: rgba(74, 222, 128, .4); } .tag.bad { color: var(--bad); border-color: rgba(248, 113, 113, .4); }
@@ -118,7 +118,7 @@ td { color: var(--ink); }
 .arch .card h3 { font-size: 26px; } .arch .card p { font-size: 22px; }
 .swap { margin-top: 30px; display: flex; gap: 18px; flex-wrap: wrap; }
 /* slide 6: human in the loop */
-.loops { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.loops { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; }
 .loops .card { padding: 28px 30px; display: flex; flex-direction: column; }
 .loops .card > p { margin-bottom: 20px; }
 .loop-steps { display: flex; flex-wrap: nowrap; align-items: center; gap: 7px; margin: 6px 0 18px; }
@@ -147,9 +147,9 @@ td { color: var(--ink); }
 .s-limits .card h3 { font-size: 44px; margin-bottom: 20px; } .s-limits .card p { font-size: 32px; }
 .s-limits .foot { font-size: 24px; }
 .s-loop .loops .card > p { font-size: 28px !important; } .s-loop .quote { font-size: 25px; } .s-loop .quote small { font-size: 20px; }
-.s-loop .loops { flex: 1; max-height: 500px; }
-.s-loop .loop-steps span { font-size: 21px; } .s-loop .loop-steps i { font-size: 21px; } .s-loop .resist { margin-top: 34px; }
-.s-score .flow { flex: 1; max-height: 470px; } .s-score .flow .card { padding: 34px 28px; }
+.s-loop .loops { margin-bottom: 8px; }
+.s-loop .loop-steps span { font-size: 20px; } .s-loop .loop-steps i { font-size: 20px; } .s-loop .resist { margin-top: 34px; }
+.s-score .flow { margin-bottom: 24px; } .s-score .flow .card { padding: 34px 28px; }
 .s-score .flow .card h3 { font-size: 36px; margin-bottom: 16px; } .s-score .flow .card p { font-size: 28px; }
 .s-score .judge { font-size: 22px; } .s-score .foot { font-size: 26px; color: var(--ink-2); }
 .s-proof .row { flex: 1; max-height: 560px; } .s-proof table { font-size: 30px; } .s-proof th { font-size: 22px; }
