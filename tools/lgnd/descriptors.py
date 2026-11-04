@@ -75,3 +75,9 @@ def dataset_from_args(tool: str, args: dict[str, Any]) -> str | None:
     if isinstance(scope, dict) and scope.get("index"):
         return f"{SERVER}:{scope['index']}"
     return None
+
+
+# What the LGND Geo service and its imagery indexes are, for the per-run licence list (docs/adb-alignment).
+# Licence facts are cited in analysis/licences.py; this only names them, keeping LGND knowledge in tools/.
+SERVICE_URL = "https://geo.lgnd.ai/"
+INDEX_SOURCES = {"naip": "lgnd:naip", "s2": "lgnd:s2"}  # LGND index -> licence-table key

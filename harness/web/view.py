@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from analysis import provenance, signals, summary, timeline
@@ -152,10 +153,22 @@ def review_layer(
 
 
 def run_view(
-    run: Run, serve_tiles: bool = True, deploy_store: Any = None, reconsider: bool = True
+    run: Run,
+    serve_tiles: bool = True,
+    deploy_store: Any = None,
+    reconsider: bool = True,
+    narrative_model: str | None = None,
 ) -> dict[str, Any]:
+    from analysis import report as report_mod
+    from harness import reference as reference_mod
+
     prov = provenance.grade(run)
     m = measure.measure(run, prov)
+    tie = run.store.read_text(f"runs/{run.run_id}/reference/tie.json")
+    ref = report_mod.reference_of(
+        run, m, prov, reference_mod.repo_sha(json.loads(tie).get("id")) if tie else None
+    )  # docs/adb-alignment AC4: scored from the run's own archived snapshot
+    lic = report_mod.licences_of(run, ref, narrative_model)
     sig = signals.compute(run)
     summ = summary.build(run, prov)
     card = scorecard(run, deploy_store, reconsider)
@@ -200,6 +213,8 @@ def run_view(
         "valid_judges": card["valid_judges"] if card else None,
         "trace_integrity": m.trace_integrity,
         "missing_fields": m.missing_fields,
+        "presentable": lic["presentable"],
+        "licence_blockers": lic["blockers"],
     }
     # Claims are located in the same order provenance graded them; match by position, not by name.
     located_claims = iter([x for x in m.located if x.source == "claim"])
@@ -235,6 +250,8 @@ def run_view(
         "narrative": summ.narrative,
         "trouble_spots": [t.__dict__ for t in summ.trouble_spots],
         "datasets": signals.datasets_accessed(run),
+        "reference": ref,
+        "licences": lic,
     }
 
 

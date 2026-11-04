@@ -57,6 +57,18 @@
 <p>Failure modes (majority): {% for f in p.failure_modes %}<code>{{ f.id }}</code> {{ f.votes }}/{{ f.of }} {% else %}<span class="muted">none</span>{% endfor %}</p>
 {% endif %}
 
+{% set ref = r.reference %}{% if ref %}<h2>Against the reference</h2>
+{% if ref.error %}<p class="bad">Reference {{ ref.id }}: {{ ref.error }}</p>{% else %}
+<p>{{ ref.id }}: {{ ref.concept.replace("_", " ") }} in {{ ref.place }} · <b>{{ ref.completeness }}</b> ({{ ref.completeness_note }}) · {{ ref.source.name }} {{ ref.source.version }} · licence {{ ref.licence.name }}{% if ref.stale %} · <span class="warn">the repo's copy has changed since this run was tied</span>{% endif %}</p>
+<div class="grid">{% for k, label in [("site_recall", "Site recall"), ("cell_precision", "Cell precision"), ("count_ratio", "Count ratio"), ("lift", "Lift")] %}<div class="tile"><span class="muted">{{ label }}</span><b>{{ "n/a" if ref[k] is none else ref[k] }}</b></div>{% endfor %}</div>
+<p class="muted">{{ ref.found | length }}/{{ ref.assets }} reference assets found; {{ ref.sites }} flagged sites in {{ ref.flagged_cells }} {{ ref.cell_m | int }} m cells; {{ ref.outside_area }} claimed sites outside the reference area. Matching: an asset is found when a claimed site's cell is one of its cells (any-touch, each asset once).{% for n in ref.notes %} {{ n }}.{% endfor %}</p>
+{% if ref.missed %}<p>Missed: {% for x in ref.missed %}<code>{{ x }}</code> {% endfor %}</p>{% endif %}{% endif %}{% endif %}
+
+{% set lic = r.licences %}{% if lic %}<h2>Data and licences</h2>
+<p class="{{ 'ok' if lic.presentable else 'warn' }}">{{ "Presentable: every source allows sharing with third parties." if lic.presentable else "Check before sharing: " ~ (lic.blockers | join("; ")) }}</p>
+<table><tr><th>Source</th><th>Role</th><th>Used as</th><th>Licence</th><th>Attribution</th><th>Presentable</th></tr>
+{% for i in lic["items"] %}<tr><td>{{ i.name }}</td><td>{{ i.role }}</td><td>{{ i.used_as }}</td><td>{% if i.url %}<a href="{{ i.url }}">{{ i.licence }}</a>{% else %}{{ i.licence }}{% endif %}</td><td>{{ i.attribution }}</td><td class="{{ 'ok' if i.presentable else 'warn' }}">{{ "yes" if i.presentable else ("no" if i.presentable is sameas false else "unknown") }}</td></tr>{% endfor %}</table>{% endif %}
+
 <h2>Trace check (AC2)</h2>
 {% if r.missing %}<p class="bad">{{ r.missing | length }} missing fields</p><ul>{% for x in r.missing %}<li><code>{{ x.line() }}</code></li>{% endfor %}</ul>{% else %}<p class="ok">0 missing fields</p>{% endif %}
 

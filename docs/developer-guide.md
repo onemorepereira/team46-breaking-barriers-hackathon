@@ -130,8 +130,9 @@ Per-run limits (40 steps, 400k input and 200k output tokens, 600 s wall clock, 6
 
 | Command | Does |
 | --- | --- |
-| `run --prompt FILE [--model KEY] [--backend agentcore\|local]` | Run the agent on a task prompt, then archive, judge and report it |
-| `run --suite FILE` | Every prompt × model in a suite (e.g. `suites/dallas-dc-v1.yaml`), within the suite caps |
+| `run --prompt FILE [--model KEY] [--backend agentcore\|local] [--reference ID]` | Run the agent on a task prompt, then archive, judge and report it. With `--reference`, the run is also scored against `references/ID` ([ADB alignment](adb-alignment/spec.md)) |
+| `run --suite FILE` | Every prompt × model in a suite (e.g. `suites/dallas-dc-v1.yaml`), within the suite caps. A prompt entry can be a path, or a mapping `{file, concept, place, task, reference, role}`. See `suites/adb-t1-v1.yaml` |
+| `reference list\|tie RUN_ID REF_ID\|build-uspvdb --state ST --state-fips NN --county NAME --id ID` | Reference sets: list them; score an archived run against one (it's snapshotted into the run's archive); build a set from USGS USPVDB plus the Census county boundary |
 | `ui [--port 8787]` | The console: run, watch, score, map. Binds to 127.0.0.1. The API reference is at `/api/docs` |
 | `judge RUN_ID [--passes N]` | Score an archived run with the judge tribunal |
 | `calibrate RUN_ID [--passes N] [--feedback]` | Plant known defects in the run's dossier, and check that the panel lowers the right criterion. With `--feedback`: check that the judges resist a wrong, pushy or injected review and accept a right one |
@@ -141,7 +142,7 @@ Per-run limits (40 steps, 400k input and 200k output tokens, 600 s wall clock, 6
 | `guidance list\|propose --by NAME\|evaluate N [--yes]\|approve N --by NAME [--reason TEXT]\|off --by NAME` | This deployment's judging guidance, as on the console's **Guidance** page ([judge feedback](judge-feedback/design.md)) |
 | `check RUN_ID` | Trace checker: is every decision field recorded? |
 | `replay RUN_ID` | Rebuild the report (and the runs row and archived tiles) from the archive alone |
-| `compare SUITE_ID` | Side-by-side table for a suite (`compare.html`, `compare.csv`) |
+| `compare SUITE_ID` | Side-by-side table for a suite (`compare.html`, `compare.csv`), plus per-concept and transfer-gap tables (`concepts.csv`) |
 | `lgnd-login [--secret ARN] [--device]` | One-time OAuth login to LGND Geo, saved to Secrets Manager |
 
 ## 7. Recipes

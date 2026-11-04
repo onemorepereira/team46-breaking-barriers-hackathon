@@ -9,6 +9,7 @@ import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from analysis import check, report
 from analysis.trace import ArchiveError, Run
@@ -42,13 +43,23 @@ def write_report(cfg: config_mod.Config, run: Run, archive_tiles: bool = True) -
     out = Path(cfg["out_dir"]) / run.run_id
     out.mkdir(parents=True, exist_ok=True)
     path = out / "report.html"
-    path.write_text(report.render_run(report.analyze(run), _now()), encoding="utf-8")
+    path.write_text(report.render_run(analyze_for(cfg, run), _now()), encoding="utf-8")
     from harness import rows
 
     rows.save(cfg["out_dir"], run)  # the runs table row, kept in step with the report
     if archive_tiles:
         archive_tiles_quietly(cfg, run)
     return path
+
+
+def analyze_for(cfg: config_mod.Config, run: Run) -> report.RunReport:
+    """report.analyze with what only the harness knows: the repo reference's sha (for `stale`) and the
+    narrative model (for the licence list)."""
+    from harness import reference
+
+    tie = run.store.read_text(f"runs/{run.run_id}/reference/tie.json")
+    sha = reference.repo_sha(json.loads(tie).get("id")) if tie else None
+    return report.analyze(run, repo_sha=sha, narrative_model=cfg.get("narrative_model"))
 
 
 def archive_tiles_quietly(cfg: config_mod.Config, run: Run) -> dict[str, int] | None:
@@ -98,7 +109,7 @@ def cmd_compare(cfg: config_mod.Config, index: Index, args: argparse.Namespace) 
     for run_id in suite["run_ids"]:
         try:
             run = Run.load(open_store(index.run_uri(run_id) or uri), run_id)
-            reports.append(report.analyze(run))
+            reports.append(analyze_for(cfg, run))
             runs.append(run)
         except ArchiveError as e:
             print(f"warning: {e}", file=sys.stderr)
@@ -112,7 +123,8 @@ def cmd_compare(cfg: config_mod.Config, index: Index, args: argparse.Namespace) 
     html = report.render_compare(args.suite_id, rows, _now(), agreement)
     (out / "compare.html").write_text(html, encoding="utf-8")
     (out / "compare.csv").write_text(report.compare_csv(rows), encoding="utf-8")
-    print(f"→ {out / 'compare.html'} ({len(rows)} rows), compare.csv")
+    (out / "concepts.csv").write_text(report.concepts_csv(rows), encoding="utf-8")
+    print(f"→ {out / 'compare.html'} ({len(rows)} rows), compare.csv, concepts.csv")
     return 0
 
 
@@ -149,7 +161,7 @@ def _run_one(cfg: config_mod.Config, index: Index, plan: invoke.RunPlan) -> tupl
                 f"run {plan.run_id}: judging failed ({e}); run 'harness judge {plan.run_id}'", file=sys.stderr
             )
     path = write_report(cfg, run)
-    rep = report.analyze(run)
+    rep = analyze_for(cfg, run)
     c = rep.prov.counts()
     if outcome.status in ("ok", "limit_exceeded"):
         line = (
@@ -177,6 +189,14 @@ def cmd_run(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> i
         print(str(e))
         return 2
     print(f"worst case for this run: ${plan.worst_case_usd:.2f}")
+    if getattr(args, "reference", None):
+        from harness import reference
+
+        try:  # tie before the run, so its report and runs row already carry the reference (design)
+            reference.tie(open_store(plan.archive_uri), plan.run_id, args.reference, by="cli")
+        except ValueError as e:
+            print(str(e))
+            return 2
     outcome, line = _run_one(cfg, index, plan)
     print(line)
     return 0 if outcome.status in ("ok", "limit_exceeded") else 1
@@ -196,10 +216,27 @@ def cmd_suite(cfg: config_mod.Config, index: Index, args: argparse.Namespace, ba
         if m not in known:
             print(f"suite {name}: unknown model key {m!r} (known: {', '.join(known)}).")
             return 2
-    for pf in prompts:
+    from harness import reference
+
+    entries: list[tuple[str, dict[str, Any]]] = []
+    for item in prompts:
+        pf, meta = (item, {}) if isinstance(item, str) else (str((item or {}).get("file") or ""), dict(item))
+        meta.pop("file", None)
+        if meta:
+            meta.setdefault("task", "T1")
         if not Path(pf).is_file():
-            print(f"suite {name}: prompt file {pf} not found.")
+            print(f"suite {name}: prompt file {pf or item!r} not found.")
             return 2
+        if meta.get("role") not in (None, "home", "transfer"):
+            print(f"suite {name}: {pf}: role must be home or transfer.")
+            return 2
+        if meta.get("reference"):
+            try:
+                reference.load(str(meta["reference"]))
+            except ValueError as e:
+                print(f"suite {name}: {pf}: {e}")
+                return 2
+        entries.append((pf, meta))
     total = len(prompts) * len(models)
     if total > int(cfg["max_runs_per_suite"]):
         print(
@@ -232,9 +269,12 @@ def cmd_suite(cfg: config_mod.Config, index: Index, args: argparse.Namespace, ba
     index.record_suite(suite_id, archive_uri)
     print(f"suite {suite_id}: {total} runs, worst case ${worst:.2f}")
     ok, failed = 0, []
-    for pf in prompts:  # prompt-major order
+    for pf, meta in entries:  # prompt-major order
         for m in models:
-            plan = invoke.plan_run(cfg, prompt_file=pf, model_key=m, backend=backend, suite_id=suite_id)
+            plan = invoke.plan_run(cfg, prompt_file=pf, model_key=m, backend=backend, suite_id=suite_id,
+                                   meta=meta or None)  # fmt: skip
+            if meta.get("reference"):
+                reference.tie(store, plan.run_id, str(meta["reference"]), by="suite")
             outcome, line = _run_one(cfg, index, plan)
             print(line)
             run_ids = manifest["run_ids"]
@@ -457,6 +497,38 @@ def cmd_guidance(cfg: config_mod.Config, index: Index, args: argparse.Namespace)
     return 0
 
 
+def cmd_reference(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
+    """`harness reference list | tie RUN REF | build-uspvdb ...` (docs/adb-alignment AC3, AC5)."""
+    from analysis import reference as ref_mod
+    from harness import reference
+
+    try:
+        if args.action == "list":
+            for rid in reference.available():
+                r = reference.load(rid)
+                print(
+                    f"{r.id:<28} {r.concept:<12} {r.completeness:<10} {len(r.features):>5} assets  {r.place}"
+                )
+            return 0
+        if args.action == "tie":
+            store = _run_store(cfg, index, args.run_id)
+            Run.load(store, args.run_id)  # the run must exist
+            rec = reference.tie(store, args.run_id, args.ref_id, by="cli")
+            write_report(cfg, Run.load(store, args.run_id), archive_tiles=False)
+            out = analyze_for(cfg, Run.load(store, args.run_id)).reference or {}
+            print(
+                f"{args.run_id} tied to {rec['id']}: recall {out.get('site_recall')}, "
+                f"precision {out.get('cell_precision')}, count ratio {out.get('count_ratio')}"
+            )
+            return 0
+        res = reference.build_uspvdb(args.state, args.state_fips, args.county, args.id)
+        print(f"{res['id']}: {res['assets']} assets → {res['dir']}")
+        return 0
+    except ref_mod.ReferenceError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+
+
 def cmd_ui(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
     from harness.web import app
 
@@ -473,6 +545,7 @@ def build_parser() -> argparse.ArgumentParser:
     what.add_argument("--suite", help="suite file, e.g. suites/dallas-dc-v1.yaml")
     run.add_argument("--model", default=None, help="model key from harness.yaml models")
     run.add_argument("--backend", choices=["agentcore", "local"], default=None)
+    run.add_argument("--reference", default=None, help="score against references/<ID> (docs/adb-alignment)")
     ui = sub.add_parser("ui", help="the Team Foundry console: run, watch, score, map")
     ui.add_argument("--port", type=int, default=8787)
     lg = sub.add_parser(
@@ -502,6 +575,17 @@ def build_parser() -> argparse.ArgumentParser:
     rc = sub.add_parser("reconsider", help="the judges reconsider a run with a review")
     rc.add_argument("run_id")
     rc.add_argument("review_id")
+    rf = sub.add_parser("reference", help="reference sets: list, tie a run to one, build the USPVDB set")
+    rfs = rf.add_subparsers(dest="action", required=True)
+    rfs.add_parser("list")
+    rt = rfs.add_parser("tie")
+    rt.add_argument("run_id")
+    rt.add_argument("ref_id")
+    rb = rfs.add_parser("build-uspvdb")
+    rb.add_argument("--state", required=True, help="USPVDB p_state, e.g. TX")
+    rb.add_argument("--state-fips", required=True, help="Census state FIPS, e.g. 48")
+    rb.add_argument("--county", required=True, help="USPVDB p_county and Census BASENAME, e.g. Pecos")
+    rb.add_argument("--id", required=True, help="reference id, e.g. uspvdb-tx-pecos-v4")
     g = sub.add_parser(
         "guidance", help="this deployment's judging guidance: list, propose, evaluate, approve, off"
     )
@@ -546,6 +630,7 @@ def main(argv: list[str] | None = None) -> int:
             "review": cmd_review,
             "reconsider": cmd_reconsider,
             "guidance": cmd_guidance,
+            "reference": cmd_reference,
         }[args.command]
         return handler(cfg, index, args)
     except (ArchiveError, FileNotFoundError, ValueError) as e:  # FeedbackError is a ValueError
