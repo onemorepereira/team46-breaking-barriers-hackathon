@@ -39,7 +39,9 @@ class ScriptedModel(Model):
     def get_config(self) -> dict[str, Any]:
         return self.config
 
-    async def structured_output(self, *args: Any, **kwargs: Any) -> AsyncIterator[Any]:  # pragma: no cover
+    async def structured_output(  # type: ignore[override]  # never called by the scripted runs
+        self, *args: Any, **kwargs: Any
+    ) -> AsyncIterator[Any]:  # pragma: no cover
         raise NotImplementedError
         yield
 

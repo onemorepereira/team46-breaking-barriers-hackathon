@@ -17,7 +17,7 @@ from opentelemetry.context import Context
 from opentelemetry.sdk.trace import ReadableSpan, Span, SpanProcessor
 
 from agent import runctx
-from analysis.store import Store
+from core.store import Store
 
 log = logging.getLogger("harness.archive")
 FLUSH_EVERY = 50

@@ -7,17 +7,8 @@ from datetime import datetime
 from typing import Any
 
 from analysis.trace import Run
-
-# tool name -> argument field that names a dataset (spike S1: RODA uses `slug`)
-DATASET_ARG_FIELDS: dict[str, str] = {
-    "get_dataset_details": "slug",
-    "preview_dataset": "slug",
-    "sample_dataset": "slug",
-    "find_related_datasets": "slug",
-}
-# Catalog searches find datasets but don't access one (Build deviation, design: Datasets accessed).
-SEARCH_TOOLS = {"search_datasets", "list_datasets", "discover_by_organization", "discover_by_license",
-                "get_knowledge_base_stats", "search_stac_endpoints"}  # fmt: skip
+from tools.lgnd import descriptors as lgnd
+from tools.roda import descriptors as roda
 
 
 @dataclass
@@ -90,20 +81,19 @@ def tools_available(run: Run) -> list[dict[str, Any]]:
 
 
 def datasets_accessed(run: Run) -> list[dict[str, str]]:
-    """Datasets the agent opened by ID (tool arguments). Unmapped tools are listed as unknown."""
+    """Datasets the agent opened by ID. Catalog searches don't count; unmapped tools are listed as unknown."""
     seen: dict[str, set[str]] = {}
     for s in run.tool_results:
         name = str(s.attr("harness.tool.name", ""))
         args = s.json_attr("harness.tool.arguments", {}) or {}
-        if not isinstance(args, dict) or name in SEARCH_TOOLS:
+        if not isinstance(args, dict) or name in roda.SEARCH_TOOLS:
             continue
-        field = DATASET_ARG_FIELDS.get(name)
-        scope = args.get("scope")
-        if field and args.get(field):
-            dataset = str(args[field])
-        elif s.attr("harness.tool.server") == "lgnd" and isinstance(scope, dict) and scope.get("index"):
-            dataset = f"lgnd:{scope['index']}"  # LGND tools name their imagery index (e.g. naip)
-        else:
-            dataset = f"dataset unknown ({name})"
+        server = s.attr("harness.tool.server")
+        found = (
+            lgnd.dataset_from_args(name, args)
+            if server == lgnd.SERVER
+            else roda.dataset_from_args(name, args)
+        )
+        dataset = found or f"dataset unknown ({name})"
         seen.setdefault(dataset, set()).add(name)
     return [{"dataset": d, "via": ", ".join(sorted(v))} for d, v in seen.items()]

@@ -10,8 +10,8 @@ from analysis.provenance import (
     match_text,
     parse_claims_block,
 )
-from analysis.store import FileStore
 from analysis.trace import Run
+from core.store import FileStore
 from tests.fixtures.builder import DA11_RESULT, RunBuilder, standard_run
 
 

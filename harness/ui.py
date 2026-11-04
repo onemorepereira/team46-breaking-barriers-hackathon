@@ -18,11 +18,15 @@ from typing import Any
 from urllib.parse import urlparse
 
 from analysis import report
-from analysis.store import open_store
 from analysis.trace import Run
+from core import geometry
+from core.store import open_store
+from harness import area as geo
 from harness import config as config_mod
-from harness import geo, invoke
+from harness import imagery, invoke
 from harness.manifest import Index
+from tools.lgnd import descriptors as lgnd
+from tools.lgnd import results as lgnd_results
 
 PAGE = Path(__file__).with_name("ui.html")
 
@@ -38,57 +42,22 @@ class RunState:
         self.chip_checks: dict[str, bool] = {}
 
     def annotate(self, ev: dict[str, Any]) -> None:
-        """Mark each chip inside/outside the prompt's area (ground truth, not the agent's view)."""
+        """Add each chip's display tile, and mark it inside/outside the prompt's area (ground truth)."""
+        for c in ev.get("chips", []):
+            c["tile_url"] = imagery.tile_url(c.get("index"), c["bbox"])
+            c["tile_source"] = imagery.ATTRIBUTION.get(c.get("index") or "", imagery.ATTRIBUTION["s2"])
         geom = self.area.geometry if self.area else None
         if not geom:
             return
         for c in ev.get("chips", []):
             try:
-                c["in_area"] = geo.contains(geom, float(c["lon"]), float(c["lat"]))
+                c["in_area"] = geometry.contains(geom, float(c["lon"]), float(c["lat"]))
             except (TypeError, ValueError, KeyError):
                 continue
             self.chip_checks[str(c["node"])] = bool(c["in_area"])
 
 
 RUNS: dict[str, RunState] = {}
-
-
-def _rows(table: Any) -> list[dict[str, Any]]:
-    """LGND returns {"columns": [...], "rows": [[...], ...]}; turn it into dicts."""
-    if not isinstance(table, dict) or not isinstance(table.get("rows"), list):
-        return []
-    cols = table.get("columns") or []
-    return [dict(zip(cols, r, strict=False)) for r in table["rows"] if isinstance(r, list)]
-
-
-def lgnd_extras(name: str, result: str) -> dict[str, Any]:
-    """Chips (with bbox) from search results, and per-chip verdicts from imagery checks."""
-    try:
-        data = json.loads(result)
-    except (json.JSONDecodeError, TypeError):
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    chips = [
-        {k: r.get(k) for k in ("node", "chip_id", "lat", "lon", "bbox", "observed", "similarity")}
-        for r in _rows(data.get("matches"))
-        if isinstance(r.get("bbox"), list) and len(r["bbox"]) == 4
-    ]
-    verdicts = [
-        {"node": r.get("node"), "answer": r.get("answer"), "reason": r.get("reason")}
-        for r in _rows(data.get("places"))
-        if r.get("node")
-    ]
-    out: dict[str, Any] = {}
-    if data.get("matches") is not None:
-        out["where"] = data.get("where")
-        out["unscoped"] = data.get("where") == "everywhere"
-    if chips:
-        out["chips"] = chips
-    if verdicts:
-        out["verdicts"] = verdicts
-        out["verdict"] = data.get("verdict")
-    return out
 
 
 def span_event(span: dict[str, Any]) -> dict[str, Any] | None:
@@ -129,8 +98,8 @@ def span_event(span: dict[str, Any]) -> dict[str, Any] | None:
             "attempt": a.get("harness.tool.attempt"),
             "head": result[:600],
         }
-        if a.get("harness.tool.server") == "lgnd":
-            ev.update(lgnd_extras(str(a.get("harness.tool.name")), result))
+        if a.get("harness.tool.server") == lgnd.SERVER:
+            ev.update(lgnd_results.extras(result))
             try:
                 area = (json.loads(a.get("harness.tool.arguments") or "{}").get("scope") or {}).get("area")
             except (json.JSONDecodeError, AttributeError):
@@ -180,9 +149,9 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str) -> 
             if state.area and state.area.geometry:
                 geom = state.area.geometry
                 for c in claims:
-                    pair = geo.coordinate_pair(c["value"])
+                    pair = geometry.coordinate_pair(c["value"])
                     if pair:
-                        c["in_area"] = geo.contains(geom, pair[1], pair[0])
+                        c["in_area"] = geometry.contains(geom, pair[1], pair[0])
                 located = [c for c in claims if "in_area" in c]
                 area_check = {
                     "area": state.area.label,

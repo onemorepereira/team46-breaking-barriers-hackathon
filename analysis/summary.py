@@ -8,7 +8,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from analysis.provenance import MISMATCH, UNSOURCED, Provenance
-from analysis.trace import MODEL_RESULT, RUN_END, TOOL_RESULT, Run
+from analysis.trace import Run
+from core.spans import MODEL_RESULT, RUN_END, TOOL_RESULT
+from tools.lgnd import descriptors as lgnd
+from tools.lgnd.results import searched_everywhere
 
 SPAN_ID_RE = re.compile(r"\b[0-9a-f]{16}\b")
 
@@ -56,15 +59,6 @@ def _step(span: Any) -> Step | None:
     return None
 
 
-def _searched_everywhere(span: Any) -> bool:
-    """LGND answers a search with no scope.area with where='everywhere' (seen in live runs)."""
-    try:
-        data = json.loads(str(span.attr("harness.tool.result", "")))
-    except json.JSONDecodeError:
-        return False
-    return isinstance(data, dict) and data.get("where") == "everywhere"
-
-
 def trouble_spots(run: Run, prov: Provenance) -> list[TroubleSpot]:
     """The only trouble-spot rule (design ADR-3)."""
     spots: list[TroubleSpot] = []
@@ -84,7 +78,9 @@ def trouble_spots(run: Run, prov: Provenance) -> list[TroubleSpot]:
             spots.append(
                 TroubleSpot(s.span_id, f"tool {ref} retried (attempt {s.attr('harness.tool.attempt')})")
             )
-        if s.attr("harness.tool.server") == "lgnd" and _searched_everywhere(s):
+        if s.attr("harness.tool.server") == lgnd.SERVER and searched_everywhere(
+            str(s.attr("harness.tool.result", ""))
+        ):
             spots.append(
                 TroubleSpot(
                     s.span_id, f"tool {ref} {s.attr('harness.tool.name')} had no area: searched everywhere"

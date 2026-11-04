@@ -21,8 +21,8 @@ from opentelemetry.sdk.trace.sampling import ALWAYS_ON
 
 from agent import runctx
 from agent.archive import ArchiveProcessor, ArchiveWriter
-from analysis.store import open_store
-from analysis.trace import span_kind_for
+from core.spans import span_kind_for
+from core.store import open_store
 
 RUN_ATTRS = {
     "harness.run_id": "run_id",

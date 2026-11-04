@@ -4,7 +4,8 @@ import json
 
 import pytest
 
-from harness import geo
+from core import geometry
+from harness import area as geo
 
 SQUARE = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]
 HOLE = [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]
@@ -63,8 +64,8 @@ def test_resolve_city_postal_radius_and_point_only(tmp_path):
         [{"lat": "32.78", "lon": "-96.80", "geojson": {"type": "Point", "coordinates": [-96.8, 32.78]}}],
     )
     ring = geo.resolve_area(geo.AreaSpec("point_radius", "downtown Dallas", None, None, 50), tmp_path)
-    assert ring.geometry["type"] == "Polygon" and geo.contains(ring.geometry, -96.8, 32.78)
-    assert not geo.contains(ring.geometry, -96.8, 33.5)  # ~80 km north: outside the 50 km circle
+    assert ring.geometry["type"] == "Polygon" and geometry.contains(ring.geometry, -96.8, 32.78)
+    assert not geometry.contains(ring.geometry, -96.8, 33.5)  # ~80 km north: outside the 50 km circle
 
     _seed(
         tmp_path,
@@ -91,14 +92,16 @@ def test_unknown_place_raises(tmp_path):
 
 def test_point_in_polygon_with_hole_and_multipolygon():
     poly = {"type": "Polygon", "coordinates": [SQUARE, HOLE]}
-    assert geo.contains(poly, 1, 1) and not geo.contains(poly, 5, 5) and not geo.contains(poly, 11, 5)
+    assert geometry.contains(poly, 1, 1)
+    assert not geometry.contains(poly, 5, 5)  # in the hole
+    assert not geometry.contains(poly, 11, 5)
     multi = {
         "type": "MultiPolygon",
         "coordinates": [[SQUARE], [[[20, 20], [30, 20], [30, 30], [20, 30], [20, 20]]]],
     }
-    assert geo.contains(multi, 25, 25) and not geo.contains(multi, 15, 15)
+    assert geometry.contains(multi, 25, 25) and not geometry.contains(multi, 15, 15)
 
 
 def test_coordinate_claims():
-    assert geo.coordinate_pair("32.965, -96.7121") == (32.965, -96.7121)
-    assert geo.coordinate_pair("naip/obs:1") is None and geo.coordinate_pair("200, 10") is None
+    assert geometry.coordinate_pair("32.965, -96.7121") == (32.965, -96.7121)
+    assert geometry.coordinate_pair("naip/obs:1") is None and geometry.coordinate_pair("200, 10") is None

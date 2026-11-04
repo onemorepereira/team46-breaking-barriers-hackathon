@@ -12,9 +12,9 @@ import pytest
 
 from analysis import report
 from analysis.provenance import grade
-from analysis.store import FileStore
 from analysis.summary import build, filter_narrative
 from analysis.trace import Run
+from core.store import FileStore
 from harness.cli import main
 from tests.fixtures.builder import DA11_RESULT, RunBuilder, standard_run
 

@@ -2,7 +2,7 @@
 
 import json
 
-from agent import lgnd_auth
+from tools.lgnd import auth as lgnd_auth
 
 
 class FakeSecrets:

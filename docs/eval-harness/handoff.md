@@ -7,7 +7,7 @@
 - Infrastructure is CDK (`infra/app.py`), and CI runs ruff, mypy, pytest and gitleaks.
 
 **Verification** (Verify run, 2026-11-04; suite `uv run pytest` gave 63 passed, then 66 after the Unicode fix below; ruff and mypy clean):
-- [x] **AC1 Run.** `harness run --prompt prompts/dallas-dc-strict.md --model sonnet --backend agentcore` exited 0: run `65ab6003-3663-4db4-a2ca-a9ff96d4a20a`, 8 steps, 0 errors. Earlier live runs: `954835ff`, `77151a3e`, `572c67cc`, and suites `dallas-dc-v1-20261104T0359`, `…T0414` and `…T0423`.
+- [x] **AC1 Run.** `harness run --prompt prompts/tasks/dallas-dc-strict.md --model sonnet --backend agentcore` exited 0: run `65ab6003-3663-4db4-a2ca-a9ff96d4a20a`, 8 steps, 0 errors. Earlier live runs: `954835ff`, `77151a3e`, `572c67cc`, and suites `dallas-dc-v1-20261104T0359`, `…T0414` and `…T0423`.
 - [x] **AC2 Decisions traced.** `tests/test_check.py` (16 passed, using synthetic archives). `harness check 65ab6003…` on the live S3 archive reported 0 missing fields. Every deployed run so far reports 0 missing fields.
 - [x] **AC3 OpenTelemetry only.** `tests/test_import_lint.py` (3 passed): a static AST scan plus the reviewed dependency allowlist.
 - [x] **AC4 Exporter swap.** `tests/test_exporter_swap.py` (1 passed): two subprocesses through the real `telemetry.py`, one exporting OTLP to an in-process receiver and one to the console. Only the model and tool are scripted. Live: trace `6aeab6e0764434343c0035fe0e452158` showed 47 spans in CloudWatch `aws/spans` (Logs Insights).

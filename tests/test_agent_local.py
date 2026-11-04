@@ -8,8 +8,8 @@ from pathlib import Path
 
 from analysis.check import check_run
 from analysis.provenance import MATCHED, grade
-from analysis.store import FileStore
 from analysis.trace import Run
+from core.store import FileStore
 
 REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / "tests/fixtures/scripted_run.json"
@@ -37,8 +37,12 @@ def run_harness(tmp_path, *args, script=SCRIPT):
     }
     return subprocess.run(
         [sys.executable, "-m", "harness.cli", "--config", str(config(tmp_path)), *args],
-        cwd=REPO, env=env, capture_output=True, text=True, timeout=120,
-    )  # fmt: skip
+        cwd=REPO,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
 
 
 def only_run(tmp_path):
@@ -48,7 +52,7 @@ def only_run(tmp_path):
 
 
 def test_scripted_run_end_to_end(tmp_path):
-    r = run_harness(tmp_path, "run", "--prompt", "prompts/dallas-dc.md", "--model", "scripted")
+    r = run_harness(tmp_path, "run", "--prompt", "prompts/tasks/dallas-dc.md", "--model", "scripted")
     assert r.returncode == 0, r.stdout + r.stderr
     assert "claims 2 matched / 0 mismatch / 0 unsourced" in r.stdout
     run = only_run(tmp_path)
@@ -76,7 +80,9 @@ def test_scripted_run_end_to_end(tmp_path):
 def test_step_limit_ends_run_as_limit_exceeded(tmp_path):
     loop = tmp_path / "loop.json"
     loop.write_text(json.dumps([{"tool": "lookup_facility", "input": {"name": "DA11"}}]))  # repeats forever
-    r = run_harness(tmp_path, "run", "--prompt", "prompts/dallas-dc.md", "--model", "scripted", script=loop)
+    r = run_harness(
+        tmp_path, "run", "--prompt", "prompts/tasks/dallas-dc.md", "--model", "scripted", script=loop
+    )
     assert r.returncode == 0, r.stdout + r.stderr
     assert "status limit_exceeded: step limit 40 reached" in r.stdout
     run = only_run(tmp_path)
@@ -93,9 +99,24 @@ def test_refuses_without_prices(tmp_path):
     cfg.write_text(json.dumps(data))
     env = {**os.environ, "HARNESS_TEST_SCRIPT": str(SCRIPT)}
     r = subprocess.run(
-        [sys.executable, "-m", "harness.cli", "--config", str(cfg), "run", "--prompt", "prompts/dallas-dc.md",
-         "--model", "scripted"], cwd=REPO, env=env, capture_output=True, text=True, timeout=60,
-    )  # fmt: skip
+        [
+            sys.executable,
+            "-m",
+            "harness.cli",
+            "--config",
+            str(cfg),
+            "run",
+            "--prompt",
+            "prompts/tasks/dallas-dc.md",
+            "--model",
+            "scripted",
+        ],
+        cwd=REPO,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
     assert r.returncode == 2 and "prices_per_mtok.scripted is not set" in r.stdout
     assert not (tmp_path / "archive").exists()
 
@@ -113,7 +134,9 @@ def test_suite_runs_prompt_major_and_compares(tmp_path):
     data["prices_per_mtok"]["scripted2"] = {"in": 1.0, "out": 5.0}
     cfg.write_text(json.dumps(data))
     suite = suite_file(
-        tmp_path, ["prompts/dallas-dc.md", "prompts/dallas-dc-strict.md"], ["scripted", "scripted2"]
+        tmp_path,
+        ["prompts/tasks/dallas-dc.md", "prompts/tasks/dallas-dc-strict.md"],
+        ["scripted", "scripted2"],
     )
     env = {**os.environ, "HARNESS_TEST_SCRIPT": str(SCRIPT)}
     cmd = [sys.executable, "-m", "harness.cli", "--config", str(cfg), "run", "--suite", str(suite)]
@@ -127,11 +150,16 @@ def test_suite_runs_prompt_major_and_compares(tmp_path):
         json.loads((tmp_path / f"archive/runs/{rid}/run.json").read_text()) for rid in manifest["run_ids"]
     ]
     assert [(x["prompt_file"], x["model_key"]) for x in runs] == [
-        ("prompts/dallas-dc.md", "scripted"), ("prompts/dallas-dc.md", "scripted2"),
-        ("prompts/dallas-dc-strict.md", "scripted"), ("prompts/dallas-dc-strict.md", "scripted2"),
+        ("prompts/tasks/dallas-dc.md", "scripted"), ("prompts/tasks/dallas-dc.md", "scripted2"),
+        ("prompts/tasks/dallas-dc-strict.md", "scripted"), ("prompts/tasks/dallas-dc-strict.md", "scripted2"),
     ]  # fmt: skip
-    c = subprocess.run([sys.executable, "-m", "harness.cli", "--config", str(cfg), "compare", suite_id],
-                       cwd=REPO, capture_output=True, text=True, timeout=60)  # fmt: skip
+    c = subprocess.run(
+        [sys.executable, "-m", "harness.cli", "--config", str(cfg), "compare", suite_id],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
     assert c.returncode == 0 and "(4 rows)" in c.stdout
 
 
@@ -147,13 +175,15 @@ def test_suite_refusals(tmp_path):
         return subprocess.run(cmd, cwd=REPO, env=env, capture_output=True, text=True, timeout=60)
 
     too_many = run(
-        suite_file(tmp_path, ["prompts/dallas-dc.md", "prompts/dallas-dc-strict.md"], ["scripted"])
+        suite_file(
+            tmp_path, ["prompts/tasks/dallas-dc.md", "prompts/tasks/dallas-dc-strict.md"], ["scripted"]
+        )
     )
     assert too_many.returncode == 2 and "suite has 2 runs; max_runs_per_suite is 1" in too_many.stdout
-    bad_model = run(suite_file(tmp_path, ["prompts/dallas-dc.md"], ["opus"]))
+    bad_model = run(suite_file(tmp_path, ["prompts/tasks/dallas-dc.md"], ["opus"]))
     assert "unknown model key 'opus' (known: scripted)" in bad_model.stdout
     data["max_runs_per_suite"], data["max_suite_usd"] = 8, 0.5
     cfg.write_text(json.dumps(data))
-    costly = run(suite_file(tmp_path, ["prompts/dallas-dc.md"], ["scripted"]))
+    costly = run(suite_file(tmp_path, ["prompts/tasks/dallas-dc.md"], ["scripted"]))
     assert "exceeds max_suite_usd $0" in costly.stdout and costly.returncode == 2
     assert not (tmp_path / "archive/runs").exists()

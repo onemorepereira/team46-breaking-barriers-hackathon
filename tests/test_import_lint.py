@@ -7,7 +7,7 @@ import tomllib
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-PACKAGES = ["agent", "harness", "analysis"]
+PACKAGES = ["core", "tools", "agent", "harness", "analysis"]
 FIRST_PARTY = set(PACKAGES)
 # import name -> distribution name, where they differ
 IMPORT_TO_DIST = {

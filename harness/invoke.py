@@ -14,9 +14,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from analysis.store import open_store
+from core.store import open_store
 from harness.config import Config
 from harness.manifest import Index
+from tools.lgnd import descriptors as lgnd
 
 DEFAULT_LIMITS = {"max_steps": 40, "max_input_tokens": 400_000, "max_output_tokens": 200_000,
                   "wall_clock_s": 600, "tool_timeout_s": 60}  # fmt: skip
@@ -158,7 +159,7 @@ def _run_local(cfg: Config, plan: RunPlan, extra_env: dict[str, str] | None = No
            "HARNESS_EXPORTER": os.environ.get("HARNESS_EXPORTER", cfg["local_exporter"])}  # fmt: skip
     if cfg.get("lgnd_secret_id") and not os.environ.get("HARNESS_TEST_SCRIPT"):
         # same LGND Geo access as the deployed runtime (refresh token in Secrets Manager)
-        env.setdefault("HARNESS_LGND_URL", "https://geo.lgnd.ai/mcp")
+        env.setdefault("HARNESS_LGND_URL", lgnd.MCP_URL)
         env.setdefault("HARNESS_LGND_SECRET_ID", str(cfg["lgnd_secret_id"]))
     env.update(extra_env or {})
     proc = subprocess.run([sys.executable, "-m", "agent.local", str(payload_path)], env=env, timeout=900,

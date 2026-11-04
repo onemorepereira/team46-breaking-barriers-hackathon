@@ -12,9 +12,9 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-from agent.lgnd_auth import HTTP_TIMEOUT_S, LGND_RESOURCE, USER_AGENT, post_form
+from tools.lgnd.auth import HTTP_TIMEOUT_S, LGND_RESOURCE, USER_AGENT, post_form
+from tools.lgnd.descriptors import RESOURCE_METADATA
 
-RESOURCE_METADATA = "https://geo.lgnd.ai/.well-known/oauth-protected-resource/mcp"
 SCOPES = "openid profile email offline_access"
 
 

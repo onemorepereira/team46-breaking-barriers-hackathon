@@ -3,8 +3,8 @@ import json
 import pytest
 
 from analysis.check import check_run, full_input
-from analysis.store import FileStore
 from analysis.trace import Run
+from core.store import FileStore
 from tests.fixtures.builder import DA11_RESULT, RunBuilder, standard_run
 
 

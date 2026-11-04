@@ -13,7 +13,8 @@ import urllib.request
 from typing import Any
 
 log = logging.getLogger("harness.lgnd")
-LGND_RESOURCE = "https://geo.lgnd.ai/mcp"
+from tools.lgnd.descriptors import RESOURCE as LGND_RESOURCE  # noqa: E402
+
 HTTP_TIMEOUT_S = 10
 # Cloudflare in front of LGND's OAuth server rejects Python's default urllib User-Agent (error 1010).
 USER_AGENT = "team46-eval-harness/0.1"

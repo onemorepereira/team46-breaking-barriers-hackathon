@@ -56,11 +56,11 @@ a{color:var(--accent)}
     <div id="feed"><p class="muted">Start a run to watch each model step and tool call as it happens.</p></div>
   </section>
   <section>
-    <h2>NAIP tiles the agent looked at</h2>
+    <h2>Tiles the agent looked at</h2>
     <div id="map"></div>
     <p id="unscopedNote" hidden style="margin:8px 0 0"></p>
     <div id="tiles"></div>
-    <p class="muted" style="font-size:12px;margin:8px 0 0">Tiles: USGS NAIP imagery (The National Map) for each chip's footprint. That's the current NAIP mosaic, which may be newer than the chip's capture date. Outlines show LGND's imagery check: green yes, amber maybe, red no.</p>
+    <p class="muted" style="font-size:12px;margin:8px 0 0">Tiles: NAIP chips use USGS NAIP imagery (The National Map, US only); Sentinel-2 cells use EOX Sentinel-2 cloudless 2023 (contains modified Copernicus Sentinel data). Both are current mosaics, which may differ from the capture LGND searched. Outlines show LGND's imagery check: green yes, amber maybe, red no.</p>
   </section>
   <section class="wide" id="result" hidden>
     <h2>Result</h2>
@@ -98,10 +98,6 @@ function refreshUnscoped() {
   b.onclick = () => { showUnscoped = !showUnscoped; refreshUnscoped(); };
   n.append(el("span", "warn", `${count} chips came from a search with no area (LGND searched everywhere), so they may be far away. `), b);
 }
-function naipUrl(b) {
-  return "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?bbox="
-    + b.map(Number).join(",") + "&bboxSR=4326&imageSR=3857&size=384,384&format=jpg&f=image";
-}
 function addChip(c, unscoped, ref, where) {
   if (!c.node) return;
   if (chips[c.node]) { if (!unscoped) { chips[c.node].unscoped = false; refreshUnscoped(); } return; }
@@ -109,9 +105,9 @@ function addChip(c, unscoped, ref, where) {
   const rect = L.rectangle([[b[1], b[0]], [b[3], b[2]]], { weight: 2, color: "#2457c5" }).addTo(chipLayer);
   rect.bindTooltip(c.node);
   const card = el("div", "tile");
-  const img = el("img"); img.alt = "NAIP imagery for " + c.node; img.loading = "lazy"; img.src = naipUrl(b);
+  const img = el("img"); img.alt = "Imagery for " + c.node; img.loading = "lazy"; img.src = c.tile_url;
   const cap = el("div", "cap");
-  cap.append(el("div", null, c.node), el("div", "muted", `${Number(c.lat).toFixed(4)}, ${Number(c.lon).toFixed(4)} · ${c.observed || ""}`),
+  cap.append(el("div", null, c.node + (c.label ? ` · ${c.label}` : "")), el("div", "muted", `${Number(c.lat).toFixed(4)}, ${Number(c.lon).toFixed(4)} · ${c.observed || ""} · ${c.tile_source || ""}`),
     el("div", unscoped ? "warn" : "muted", `${ref}: ${where || ""}`));
   if (c.in_area !== undefined) {
     cap.append(el("div", c.in_area ? "ok" : "bad", c.in_area ? `inside ${areaName}` : `outside ${areaName}`));

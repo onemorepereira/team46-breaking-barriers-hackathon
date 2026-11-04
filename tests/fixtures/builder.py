@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from analysis.trace import HARNESS_SCOPE, SPAN_CAP_BYTES, STRANDS_SCOPE, span_kind_for
+from core.spans import HARNESS_SCOPE, SPAN_CAP_BYTES, STRANDS_SCOPE, span_kind_for
 
 SYSTEM_SHA = "a" * 64
 PROMPT_SHA = "b" * 64
@@ -250,7 +250,7 @@ class RunBuilder:
             "backend": "local",
             "model_key": self.model_key,
             "model_id": self.model_id,
-            "prompt_file": "prompts/dallas-dc.md",
+            "prompt_file": "prompts/tasks/dallas-dc.md",
             "prompt_sha256": PROMPT_SHA,
             "started_at": started_at,
             "ended_at": ended_at,

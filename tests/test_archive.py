@@ -8,7 +8,7 @@ from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
 
 from agent import runctx
 from agent.archive import ArchiveProcessor, ArchiveWriter
-from analysis.store import FileStore, S3Store
+from core.store import FileStore, S3Store
 
 
 class Mutator(SpanProcessor):

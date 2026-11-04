@@ -44,8 +44,8 @@ Needs `uv`, AWS credentials for the sandbox account, and podman or Docker for de
 ```sh
 uv sync                                                       # Python 3.12 environment
 uv run pytest                                                 # 67 tests, no AWS needed
-uv run harness run --prompt prompts/dallas-dc.md --model sonnet --backend local      # agent on your machine
-uv run harness run --prompt prompts/dallas-dc.md --model sonnet --backend agentcore  # agent on AgentCore
+uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend local      # agent on your machine
+uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend agentcore  # agent on AgentCore
 uv run harness run --suite suites/dallas-dc-v1.yaml           # both prompts on Sonnet 5.5 and Kimi K3
 uv run harness compare <suite-id>                             # side-by-side table (HTML + CSV)
 uv run harness replay <run-id>                                # rebuild a report from the archive only

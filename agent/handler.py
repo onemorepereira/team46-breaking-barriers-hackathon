@@ -11,22 +11,22 @@ import logging
 import os
 import threading
 from contextlib import ExitStack
-from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
 from agent import runctx
 from agent.hooks import HarnessHooks, LimitExceeded
 from agent.telemetry import flush_exporters, setup
+from core import prompts
+from tools import registry
 
 log = logging.getLogger("harness.agent")
 REQUIRED = ("schema_version", "run_id", "prompt", "prompt_sha256", "model_id", "model_params", "limits")
-PROMPTS_DIR = Path(os.environ.get("HARNESS_PROMPTS_DIR", Path(__file__).resolve().parents[1] / "prompts"))
 CANCEL_GRACE_S = 180
 
 
-def _system_prompt() -> str:
-    return (PROMPTS_DIR / "system.md").read_text(encoding="utf-8")
+def _region() -> str:
+    return os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-west-2"
 
 
 def _validate(payload: Any) -> str | None:
@@ -47,7 +47,7 @@ def _bedrock_model(payload: dict[str, Any]) -> Any:
     params = payload["model_params"]
     return BedrockModel(
         model_id=payload["model_id"],
-        region_name=os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-west-2",
+        region_name=_region(),
         max_tokens=int(params.get("max_tokens", 16000)),
         additional_request_fields=params.get("request_fields") or {},
         boto_client_config=Config(
@@ -56,45 +56,8 @@ def _bedrock_model(payload: dict[str, Any]) -> Any:
     )
 
 
-def _mcp_tools(stack: ExitStack, timeout_s: int) -> tuple[list[Any], dict[str, str], list[dict[str, Any]]]:
-    from mcp import StdioServerParameters, stdio_client
-    from strands.tools.mcp import MCPClient
-
-    tools: list[Any] = []
-    server_of: dict[str, str] = {}
-    available: list[dict[str, Any]] = []
-    roda_args = ["awslabs.roda-mcp-server@0.1.7"]
-    roda = MCPClient(lambda: stdio_client(StdioServerParameters(command="uvx", args=roda_args)))
-    stack.enter_context(roda)
-    servers: list[tuple[str, Any]] = [("roda", roda)]
-    lgnd_url = os.environ.get("HARNESS_LGND_URL")
-    if lgnd_url:
-        try:
-            from agent.lgnd_auth import access_token
-
-            secret_id = os.environ.get("HARNESS_LGND_SECRET_ID", "")
-            region = os.environ.get("AWS_REGION") or os.environ.get("AWS_DEFAULT_REGION") or "us-west-2"
-            token = access_token(secret_id, region) if secret_id else None
-            if not token:
-                raise RuntimeError("no LGND login; run `harness lgnd-login`")
-            lgnd = MCPClient(url=lgnd_url, headers={"authorization": f"Bearer {token}"})
-            stack.enter_context(lgnd)
-            servers.append(("lgnd", lgnd))
-        except Exception as e:  # noqa: BLE001 - LGND is optional; record and continue with RODA
-            log.warning("LGND Geo unavailable: %s", e)
-            available.append({"server": "lgnd", "tool": None, "error": str(e)})
-    for server, client in servers:
-        for t in client.list_tools_sync():
-            t.timeout = timedelta(seconds=timeout_s)  # MCPAgentTool passes this as read_timeout_seconds
-            tools.append(t)
-            server_of[t.tool_name] = server
-            schema = (t.tool_spec.get("inputSchema") or {}).get("json", {})
-            available.append({"server": server, "tool": t.tool_name, "input_schema": schema})
-    return tools, server_of, available
-
-
 def _scripted(path: str) -> tuple[Any, list[Any], dict[str, str], list[dict[str, Any]]]:
-    from agent.scripted import ScriptedModel, lookup_facility
+    from tools.scripted import ScriptedModel, lookup_facility
 
     turns = json.loads(Path(path).read_text(encoding="utf-8"))
     available = [{"server": "local", "tool": "lookup_facility", "input_schema": {}}]
@@ -112,7 +75,7 @@ def handle(payload: Any) -> dict[str, Any]:
     from strands.agent.conversation_manager import NullConversationManager
 
     tel = setup()
-    system_prompt = _system_prompt()
+    system_prompt = prompts.load("agent/system")
     runctx.set_context(
         {
             "run_id": run_id,
@@ -140,7 +103,13 @@ def handle(payload: Any) -> dict[str, Any]:
                 model, tools, server_of, available = _scripted(script)
             else:
                 model = _bedrock_model(payload)
-                tools, server_of, available = _mcp_tools(stack, int(limits.get("tool_timeout_s", 60)))
+                tools, server_of, available = registry.build(
+                    stack,
+                    timeout_s=int(limits.get("tool_timeout_s", 60)),
+                    region=_region(),
+                    lgnd_url=os.environ.get("HARNESS_LGND_URL"),
+                    lgnd_secret_id=os.environ.get("HARNESS_LGND_SECRET_ID"),
+                )
             search_area = payload.get("search_area")
             hooks = HarnessHooks(
                 tracer=tel.tracer(),
@@ -155,9 +124,11 @@ def handle(payload: Any) -> dict[str, Any]:
             run_system_prompt = system_prompt
             if search_area and search_area.get("label"):
                 label, source = search_area["label"], search_area.get("source")
-                run_system_prompt += f"\n\nSearch area for this request: {label} (boundary: {source})."
+                run_system_prompt += (
+                    "\n\n" + prompts.load("agent/search_area", label=label, source=source).strip()
+                )
                 if search_area.get("mode") == "enforce" and search_area.get("lgnd_area"):
-                    run_system_prompt += " LGND Geo searches are limited to this boundary automatically."
+                    run_system_prompt += " " + prompts.load("agent/search_area_enforced").strip()
             agent = Agent(
                 model=model,
                 tools=tools,

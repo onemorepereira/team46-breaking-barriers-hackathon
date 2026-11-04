@@ -42,7 +42,7 @@ def payload(tmp_path, run_id):
     p = tmp_path / f"{run_id}.json"
     p.write_text(json.dumps({
         "schema_version": 1, "run_id": run_id, "suite_id": None, "prompt": "Find DA11.",
-        "prompt_file": "prompts/dallas-dc.md", "prompt_sha256": "0" * 64, "model_id": "scripted",
+        "prompt_file": "prompts/tasks/dallas-dc.md", "prompt_sha256": "0" * 64, "model_id": "scripted",
         "model_params": {"max_tokens": 1000, "request_fields": {}},
         "limits": {"max_steps": 40, "max_input_tokens": 400000, "wall_clock_s": 60, "tool_timeout_s": 60},
     }))  # fmt: skip

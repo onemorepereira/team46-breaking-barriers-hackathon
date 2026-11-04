@@ -11,8 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from analysis import check, report
-from analysis.store import Store, open_store
 from analysis.trace import ArchiveError, Run
+from core.store import Store, open_store
 from harness import config as config_mod
 from harness import invoke
 from harness.manifest import Index
@@ -82,7 +82,7 @@ def cmd_compare(cfg: config_mod.Config, index: Index, args: argparse.Namespace) 
 def _run_one(cfg: config_mod.Config, index: Index, plan: invoke.RunPlan) -> tuple[invoke.Outcome, str]:
     mode = str(cfg.get("area_mode") or "enforce")
     if mode != "off" and not os.environ.get("HARNESS_TEST_SCRIPT"):
-        from harness import geo
+        from harness import area as geo
 
         area, event = geo.area_for_prompt(cfg, plan.payload["prompt"])
         invoke.attach_area(plan, geo.payload_area(area, mode))
@@ -206,7 +206,7 @@ def cmd_suite(cfg: config_mod.Config, index: Index, args: argparse.Namespace, ba
 
 
 def cmd_lgnd_login(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
-    from harness import lgnd
+    from tools.lgnd import login as lgnd
 
     secret = args.secret or cfg.get("lgnd_secret_id")
     if not secret:
@@ -229,7 +229,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
     run = sub.add_parser("run", help="run the agent on a prompt and report it")
     what = run.add_mutually_exclusive_group(required=True)
-    what.add_argument("--prompt", help="prompt file, e.g. prompts/dallas-dc.md")
+    what.add_argument("--prompt", help="prompt file, e.g. prompts/tasks/dallas-dc.md")
     what.add_argument("--suite", help="suite file, e.g. suites/dallas-dc-v1.yaml")
     run.add_argument("--model", default=None, help="model key from harness.yaml models")
     run.add_argument("--backend", choices=["agentcore", "local"], default=None)

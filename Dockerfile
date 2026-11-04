@@ -4,6 +4,8 @@ ENV PYTHONUNBUFFERED=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/app/.venv PATH=
 RUN pip install --no-cache-dir uv==0.13.6
 WORKDIR /app
 COPY pyproject.toml uv.lock README.md ./
+COPY core core
+COPY tools tools
 COPY agent agent
 COPY analysis analysis
 COPY harness harness

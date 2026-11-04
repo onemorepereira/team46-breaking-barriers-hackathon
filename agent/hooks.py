@@ -23,17 +23,8 @@ from strands.hooks import (
 
 from agent.archive import ArchiveWriter
 from agent.telemetry import to_attr
-
-SPAN_CAP_BYTES = 16 * 1024
-# LGND Geo tools whose scope reads `area` (from their input schemas); omitting it searches the whole index.
-AREA_TOOLS = {
-    "search_place_find",
-    "search_change_find",
-    "search_similar_change_find",
-    "discover_area_view",
-    "discover_area_shift_find",
-    "toolbox_classifier_apply",
-}
+from core.spans import SPAN_CAP_BYTES
+from tools.lgnd import descriptors as lgnd
 
 
 class LimitExceeded(Exception):
@@ -243,13 +234,11 @@ class HarnessHooks(HookProvider):
         area = self.search_area.get("lgnd_area")
         use = event.tool_use
         name = str(use.get("name"))
-        if self.search_area.get("mode") != "enforce" or not area or name not in AREA_TOOLS:
-            return
-        if self.server_of.get(name) != "lgnd":
-            return
         inp = dict(use.get("input") or {})
-        if name == "toolbox_classifier_apply" and (inp.get("nodes") or inp.get("inside")):
-            return  # that tool ignores area when nodes or inside are given
+        if self.search_area.get("mode") != "enforce" or not area or self.server_of.get(name) != lgnd.SERVER:
+            return
+        if not lgnd.reads_area(name, inp):
+            return
         scope = dict(inp.get("scope") or {})
         self._area_requested[use_id] = scope.get("area")
         scope["area"] = area
