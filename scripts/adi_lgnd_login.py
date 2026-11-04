@@ -98,6 +98,7 @@ def main() -> int:
                     p = Path("harness.local.yaml")
                     config = yaml.safe_load(p.read_text())
                     config["lgnd_secret_id"] = arn
+                    config["area_mode"] = "enforce"
                     p.write_text(yaml.safe_dump(config, sort_keys=False))
                     result["ok"] = True
                     body = (

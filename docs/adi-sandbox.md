@@ -28,3 +28,15 @@ On November 4, actual inference probes succeeded for Sonnet 5.5, Opus 5.5, Kimi 
 `harness.local.yaml`, credentials, archives and logs are private/ignored. Model calls consume the event budget. Source checks and replay do not prove real-world dataset accuracy.
 
 The optional `--workshop-proxy` adapts application links for code-server’s existing authenticated `/proxy/8787/` route. The server still binds only to localhost. Omit the flag when accessing the app directly on localhost.
+
+## Verified browser run
+
+On November 4, run `230a6437-3e8f-46c8-953a-88d909679989` completed through the workshop browser's **Run & judge** button with real Sonnet/RODA and three valid judges. Six declared values matched their cited source text. The panel marked relevance/completeness lower because Kenya coverage was not confirmed; this is a source-checking result, not a validated dataset answer. Another advanced-spatial run recorded a transient Bedrock ServiceUnavailable error. Retry failed runs; do not treat their scores as successful task completion.
+
+Open `https://d37rt8nwcs1lq3.cloudfront.net/proxy/8787/` while the workshop and server are active. **Runs** opens the saved reports. The event login is required. The app is hosted on the supplied workshop machine, with inference in Bedrock, rather than a new AgentCore Runtime deployment.
+
+## Optional LGND connection
+
+Miguel's integration is included, but his private OAuth login is not copied. LGND is needed for the imagery/site-search example cards, not for the catalog-only Bedrock smoke test. A dedicated empty secret slot `team46-adi-lgnd` was prepared in this event account; login remains unfinished and imagery is not claimed working.
+
+If the team supplies a whitelisted LGND login, run `uv run python -m scripts.adi_lgnd_login` in this copy, open the displayed authenticated workshop link and sign in. The helper uses PKCE, stores the renewable login in that event secret without printing it, updates only ignored `harness.local.yaml`, and enables boundary enforcement. Restart the UI afterwards and verify a real imagery call before claiming the connection is working. The login helper closes after 15 minutes.

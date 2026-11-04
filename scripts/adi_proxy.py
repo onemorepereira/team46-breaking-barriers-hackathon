@@ -7,12 +7,22 @@ from typing import Any
 
 
 def rewrite(data: bytes, content_type: str, path: str, prefix: str) -> bytes:
-    if "javascript" in content_type and path.rsplit("/", 1)[-1] not in ("app.js", "runs.js", "api-docs.js"):
+    if "javascript" in content_type and path.rsplit("/", 1)[-1] not in (
+        "app.js",
+        "runs.js",
+        "api-docs.js",
+        "guidance.js",
+    ):
         return data
     text = data.decode("utf-8")
     if "text/html" in content_type:
         text = re.sub(r"""((?:href|src|action)=["'])/(?!/)""", lambda m: m[1] + prefix + "/", text)
-    elif "javascript" in content_type and path.rsplit("/", 1)[-1] in ("app.js", "runs.js", "api-docs.js"):
+    elif "javascript" in content_type and path.rsplit("/", 1)[-1] in (
+        "app.js",
+        "runs.js",
+        "api-docs.js",
+        "guidance.js",
+    ):
         text = re.sub(r"""(["'`])/(?!/)(?=[a-z])""", lambda m: m[1] + prefix + "/", text)
     elif "json" in content_type or "text/event-stream" in content_type:
         text = re.sub(
@@ -22,8 +32,20 @@ def rewrite(data: bytes, content_type: str, path: str, prefix: str) -> bytes:
 
 
 class WorkshopProxy:
-    def __init__(self, app: Any, port: int):
+    def __init__(self, app: Any, port: int, lgnd_enabled: bool = False):
         self.app = app
+        self.notice = (
+            '<div role="status" class="alert alert-info m-3">Aditya event sandbox: real AWS Bedrock. '
+            + (
+                "AWS Open Data and LGND connected."
+                if lgnd_enabled
+                else (
+                    "AWS Open Data connected. LGND imagery is not connected; "
+                    "imagery examples need a separate login."
+                )
+            )
+            + "</div>"
+        )
         self.prefix = f"/proxy/{port}"
 
     async def __call__(self, scope, receive, send):
@@ -53,6 +75,16 @@ class WorkshopProxy:
                         **message,
                         "body": rewrite(message["body"], content_type, scope["path"], self.prefix),
                     }
+            if message["type"] == "http.response.body" and "text/html" in content_type:
+                message = {
+                    **message,
+                    "body": re.sub(
+                        rb"(<body[^>]*>)",
+                        lambda m: m[1] + self.notice.encode(),
+                        message.get("body", b""),
+                        count=1,
+                    ),
+                }
             await send(message)
 
         await self.app(scope, receive, proxy_send)
@@ -64,5 +96,10 @@ def serve(cfg: Any, port: int) -> int:
     from harness.web.app import create_app
 
     print(f"Workshop UI: /proxy/{port}/ (uses existing code-server authentication)", flush=True)
-    uvicorn.run(WorkshopProxy(create_app(cfg), port), host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(
+        WorkshopProxy(create_app(cfg), port, bool(cfg.get("lgnd_secret_id"))),
+        host="127.0.0.1",
+        port=port,
+        log_level="warning",
+    )
     return 0
