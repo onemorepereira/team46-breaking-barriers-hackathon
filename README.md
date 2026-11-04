@@ -1,6 +1,6 @@
 # Team 46 Manifest — Clay Earth Dataset Foundry
 
-Nov 3, 2026 · @Miguel
+Nov 3, 2026 · @Miguel · updated Nov 4 with what we built
 
 > **Sources.** Each statement cites where it comes from. Most cite the two briefs, [Technical](docs/Clay-Foundry-Technical-Hackathon.md) (T) and [Vision](docs/Clay-Foundry-Vision-Hackathon.md) (V), with line numbers. Both briefs include Clay's suggested edits from [the Nov 3 PDF](<docs/suggested hackathon edits.pdf>). Statements that are not in either brief carry a tag instead: **[team]** for our own decisions, **[event]** for event logistics from the organizers, and **[ext]** for general background.
 
@@ -14,12 +14,65 @@ The briefs now offer two tasks, the ADB agentic eval and caption generation[^T27
 
 Track 1 evaluates an agent doing an ADB-style "how to use AI / build datasets" task. Its inputs are an input dataset, the harness(es) under test and synthetic prompts that teams bring; it is scored against a rubric, and its output is the traces gathered from observing the system[^T31][^V70]. The task, the dataset and the rubric come from Clay[^V191].
 
+## What we built
+
+A working Track 1 evaluation harness, on branch `design/eval-harness` **[team]**. An agent does the Dallas data-center task; every model and tool decision is recorded; and each run is checked, graded, summarized and reported, from the archive alone **[team]**. Design docs: [spec](docs/eval-harness/spec.md), [design](docs/eval-harness/design.md), [spike results](docs/eval-harness/spikes.md), [handoff and verification](docs/eval-harness/handoff.md).
+
+### How it works
+
+```
+harness CLI ──▶ AgentCore Runtime ──▶ Strands agent ──▶ Bedrock model (Claude Sonnet 5.5 or Kimi K3)
+   │                                       ├─▶ RODA MCP server (public dataset catalog)
+   │                                       └─▶ LGND Geo MCP server (NAIP imagery search and checks)
+   │                                  every span ──▶ S3 archive (JSONL)  +  CloudWatch (AgentCore Observability)
+   └─ reads the archive ──▶ check · claim provenance · signals · summary · report · replay · compare
+```
+
+**[team]**
+
+- **The agent** runs on Bedrock AgentCore Runtime[^T105] and uses the RODA and LGND Geo MCP servers[^T34][^T144] **[team]**. Its task is to find data centers within 50 km of downtown Dallas, TX **[team]**.
+- **Every decision is a span.** Hooks in the agent record each model call (full input, output, reasoning, tokens) and each tool call (arguments, full result, latency, retries) as OpenTelemetry `harness.*` spans **[team]**. A processor archives every span to S3 at the moment it ends **[team]**.
+- **Claims are traceable.** Each tool result is stamped with a label like `[ref T3]`. The agent must cite that label for every claim, with one value copied verbatim from one tool result **[team]**. The harness grades each claim as **matched**, **mismatch** or **unsourced** against the full archived result **[team]**.
+- **Reports work offline.** The report, replay and comparison read only the archive, so a recorded run can be re-graded without calling the model again[^T121][^V114] **[team]**.
+- **OpenTelemetry is the only telemetry API.** The deployed backend is AgentCore Observability (CloudWatch); a CI test proves the exporter can be swapped by config alone[^T177][^V164] **[team]**.
+- **Infrastructure is code.** A CDK stack creates the S3 archive, the arm64 agent image, a least-privilege role, the AgentCore runtime, the LGND login secret and an optional budget alert **[team]**. CI runs ruff, mypy, pytest (67 tests) and a gitleaks secret scan **[team]**.
+
+### Quickstart
+
+Needs `uv`, AWS credentials for the sandbox account, and podman or Docker for deploys **[team]**.
+
+```sh
+uv sync                                                       # Python 3.12 environment
+uv run pytest                                                 # 67 tests, no AWS needed
+uv run harness run --prompt prompts/dallas-dc.md --model sonnet --backend local      # agent on your machine
+uv run harness run --prompt prompts/dallas-dc.md --model sonnet --backend agentcore  # agent on AgentCore
+uv run harness run --suite suites/dallas-dc-v1.yaml           # both prompts on Sonnet 5.5 and Kimi K3
+uv run harness compare <suite-id>                             # side-by-side table (HTML + CSV)
+uv run harness replay <run-id>                                # rebuild a report from the archive only
+uv run harness check <run-id>                                 # are all decisions recorded?
+uv run harness lgnd-login                                     # one-time browser login to LGND Geo
+cd infra && CDK_DOCKER=podman npx aws-cdk deploy              # deploy or update the stack
+```
+
+**[team]** Reports land in `out/<run-id>/report.html`; settings live in `harness.yaml` **[team]**.
+
+### Verified results
+
+From the Verify stage on Nov 4; the evidence is in the [handoff](docs/eval-harness/handoff.md) **[team]**:
+
+- **All 11 acceptance criteria were proven by commands that actually ran**, including live AgentCore runs, a CloudWatch query, an S3 archive listing and the CI tests **[team]**.
+- **Every deployed run's trace check reports 0 missing fields, and 100% of decision spans were archived** **[team]**.
+- **Claim rules matter.** With one verbatim value per claim, the Dallas suite graded 21 of 21 claims matched; before that rule, a run combining values from different tool results graded 0 of 6 **[team]**.
+- **The models behave differently.** On the same task, Kimi K3 made far more traceable claims than Sonnet 5.5, but took 5–8 times longer **[team]**.
+- **The agent found candidate sites.** Through LGND Geo's NAIP imagery search and imagery check, it reported candidate data-center sites near Dallas. Each one traces to a tool result, and their names and operators are still unconfirmed **[team]**.
+- **Live runs found grader bugs, and replay re-graded old runs after the fixes**: JSON-escaped line breaks, Unicode escapes, cached prompt tokens counted as input, and tool errors counted twice **[team]**.
+
 ## Goals
 
 1. **One loop, end to end.** An agent calls geospatial tools over MCP, and every run ends in a report[^T34][^V162].
 2. **Trace everything, including the model's decisions.** Trace capture is our top priority **[team]**. Every run keeps its traces and inputs[^V34], and never gets judged on its final output alone[^T176]. See [Traceability](#traceability).
 3. **Summarize the run.** A readable account, generated from the trace, of what the agent did and where it struggled[^T115].
-4. **Score two things.** The workflow, from the traces[^T117]; the output, against ADB's rubric[^T31]. How we score the workflow is still **open** **[team]**.
+4. **Score two things.** The workflow, from the traces[^T117]; the output, against ADB's rubric[^T31]. Workflow signals are reported as raw numbers. The scoring method is still **open**, and the output score shows "awaiting rubric" until ADB's rubric is plugged in **[team]**.
 5. **Keep observation pluggable.** The model and the tracing tool both stay swappable[^T10][^V113]. OpenTelemetry is the linchpin that proves it: a CI test sends the same agent spans to two different exporters, changing only config **[team]**. See [OpenTelemetry](#opentelemetry-the-pluggability-contract).
 6. **Never fail the demo.** Recorded traces replay through the scorer and still produce a full report[^T121][^V114].
 7. **Ship it open.** Apache-2.0[^V33], in an open-source repo Clay can access after the event[^V166]. Infrastructure as code with CDK, public before judging **[team]**.
@@ -30,12 +83,13 @@ Track 1 evaluates an agent doing an ADB-style "how to use AI / build datasets" t
 | Area | Decision | Brief says |
 | --- | --- | --- |
 | Harness | Amazon Bedrock AgentCore + Strands Agents **[team]** | An agent framework, not prescribed, kept swappable[^T86]; agent on Bedrock behind an abstraction[^T105] |
-| Tools | RODA MCP server + LGND Geo MCP server **[team]** | Start with RODA[^T34]; LGND Geo is a commercial server teams are whitelisted for[^T144] |
-| Prompts | **Open** **[team]** | Teams bring synthetic prompts[^T31] |
+| Models | Claude Sonnet 5.5 and Kimi K3 on Bedrock; Haiku dropped **[team]** | Agent on Bedrock behind an abstraction[^T105] |
+| Tools | RODA MCP server + LGND Geo MCP server, which signs in through OAuth in the browser (`harness lgnd-login`) **[team]** | Start with RODA[^T34]; LGND Geo is a commercial server teams are whitelisted for[^T144] |
+| Prompts | Find data centers near Dallas, TX, as an open and a strict variant; claims cite one verbatim value from one tool result **[team]** | Teams bring synthetic prompts[^T31] |
 | Trace capture | Top priority; OpenTelemetry; covers model decisions **[team]** | Record every step: tool calls, arguments, sequence, failures/retries, latency, cost[^T114] |
 | Summary | Generated from the trace **[team]** | Readable summary of what the agent did[^T115] |
-| Workflow scoring | **Open** **[team]** | Tool-call correctness and sequencing, error recovery, steps/cost[^T117] |
-| Report & replay | Ours to build; no dependency on Clay **[team]** | Per-run report[^T119]; replay recorded traces through scoring[^T121] |
+| Workflow scoring | Raw signals (steps, tool calls, errors, retries, tokens, cost, runtime); the scoring method is **open** **[team]** | Tool-call correctness and sequencing, error recovery, steps/cost[^T117] |
+| Report & replay | Built: a static HTML report per run, offline replay, and a suite comparison table **[team]** | Per-run report[^T119]; replay recorded traces through scoring[^T121] |
 
 ## Traceability
 
@@ -75,10 +129,10 @@ We build Tuesday 1:00–5:30 pm and Wednesday 9:30 am–5:30 pm. Judging is Thur
 
 The order of the milestones follows the brief: one trace first, then scoring, then the rest[^T34]. Their times, and "roles assigned", are **[team]** and **[event]**.
 
-- [ ] **Tue, by 3:00 pm:** sandbox up, Bedrock access checked, roles assigned, ADB task and rubric agreed with Clay[^V191].
-- [ ] **Tue, by 5:30 pm:** one agent run captured end to end as an OpenTelemetry trace, decisions included[^T34] **[team]**.
-- [ ] **Wed, by noon:** trace summary and both scores working; first report produced[^V162].
-- [ ] **Wed, by 5:30 pm:** model swap, exporter-swap test green, replay fallback, CDK and public repo done; demo rehearsed[^V164][^V165].
+- [x] **Tue, by 3:00 pm:** sandbox up, Bedrock access checked **[team]**. Still open: ADB's task and rubric from Clay[^V191].
+- [x] **Tue, by 5:30 pm:** one agent run captured end to end as an OpenTelemetry trace, decisions included[^T34] **[team]**.
+- [x] **Wed, by noon:** trace summary and first report produced[^V162]; workflow signals reported raw, while the output score waits for the rubric **[team]**.
+- [x] **Wed, by 5:30 pm:** model swap, exporter-swap test green in CI, replay fallback, CDK and public repo done[^V164][^V165] **[team]**. Demo rehearsal still to do **[team]**.
 - [ ] **Thu, 10:00 am–noon:** present in prelims; our slot is announced at 9:15 **[event]**.
 
 ## How we win
@@ -102,7 +156,7 @@ We need the Clay answers before Tuesday's 1:00 pm build start **[event]**; none 
 - [ ] What does the ADB scoring rubric evaluate: the agent's traces, its output, or both?[^T31][^V191]
 - [ ] Is there a harness under test for us to evaluate, or is our agent the one being evaluated?[^V70][^V191]
 - [ ] Can we get the geoMCP shortlist? The PDF links it, but we only have the name.[^V189]
-- [ ] How do we get whitelisted for the LGND Geo MCP server?[^T144]
+- [x] ~~How do we get whitelisted for the LGND Geo MCP server?~~[^T144] Resolved: the browser OAuth login works, and the deployed agent uses LGND Geo **[team]**.
 - [ ] How does your existing evaluation harness record results, and should our trace and report formats match it?[^T23]
 - [ ] Which observability backend do you use, so we ship an OpenTelemetry exporter for it?[^T10] **[team]**
 - [ ] Where should the repo live, and is Apache-2.0 the license you want?[^V33][^V200]
@@ -110,7 +164,7 @@ We need the Clay answers before Tuesday's 1:00 pm build start **[event]**; none 
 **For the organizers** **[event]**
 
 - [ ] How does the point system announced at kickoff work?
-- [ ] Which Bedrock models are enabled in the sandbox, and in which regions? Is AgentCore available?
+- [x] ~~Which Bedrock models are enabled in the sandbox, and in which regions? Is AgentCore available?~~ Answered by checking us-west-2: Claude (through inference profiles), Kimi K3 and AgentCore are all available **[team]**.
 - [ ] How long is each preliminary presentation, and is a live demo allowed?
 - [ ] How do we submit: a repo link only, or a form too?
 - [ ] Can we use code or templates written before the event?
@@ -131,12 +185,15 @@ Every acronym and product name used above, in alphabetical order.
 | Exporter | The OpenTelemetry component that sends traces to a backend; swapping it changes where traces go **[ext]** |
 | Harness | The code that runs the agent: its prompts, model and tool connections[^V49] |
 | JSONL | JSON Lines: one JSON record per line **[ext]**; the format of our S3 trace archive **[team]** |
+| Kimi K3 | Moonshot AI's model on Bedrock (`us.moonshotai.kimi-k3`), our second model **[team]** |
 | Langfuse, Phoenix | Open-source tools for viewing and analyzing AI agent traces **[ext]**; candidate backends **[team]** |
 | LGND | A company that builds on Clay and publishes Clay embedding datasets[^T139]; it also offers the commercial LGND Geo MCP server for searching Earth data[^T144] |
 | MCP | Model Context Protocol, an open standard for connecting AI agents to tools and data[^V50] |
+| NAIP | US aerial imagery at 0.3–1 m resolution, on AWS[^T136]; LGND Geo searches it **[team]** |
 | OpenTelemetry | An open standard for recording traces, with GenAI conventions for AI model calls **[ext]**; the brief's reasonable default[^T88] |
 | RODA | Registry of Open Data on AWS; its MCP server lets the agent search and sample public datasets[^T139] |
 | S3 | Amazon Simple Storage Service **[ext]**, where we archive traces and reports **[team]** |
+| Sonnet 5.5 | Anthropic's Claude Sonnet 5.5 on Bedrock (`us.anthropic.claude-sonnet-5-5`), our default model **[team]** |
 | Span | One timed step in an OpenTelemetry trace, such as a model call or a tool call, with attributes and events **[ext]** |
 | Strands | Strands Agents, an open-source AWS SDK for building agents that emits OpenTelemetry traces **[ext]** |
 | Trace | The step-by-step record of a run: each tool call, its inputs and outputs, errors, time and cost[^T114][^V51] |
@@ -157,6 +214,7 @@ Every acronym and product name used above, in alphabetical order.
 [^T117]: Technical L117: workflow score from traces: tool-call correctness and sequencing, error recovery, steps/cost.
 [^T119]: Technical L119: a per-run evaluation report combining the summary and the scores.
 [^T121]: Technical L121: persist traces so recorded runs can be replayed through scoring.
+[^T136]: Technical L136: NAIP on AWS, "High-res (0.3–1 m) 4-band US aerial imagery".
 [^T139]: Technical L138–139: LGND embeddings at source.coop/clay/lgnd-embeddings; RODA MCP server for Registry of Open Data discovery/sampling.
 [^T144]: Technical L144: LGND Geo MCP server, a commercial product; teams are whitelisted for the hackathon.
 [^T167]: Technical L167: no full warehouse; lightweight trace/metadata store.
