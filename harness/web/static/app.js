@@ -52,7 +52,7 @@
   const CYAN = "#01d5f9", ORANGE = "#fd8800";
   const empty = () => ({ type: "FeatureCollection", features: [] });
   const data = { chips: empty(), claims: empty(), area: empty() };
-  let map, popup, mapReady = false;
+  let map, mapReady = false;
   const pending = [];
 
   function initMap() {
@@ -64,6 +64,7 @@
     map = new maplibregl.Map({
       container: "map", center: [-40, 25], zoom: 1.4, attributionControl: { compact: true },
       style: { version: 8, sources, layers },
+      cooperativeGestures: true,  // the wheel scrolls the page; Ctrl/⌘ + wheel (or pinch, or the buttons) zooms
     });
     map.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), "top-left");
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
@@ -87,7 +88,13 @@
       map.addLayer({ id: "claims", type: "circle", source: "claims", paint: {
         "circle-radius": 6, "circle-color": "#ffffff", "circle-stroke-width": 3,
         "circle-stroke-color": ["case", ["==", ["get", "inside"], false], ORANGE, CYAN] } });
-      map.on("click", "chip-dots", (e) => openPopup(e.features[0].properties, e.lngLat));
+      // One handler, one result per click: a claimed location wins over a result dot, which wins over a footprint.
+      map.on("click", (e) => {
+        for (const layer of ["claims", "chip-dots", "chips-fill"]) {
+          const hit = map.queryRenderedFeatures(e.point, { layers: [layer] })[0];
+          if (hit) { openDetail(hit.properties, { move: "ease" }); return; }
+        }
+      });
       for (const layer of ["chips-fill", "claims", "chip-dots"]) {
         map.on("mouseenter", layer, () => (map.getCanvas().style.cursor = "pointer"));
         map.on("mouseleave", layer, () => (map.getCanvas().style.cursor = ""));
@@ -102,8 +109,6 @@
         if (hovered !== null) map.setFeatureState({ source: "chips", id: hovered }, { hover: false });
         hovered = null;
       });
-      map.on("click", "chips-fill", (e) => openPopup(e.features[0].properties, e.lngLat));
-      map.on("click", "claims", (e) => openPopup(e.features[0].properties, e.lngLat));
       mapReady = true;
       map.resize();
       pending.splice(0).forEach((fn) => fn());
@@ -122,25 +127,63 @@
     geometry: { type: "Point", coordinates: [Number(f.properties.lon), Number(f.properties.lat)] }, properties: f.properties })) });
   const refreshChips = () => whenMap(() => { map.getSource("chips").setData(data.chips); map.getSource("chip-dots").setData(dotsOf(data.chips)); });
   // The card's width settles after fonts and the grid lay out; keep the canvas matched to it.
-  new ResizeObserver(() => map && map.resize()).observe(document.getElementById("map"));
+  new ResizeObserver(() => {
+    if (map) map.resize();
+    if (!detail.hidden) detail.classList.toggle("bottom", phone());  // re-dock on rotation or resize
+  }).observe(document.getElementById("map"));
 
-  function openPopup(p, lngLat) {
+  // ---------- result details: a panel docked inside the map (docs/console-polish) ----------
+  // One camera call per action, and never persistent map padding: map clicks ease with a one-off offset,
+  // the tile strip fits with per-call padding (pad()), and closing doesn't move the camera.
+  const detail = $("detail");
+  let detailOpener = null;
+  // Bottom-docked on phones, or when the map is too narrow to give up 300 px on its right.
+  const phone = () => window.matchMedia("(max-width: 575.98px)").matches || $("map").clientWidth < 600;
+  const panelSize = () => (detail.hidden ? 0 : phone() ? detail.offsetHeight : detail.offsetWidth);
+  function pad() {
+    const p = { top: 40, bottom: 40, left: 40, right: 40 };
+    if (!detail.hidden) { if (phone()) p.bottom += panelSize(); else p.right += panelSize(); }
+    return p;
+  }
+  function openDetail(p, { move = "ease" } = {}) {
     const where = p.inside === true || p.inside === "true" ? ["Inside the requested area", "success"]
       : p.inside === false || p.inside === "false" ? ["Outside the requested area", "warning"] : ["No area to check", "secondary"];
-    const body = el("div", { class: "foundry-popup" },
-      p.tile_url ? el("img", { src: p.tile_url, alt: "imagery tile", loading: "lazy" }) : null,
-      el("div", { class: "mt-2 fw-bold", text: p.claim || p.label || p.node || "Result" }),
+    const img = p.tile_url ? el("img", { src: p.tile_url, alt: `Imagery under ${p.node || "this result"}` }) : null;
+    if (img) img.addEventListener("error", () => img.replaceWith(el("div", { class: "foundry-detail-missing", text: "Tile unavailable" })));
+    $("detail-body").replaceChildren(
+      img || el("div", { class: "foundry-detail-missing", text: "No imagery tile" }),
+      el("div", { class: "mt-2 fw-bold text-break", text: p.claim || p.label || p.node || "Result" }),
       el("div", { class: "small text-secondary" },
         [p.index ? String(p.index).toUpperCase() : null, p.observed ? `observed ${p.observed}` : null,
          p.similarity && p.similarity !== "null" ? `similarity ${Number(p.similarity).toFixed(2)}` : null].filter(Boolean).join(" · ")),
       el("div", { class: "small" }, `${Number(p.lat).toFixed(4)}, ${Number(p.lon).toFixed(4)}`),
-      el("div", { class: "mt-1 d-flex gap-1 flex-wrap" },
+      el("div", { class: "mt-2 d-flex gap-1 flex-wrap" },
         el("span", { class: `badge bg-${where[1]}-lt`, text: where[0] }),
-        p.ref ? el("span", { class: "badge bg-azure-lt ref-link", text: `from ${p.ref}`, onclick: () => scrollToStep(p.ref) }) : null),
-      p.tile_source ? el("div", { class: "text-secondary mt-1", style: "font-size:.65rem", text: p.tile_source }) : null);
-    if (popup) popup.remove();
-    popup = new maplibregl.Popup({ maxWidth: "260px" }).setLngLat(lngLat).setDOMContent(body).addTo(map);
+        p.ref ? el("button", { type: "button", class: "badge bg-azure-lt ref-link border-0", text: `from ${p.ref}`, "aria-label": `Show step ${p.ref}`, onclick: (ev) => scrollToStep(p.ref, ev) }) : null),
+      p.tile_source ? el("div", { class: "text-secondary mt-2", style: "font-size:.68rem", text: p.tile_source }) : null);
+    const wasOpen = !detail.hidden;
+    detail.classList.toggle("bottom", phone());
+    detail.hidden = false;
+    if (!wasOpen) detailOpener = document.activeElement;
+    $("detail-close").focus({ preventScroll: true });
+    if (move === "ease" && mapReady) {
+      const size = panelSize();
+      map.easeTo({ center: [Number(p.lon), Number(p.lat)], offset: phone() ? [0, -size / 2] : [-size / 2, 0], duration: 500 });
+    }
   }
+  function closeDetail() {
+    if (detail.hidden) return;
+    detail.hidden = true;
+    let back = detailOpener;
+    if (back && !document.contains(back) && back.dataset && back.dataset.key) {
+      back = document.querySelector(`#tiles [data-key="${CSS.escape(back.dataset.key)}"]`);  // re-rendered while streaming
+    }
+    if (!back || !document.contains(back)) back = mapReady ? map.getCanvas() : null;
+    if (back) back.focus({ preventScroll: true });
+    detailOpener = null;
+  }
+  $("detail-close").addEventListener("click", closeDetail);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !detail.hidden) closeDetail(); });
 
   function bboxPolygon(b) {
     const [w, s, e, n] = b.map(Number);
@@ -184,7 +227,7 @@
   }
   function fit(b, maxZoom = 14) {
     if (!b) return;
-    whenMap(() => map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, maxZoom, duration: 800 }));
+    whenMap(() => map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: pad(), maxZoom, duration: 800 }));
   }
   function fitAll() { fit(boundsOf([data.area, data.chips, data.claims])); }
 
@@ -197,7 +240,8 @@
       const p = f.properties;
       const label = p.label || (p.similarity ? `sim ${Number(p.similarity).toFixed(2)}` : p.observed || p.ref || "");
       box.append(el("button", { class: `foundry-tile ${p.inside === false ? "out" : ""}`, type: "button", title: p.node || "",
-        onclick: () => { fit(p.bbox, 16); openPopup(p, [Number(p.lon), Number(p.lat)]); } },
+        "data-key": p.key || p.node || "",
+        onclick: () => { openDetail(p, { move: "none" }); fit(p.bbox, 16); } },
         p.tile_url ? el("img", { src: p.tile_url, alt: "", loading: "lazy" }) : null, el("span", { text: `${p.ref || ""} ${label}` })));
     }
     const out = feats.filter((f) => f.properties.inside === false).length;
@@ -243,12 +287,42 @@
     const node = renderEntry(e);
     if (existing && e.kind !== "tool") existing.replaceWith(node); else box.append(node);
   }
-  function scrollToStep(ref) {
-    const n = $(`step-${ref}`);
-    if (!n) return;
-    n.scrollIntoView({ behavior: "smooth", block: "center" });
-    n.classList.remove("flash"); void n.offsetWidth; n.classList.add("flash");
+  // Step links scroll the timeline list, never the page, unless the user asks (docs/console-polish AC4).
+  const toast = $("toast");
+  let toastTimer = null, toastTarget = null;
+  function hideToast() { toast.hidden = true; clearTimeout(toastTimer); toastTarget = null; }
+  function armToast() { clearTimeout(toastTimer); toastTimer = setTimeout(hideToast, 8000); }
+  toast.addEventListener("mouseenter", () => clearTimeout(toastTimer));
+  toast.addEventListener("mouseleave", armToast);
+  toast.addEventListener("focusin", () => clearTimeout(toastTimer));
+  toast.addEventListener("focusout", armToast);
+  $("toast-show").addEventListener("click", () => {
+    const n = toastTarget;
+    hideToast();
+    if (n) { n.scrollIntoView({ block: "nearest", behavior: "smooth" }); flashStep(n); }
+  });
+  function flashStep(n) { n.classList.remove("flash"); void n.offsetWidth; n.classList.add("flash"); }
+  function scrollToStep(ref, ev) {
+    const n = $(`step-${ref}`), list = $("timeline");
+    if (!n || !list) return;
+    // Where will the step land after the list scrolls to center it? Only scroll the list if that's on screen.
+    const lr = list.getBoundingClientRect(), nr = n.getBoundingClientRect();
+    const want = list.scrollTop + (nr.top - lr.top) - list.clientHeight / 2 + n.offsetHeight / 2;
+    const final = Math.min(Math.max(0, want), Math.max(0, list.scrollHeight - list.clientHeight));
+    const landing = nr.top - (final - list.scrollTop);
+    if (landing >= 0 && landing + n.offsetHeight <= window.innerHeight) {
+      list.scrollTo({ top: final, behavior: "smooth" });
+      flashStep(n);
+      return;
+    }
+    toastTarget = n;
+    $("toast-text").textContent = `Step ${ref} is in the timeline`;
+    toast.hidden = false;
+    armToast();
+    // From the keyboard (a click event with no pointer: detail 0), move focus to Show so it's reachable.
+    if (ev && ev.detail === 0) $("toast-show").focus({ preventScroll: true });
   }
+
 
   // ---------- KPIs ----------
   function renderKpis(k) {
@@ -314,7 +388,7 @@
             const crit = (j.criteria || []).find((x) => x.id === c.id) || {};
             rationale.append(el("div", { class: "rationale" },
               el("span", { class: `vote vote-${vote} me-1` }, vote), el("strong", { text: key }), " ", crit.rationale || "",
-              ...(crit.refs || []).map((r) => el("span", { class: "badge bg-azure-lt ms-1 ref-link", text: r, onclick: (ev) => { ev.stopPropagation(); scrollToStep(r); } }))));
+              ...(crit.refs || []).map((r) => el("button", { type: "button", class: "badge bg-azure-lt ms-1 ref-link border-0", text: r, "aria-label": `Show step ${r}`, onclick: (ev) => { ev.stopPropagation(); scrollToStep(r, ev); } }))));
           }
           const a = (card.anchors || {})[c.id] || {};
           if (Object.keys(a).length) rationale.append(el("div", { class: "small text-secondary mt-2" }, el("strong", { text: "Anchors: " }),
@@ -337,9 +411,9 @@
     }
     const modes = $("modes");
     modes.replaceChildren(el("span", { class: "text-secondary me-2" }, icon("flag", "me-1"), "Failure modes (majority):"),
-      card.failure_modes.length
+      ...(card.failure_modes.length  // spread: replaceChildren() would print an array as text
         ? card.failure_modes.map((m) => el("span", { class: "badge bg-orange-lt me-1", title: m.meaning, text: `${m.id.replace(/_/g, " ")} ${m.votes}/${m.of}` }))
-        : el("span", { class: "text-secondary", text: "none" }));
+        : [el("span", { class: "text-secondary", text: "none" })]));
   }
 
   // ---------- judges ----------
@@ -378,7 +452,7 @@
     const badge = { matched: "success", mismatch: "danger", unsourced: "warning" };
     body.replaceChildren(...claims.map((c) => el("tr", {},
       el("td", { class: "small", text: c.claim }), el("td", { class: "small text-break", text: c.value }),
-      el("td", {}, c.ref ? el("span", { class: "badge bg-azure-lt ref-link", text: c.ref, onclick: () => scrollToStep(c.ref) }) : "—"),
+      el("td", {}, c.ref ? el("button", { type: "button", class: "badge bg-azure-lt ref-link border-0", text: c.ref, "aria-label": `Show step ${c.ref}`, onclick: (ev) => scrollToStep(c.ref, ev) }) : "—"),
       el("td", {}, el("span", { class: `badge bg-${badge[c.status] || "secondary"}-lt`, text: c.status })),
       el("td", {}, c.inside === true ? el("span", { class: "badge bg-success-lt", text: "inside" }) : c.inside === false ? el("span", { class: "badge bg-warning-lt", text: "outside" }) : ""))));
   }
@@ -434,7 +508,7 @@
     es.onmessage = (msg) => {
       const ev = JSON.parse(msg.data);
       if (ev.type === "area") {
-        if (ev.geometry) { setArea({ type: "Feature", geometry: ev.geometry, properties: { label: ev.label } }); fitAll(); }
+        if (ev.geometry) { setArea({ type: "Feature", geometry: ev.geometry, properties: { label: ev.label } }); if (detail.hidden) fitAll(); }
         setText("map-note", ev.label ? `Area: ${ev.label} · ${ev.source || ""} · ${ev.mode || ""}` : ev.note || "");
         progress("Agent is working…");
       } else if (ev.type === "step") {
@@ -446,7 +520,7 @@
           addChips(ev.chips);
           const b = boundsOf([{ features: ev.chips.filter((c) => c.bbox).map((c) => ({ geometry: bboxPolygon(c.bbox) })) }]);
           e.bounds = b;
-          fit(boundsOf([data.area, data.chips]));
+          if (detail.hidden) fit(boundsOf([data.area, data.chips]));  // don't pull the view from an open result
         }
         appendEntry(e);
         progress(e.kind === "end" ? "Agent finished. Writing the summary and report…" : `Agent is working… ${e.title}`);
@@ -541,6 +615,10 @@
     const d = body && body.detail;
     return Array.isArray(d) ? d.map((x) => x.msg).join("; ") : d || null;
   }
+
+  // For tests/browser/console_probe.py: resolve when the map has finished moving and rendering.
+  window.__foundryIdle = () => new Promise((resolve) => whenMap(() => (map.isMoving() ? map.once("idle", resolve) : resolve())));
+  window.__foundryPadding = () => (mapReady ? map.getPadding() : null);
 
   // ---------- boot ----------
   initMap();

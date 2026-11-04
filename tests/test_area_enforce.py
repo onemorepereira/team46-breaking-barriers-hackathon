@@ -78,3 +78,34 @@ def test_a_narrower_area_inside_the_boundary_is_kept():
         ev = event("search_place_find", {"scope": {"index": "s2", "area": area}})
         h._enforce_area(ev, "t2")
         assert ev.tool_use["input"]["scope"]["area"] == RING and h._area_requested["t2"] == area
+
+
+def test_narrowing_works_through_the_real_payload_wiring():
+    """Live run fdacf7cf: the agent payload has no `geometry` (attach_area drops it), so each narrower circle
+    was widened to all of Texas. Build the payload the way the harness does and check the hook keeps it."""
+    from harness import area as geo
+    from harness import invoke
+
+    square = {"type": "Polygon", "coordinates": [[[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]]}
+    plan = SimpleNamespace(payload={}, manifest={"snapshot": {}})
+    invoke.attach_area(
+        plan, geo.payload_area(geo.Area("Squareland", "region", "test", square, (5, 5)), "enforce")
+    )
+    assert "geometry" not in plan.payload["search_area"]  # the payload exactly as the agent receives it
+    h = HarnessHooks(
+        tracer=None,
+        writer=None,
+        run_id="r",
+        tools_available=[],
+        limits={"max_steps": 40},
+        server_of={"search_place_find": "lgnd"},
+        search_area=plan.payload["search_area"],
+    )
+    inside = {"lat": 5, "lon": 5, "radius_km": 30}
+    ev = event("search_place_find", {"scope": {"index": "naip", "area": inside}})
+    h._enforce_area(ev, "t1")
+    assert ev.tool_use["input"]["scope"]["area"] == inside and "t1" not in h._area_requested
+    outside = {"lat": 9.9, "lon": 5, "radius_km": 100}
+    ev = event("search_place_find", {"scope": {"index": "naip", "area": outside}})
+    h._enforce_area(ev, "t2")
+    assert ev.tool_use["input"]["scope"]["area"] == plan.payload["search_area"]["lgnd_area"]

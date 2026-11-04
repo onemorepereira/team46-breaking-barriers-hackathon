@@ -49,3 +49,45 @@ def test_empty_secret_means_not_logged_in(monkeypatch):
     assert (
         lgnd_auth.access_token("s", "us-west-2", client=FakeSecrets(json.dumps({"client_id": "c"}))) is None
     )
+
+
+# ---------- RefreshingBearer (docs/console-polish AC8): LGND tokens live 300 s ----------
+import base64  # noqa: E402
+
+import httpx  # noqa: E402
+
+from tools.lgnd.auth import RefreshingBearer, token_expiry  # noqa: E402
+
+
+def jwt(exp: int) -> str:
+    body = base64.urlsafe_b64encode(json.dumps({"iat": exp - 300, "exp": exp}).encode()).decode().rstrip("=")
+    return f"h.{body}.s"
+
+
+def test_token_is_refreshed_before_it_expires_and_on_a_401():
+    clock = [1000.0]
+    issued = iter([jwt(1600), jwt(1900), jwt(2200)])
+    fetches = []
+
+    def fetch():
+        fetches.append(clock[0])
+        return next(issued)
+
+    seen = []
+
+    def server(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers["authorization"])
+        return httpx.Response(401 if request.headers["authorization"] == f"Bearer {jwt(1600)}" else 200)
+
+    auth = RefreshingBearer(fetch, jwt(1300), clock=lambda: clock[0])
+    with httpx.Client(transport=httpx.MockTransport(server), auth=auth) as client:
+        assert client.get("https://geo.example/mcp").status_code == 200  # fresh enough: no refresh
+        assert seen == [f"Bearer {jwt(1300)}"] and fetches == []
+        clock[0] = 1250.0  # within 60 s of expiry: refreshed before sending
+        assert client.get("https://geo.example/mcp").status_code == 200  # 401 on jwt(1600), retried once
+        assert seen[1:] == [f"Bearer {jwt(1600)}", f"Bearer {jwt(1900)}"] and len(fetches) == 2
+
+
+def test_unreadable_token_assumes_lgnds_300_second_lifetime():
+    assert token_expiry("opaque-token", now=50.0) == 350.0
+    assert token_expiry(jwt(1234), now=0) == 1234.0

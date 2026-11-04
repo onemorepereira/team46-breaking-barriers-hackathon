@@ -1,22 +1,27 @@
-/* Team Foundry console: Tabler + brand accents. Brand: cyan #01D5F9, orange #FD8800 (from the TF logo). */
+/* Team Foundry console: Tabler (dark color mode, set on <html>) + brand accents.
+   Brand: cyan #01D5F9, orange #FD8800 (from the TF logo). The console is dark only (docs/console-polish). */
 [hidden] { display: none !important; } /* Tabler's d-flex would otherwise win over the hidden attribute */
 :root {
   --foundry-cyan: #01d5f9;
-  --foundry-cyan-ink: #0891b2;
+  --foundry-cyan-ink: #22d3ee;   /* cyan text/icons on dark surfaces (contrast ≥ 4.5:1) */
+  --foundry-btn: #0e7490;        /* cyan fill under white text (5.4:1) */
+  --foundry-btn-hover: #155e75;
   --foundry-orange: #fd8800;
-  --foundry-orange-ink: #c2410c;
+  --foundry-orange-ink: #fb923c;
   --foundry-ink: #0b1220;
-  --tblr-primary: #0891b2;
-  --tblr-primary-rgb: 8, 145, 178;
+  --tblr-primary: #22d3ee;
+  --tblr-primary-rgb: 34, 211, 238;
+  color-scheme: dark;
 }
 .foundry-nav { background: var(--foundry-ink); border-bottom: 3px solid var(--foundry-cyan); }
 .foundry-nav .nav-link.active { color: #fff; box-shadow: inset 0 -3px 0 var(--foundry-orange); }
 .foundry-mark { object-fit: contain; }
 .foundry-name { font-weight: 700; letter-spacing: .02em; font-size: 1.05rem; color: #fff; }
 .foundry-tag { font-size: .7rem; color: #94a3b8; letter-spacing: .06em; text-transform: uppercase; }
-.btn-primary { --tblr-btn-bg: var(--foundry-cyan-ink); --tblr-btn-border-color: var(--foundry-cyan-ink);
-  --tblr-btn-hover-bg: #0e7490; --tblr-btn-hover-border-color: #0e7490; }
-.bg-cyan { background-color: var(--foundry-cyan-ink) !important; }
+.btn-primary { --tblr-btn-bg: var(--foundry-btn); --tblr-btn-border-color: var(--foundry-btn); --tblr-btn-color: #fff;
+  --tblr-btn-hover-bg: var(--foundry-btn-hover); --tblr-btn-hover-border-color: var(--foundry-btn-hover);
+  --tblr-btn-active-bg: var(--foundry-btn-hover); --tblr-btn-disabled-bg: var(--foundry-btn); }
+.bg-cyan { background-color: var(--foundry-btn) !important; }
 .bg-orange { background-color: var(--foundry-orange) !important; }
 
 .foundry-prompt { font-size: 1rem; white-space: pre-wrap; border-left: 3px solid var(--foundry-cyan); padding-left: .75rem; }
@@ -39,8 +44,25 @@
 .swatch-in { background: rgba(1, 213, 249, .45); border: 2px solid var(--foundry-cyan); }
 .swatch-out { background: rgba(253, 136, 0, .45); border: 2px dashed var(--foundry-orange); }
 .swatch-claim { width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 3px solid var(--foundry-orange); }
-.maplibregl-popup-content { padding: 8px; border-radius: 8px; }
-.foundry-popup img { width: 220px; height: 220px; object-fit: cover; border-radius: 4px; display: block; background: #0b1220; }
+/* Result details: docked inside the map's right edge (bottom half on phones); never clipped */
+.foundry-detail { position: absolute; top: 0; right: 0; bottom: 0; width: 300px; z-index: 5; overflow-y: auto;
+  background: #0f172a; color: #e2e8f0; border-left: 1px solid rgba(148, 163, 184, .25); padding: 12px 12px 14px;
+  box-shadow: -8px 0 24px rgba(0, 0, 0, .35); }
+.foundry-detail img, .foundry-detail-missing { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; display: block;
+  background: #0b1220; }
+.foundry-detail-missing { display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: .8rem; }
+.foundry-detail-close { position: absolute; top: 18px; right: 18px; z-index: 1; width: 30px; height: 30px; border: 0;
+  display: flex; align-items: center; justify-content: center; border-radius: 50%; color: #f8fafc; font-size: 1rem;
+  background: rgba(11, 18, 32, .85); box-shadow: 0 0 0 1px rgba(226, 232, 240, .4); cursor: pointer; }
+.foundry-detail-close:hover { background: rgba(30, 41, 59, .95); }
+.foundry-detail-close:focus-visible { box-shadow: 0 0 0 2px var(--foundry-cyan); }
+.foundry-detail.bottom { top: auto; left: 0; width: auto; height: 55%; border-left: 0;
+  border-top: 1px solid rgba(148, 163, 184, .25); box-shadow: 0 -8px 24px rgba(0, 0, 0, .35); }
+.foundry-detail.bottom img, .foundry-detail.bottom .foundry-detail-missing { width: 45%; float: left; margin-right: 10px; }
+/* Toast: offers a page jump to a step that's off screen, instead of forcing it */
+.foundry-toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 1080; display: flex;
+  align-items: center; gap: .25rem; background: #1e293b; color: #e2e8f0; border: 1px solid rgba(148, 163, 184, .3);
+  border-radius: 8px; padding: .5rem .75rem; box-shadow: 0 8px 24px rgba(0, 0, 0, .4); font-size: .85rem; }
 
 .foundry-tiles { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; min-height: 8px; }
 .foundry-tile { flex: 0 0 auto; position: relative; width: 92px; height: 92px; border-radius: 6px; overflow: hidden;
@@ -56,10 +78,10 @@
 .foundry-timeline .list-group-item.has-bounds:hover { background: rgba(1, 213, 249, .06); }
 .foundry-timeline .step-ref { font-family: var(--tblr-font-monospace); font-size: .72rem; }
 .foundry-timeline pre { max-height: 320px; overflow: auto; font-size: .72rem; margin: .5rem 0 0; }
-.step-icon-model { background: rgba(99, 102, 241, .12); color: #4f46e5; }
+.step-icon-model { background: rgba(129, 140, 248, .16); color: #a5b4fc; }
 .step-icon-lgnd { background: rgba(1, 213, 249, .14); color: var(--foundry-cyan-ink); }
 .step-icon-roda { background: rgba(253, 136, 0, .14); color: var(--foundry-orange-ink); }
-.step-icon-run { background: rgba(100, 116, 139, .14); color: #475569; }
+.step-icon-run { background: rgba(148, 163, 184, .16); color: #cbd5e1; }
 .step-detail { white-space: pre-wrap; font-size: .82rem; }
 
 .criterion { cursor: pointer; }
@@ -68,7 +90,7 @@
 .vote { width: 18px; height: 18px; border-radius: 50%; font-size: .65rem; line-height: 18px; text-align: center;
   color: #fff; font-weight: 700; }
 .vote-0 { background: #d63939; } .vote-1 { background: #f59f00; color: #1f2937; } .vote-2 { background: #2fb344; }
-.vote-na { background: #cbd5e1; color: #334155; }
+.vote-na { background: #475569; color: #e2e8f0; }
 .rationale { font-size: .8rem; border-left: 2px solid var(--tblr-border-color); padding-left: .5rem; margin-top: .35rem; }
 .foundry-claims { max-height: 340px; overflow-y: auto; }
 .foundry-answer { font-size: .9rem; color: var(--tblr-body-color) !important; }
@@ -88,10 +110,24 @@
 .foundry-example-icon { color: var(--foundry-cyan-ink); font-size: 1.1rem; line-height: 1; }
 .foundry-example-theme { font-weight: 500; }
 .foundry-example-tab { --tblr-btn-color: var(--tblr-secondary); --tblr-btn-border-color: var(--tblr-border-color); }
-.foundry-example-tab.active { --tblr-btn-active-bg: var(--foundry-cyan-ink); --tblr-btn-active-color: #fff;
-  --tblr-btn-active-border-color: var(--foundry-cyan-ink); background: var(--foundry-cyan-ink); color: #fff; border-color: var(--foundry-cyan-ink); }
+.foundry-example-tab.active { --tblr-btn-active-bg: var(--foundry-btn); --tblr-btn-active-color: #fff;
+  --tblr-btn-active-border-color: var(--foundry-btn); background: var(--foundry-btn); color: #fff; border-color: var(--foundry-btn); }
 /* Phone width: the map card's basemap switcher wraps under the title instead of overflowing the page */
 @media (max-width: 575.98px) {
   .card-header:has(#basemaps) { flex-wrap: wrap; gap: .5rem; }
   #basemaps { margin-left: 0; flex-wrap: wrap; }
 }
+
+/* MapLibre controls on the dark console */
+.maplibregl-ctrl-group { background: #1e293b; box-shadow: 0 0 0 1px rgba(148, 163, 184, .25); }
+.maplibregl-ctrl-group button + button { border-top-color: rgba(148, 163, 184, .25); }
+.maplibregl-ctrl-group button .maplibregl-ctrl-icon { filter: invert(1) brightness(.9); }
+.maplibregl-ctrl-group button:not(:disabled):hover { background-color: rgba(148, 163, 184, .18); }
+.maplibregl-ctrl-attrib, .maplibregl-ctrl-attrib.maplibregl-compact { background: rgba(11, 18, 32, .82); color: #cbd5e1; }
+.maplibregl-ctrl-attrib a { color: #e2e8f0; }
+.maplibregl-ctrl-attrib-button { filter: invert(1); background-color: transparent; }
+.maplibregl-ctrl-scale { background: rgba(11, 18, 32, .78); color: #e2e8f0; border-color: #e2e8f0; }
+
+/* /api/docs: the API reference framed under the console header (docs/console-polish) */
+.foundry-api-frame { display: block; width: 100%; height: calc(100vh - 59px); border: 0; background: #0b1220; }
+.page-wrapper:has(.foundry-api-frame) .footer { display: none; }

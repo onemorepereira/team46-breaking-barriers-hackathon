@@ -7,6 +7,18 @@ from typing import Any
 from core.geometry import simplify
 
 
+def ring_polygon(area: Any) -> dict[str, Any] | None:
+    """The GeoJSON Polygon of an LGND `{"ring": [{lat, lon}, ...]}` scope, or None for another shape."""
+    ring = area.get("ring") if isinstance(area, dict) else None
+    if not isinstance(ring, list) or len(ring) < 3:
+        return None
+    try:
+        pts = [[float(p["lon"]), float(p["lat"])] for p in ring]
+    except (KeyError, TypeError, ValueError):
+        return None
+    return {"type": "Polygon", "coordinates": [pts + [pts[0]]]}
+
+
 def to_lgnd_area(geometry: dict[str, Any], max_vertices: int = 500) -> dict[str, Any]:
     """LGND's polygon scope from the largest outer ring, simplified (Douglas-Peucker) to max_vertices.
 

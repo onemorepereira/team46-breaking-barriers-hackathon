@@ -34,6 +34,7 @@ Each folder holds a feature's spec (problem and acceptance criteria), its design
 | Judging and console | [spec](judging/spec.md) · [design](judging/design.md) · [guide](judging/guide.md) · [gaps](judging/gaps.md) · [paper notes](judging/paper-notes.md) · [handoff](judging/handoff.md) | The generalized rubric, the judge tribunal, agreement and calibration, the Team Foundry console. The gap analysis against the briefs, and notes on the GRA paper |
 | Example cards | [spec](example-cards/spec.md) · [handoff](example-cards/handoff.md) | One-click prompts for every continent, Asia first |
 | Tile cache | [spec](tile-cache/spec.md) · [design](tile-cache/design.md) · [launch](tile-cache/launch.md) · [handoff](tile-cache/handoff.md) | Result tiles archived with each run; basemaps and tiles served from a disk cache |
+| Console polish | [spec](console-polish/spec.md) · [design](console-polish/design.md) · [handoff](console-polish/handoff.md) | Dark theme, a docked result panel, timeline-only step jumps, and the area-narrowing fix behind run `fdacf7cf` |
 | Docs pass | [spec](docs-pass/spec.md) · [handoff](docs-pass/handoff.md) | This index, the developer guide and CONTRIBUTING, plus the accuracy audit |
 
 ## Data and configuration in the repo

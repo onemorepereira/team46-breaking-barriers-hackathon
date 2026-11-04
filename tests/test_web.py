@@ -350,3 +350,37 @@ def test_tile_routes_validate_cache_and_document(tmp_path, monkeypatch):
     assert 'data-tile-proxy="0"' in off.get("/").text
     url = off.get(f"/api/runs/{run.run_id}").json()["map"]["chips"]["features"][0]["properties"]["tile_url"]
     assert url.startswith("https://")
+
+
+def test_console_is_dark_and_map_details_dock_instead_of_popping_up(tmp_path):
+    """docs/console-polish AC1, AC2, AC5, structure only; tests/browser/console_probe.py measures behavior."""
+    client = TestClient(create_app(cfg_for(tmp_path)))
+    for page in ["/", "/runs"]:
+        html = client.get(page).text
+        assert (
+            '<html lang="en" data-bs-theme="dark">' in html and 'name="color-scheme" content="dark"' in html
+        )
+    docs = client.get("/api/docs")  # the console's own header, with the reference framed below it
+    assert docs.status_code == 200 and 'data-bs-theme="dark"' in docs.text
+    assert 'src="/api/reference"' in docs.text
+    ref = client.get("/api/reference").text  # Scalar alone (pinned, SRI), with no Tabler to leak into it
+    assert "@scalar/api-reference@1.75.0/" in ref and 'integrity="sha384-' in ref and "tabler" not in ref
+    assert 'id="foundry-api"' in ref and 'id="api-reference"' not in ref
+    cfg_js = (STATIC / "api-docs.js").read_text()
+    for setting in [
+        'url: "/openapi.json"',
+        'forceDarkModeState: "dark"',
+        "telemetry: false",
+        "agent: { disabled: true }",
+    ]:
+        assert setting in cfg_js, setting
+    js = (STATIC / "app.js").read_text()
+    assert "maplibregl.Popup" not in js and "cooperativeGestures: true" in js and "scrollIntoView" in js
+    assert js.count("scrollIntoView") == 1  # only the toast's Show button may move the page
+    home = client.get("/").text
+    assert (
+        'id="detail" role="region" aria-label="Result details"' in home
+        and 'role="status" aria-live="polite"' in home
+    )
+    report_css = (REPO / "analysis/templates/_style.html").read_text()
+    assert "color-scheme:dark" in report_css and "prefers-color-scheme" not in report_css

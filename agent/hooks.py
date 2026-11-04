@@ -25,6 +25,7 @@ from agent.archive import ArchiveWriter
 from agent.telemetry import to_attr
 from core import geometry
 from core.spans import SPAN_CAP_BYTES
+from tools.lgnd import areas as lgnd_areas
 from tools.lgnd import descriptors as lgnd
 
 
@@ -243,7 +244,10 @@ class HarnessHooks(HookProvider):
         if not lgnd.reads_area(name, inp):
             return
         scope = dict(inp.get("scope") or {})
-        boundary = self.search_area.get("geometry")
+        # The agent's payload carries the simplified LGND ring, not the full boundary (`invoke.attach_area`
+        # drops `geometry`: Texas is 45,740 points). Narrowing is judged against that ring, the same polygon
+        # LGND itself searches when the boundary is enforced.
+        boundary = self.search_area.get("geometry") or lgnd_areas.ring_polygon(area)
         outline = lgnd.area_outline(scope.get("area"))
         if boundary and outline and all(geometry.contains(boundary, lon, lat) for lon, lat in outline):
             return  # a narrower search inside the boundary: kept as sent

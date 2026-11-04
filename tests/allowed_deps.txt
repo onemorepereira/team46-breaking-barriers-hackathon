@@ -14,3 +14,5 @@ uvicorn
 markdown-it-py
 # Request/response models for the console API docs (FastAPI depends on it already). Not observability.
 pydantic
+# Auth for the LGND MCP client (RefreshingBearer, an httpx.Auth); mcp already depends on it. Not observability.
+httpx

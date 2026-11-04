@@ -114,6 +114,10 @@
               <div><span class="swatch swatch-claim"></span>Claimed location</div>
             </div>
             <div class="foundry-map-note small" id="map-note"></div>
+            <aside class="foundry-detail" id="detail" role="region" aria-label="Result details" hidden>
+              <button type="button" class="foundry-detail-close" id="detail-close" aria-label="Close result details"><i class="ti ti-x" aria-hidden="true"></i></button>
+              <div id="detail-body"></div>
+            </aside>
           </div>
           <div class="card-footer p-2">
             <div class="d-flex align-items-center gap-2 mb-1 small text-secondary"><i class="ti ti-photo"></i><span id="tiles-caption">Imagery tiles the tools returned appear here.</span></div>
@@ -185,6 +189,10 @@
       </div>
     </div>
   </div>
+</div>
+<div class="foundry-toast" id="toast" role="status" aria-live="polite" hidden>
+  <span id="toast-text"></span>
+  <button type="button" class="btn btn-sm btn-primary ms-2" id="toast-show">Show</button>
 </div>
 {% endblock %}
 {% block scripts %}

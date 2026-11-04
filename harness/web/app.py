@@ -50,7 +50,7 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         summary="Run the agent, stream its trace, and score each run with the judge tribunal.",
         description=DESCRIPTION,
         openapi_tags=TAGS,
-        docs_url="/api/docs",
+        docs_url=None,  # served below: Scalar in the console's chrome (docs/console-polish)
         redoc_url=None,
     )
     app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
@@ -90,6 +90,16 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
     def run_page(request: Request, run_id: str) -> HTMLResponse:
         load(run_id)
         return page(request, "run.html", run_id=run_id, active="runs")
+
+    @app.get("/api/docs", include_in_schema=False, response_class=HTMLResponse)
+    def api_docs(request: Request) -> HTMLResponse:
+        """The API reference under the console's own header; the reference is framed (docs/console-polish)."""
+        return page(request, "api_docs.html", active="api")
+
+    @app.get("/api/reference", include_in_schema=False, response_class=HTMLResponse)
+    def api_reference(request: Request) -> HTMLResponse:
+        """Scalar alone, with no Tabler: framed by /api/docs so the console styles never reach it."""
+        return pages.TemplateResponse(request, "api_reference.html", {"team": TEAM})
 
     @app.get("/api/models", tags=["Setup"], response_model=ModelsResponse,
              summary="Agent models and the seated judges")  # fmt: skip

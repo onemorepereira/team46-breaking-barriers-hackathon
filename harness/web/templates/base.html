@@ -1,8 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
   <title>{% block title %}{{ team }}{% endblock %} · Agentic eval console</title>
   <link rel="icon" type="image/png" href="/static/favicon.png">
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css">
@@ -24,7 +25,7 @@
       <div class="navbar-nav flex-row gap-1">
         <a class="nav-link {{ 'active' if active == 'console' }}" href="/"><i class="ti ti-player-play me-1"></i>Console</a>
         <a class="nav-link {{ 'active' if active == 'runs' }}" href="/runs"><i class="ti ti-history me-1"></i>Runs</a>
-        <a class="nav-link" href="/api/docs"><i class="ti ti-code me-1"></i>API</a>
+        <a class="nav-link {{ 'active' if active == 'api' }}" href="/api/docs"><i class="ti ti-code me-1"></i>API</a>
       </div>
       <div class="ms-auto d-none d-lg-flex align-items-center gap-2 text-secondary small">
         <i class="ti ti-scale"></i> Clay Earth Dataset Foundry · Track 1
