@@ -47,7 +47,7 @@ export default function EvidenceMap({
   const host = useRef<HTMLDivElement>(null),
     map = useRef<any>(null),
     markers = useRef<any[]>([]),
-    fit = useRef<() => void>(() => {}),
+    fit = useRef<(animate?: boolean) => void>(() => {}),
     lastInspection = useRef({ open: false, runId: "" }),
     onSelectRef = useRef(onSelect),
     tileFocus = useRef<HTMLButtonElement>(null);
@@ -307,12 +307,16 @@ export default function EvidenceMap({
       ...(view?.map.claims?.features || []),
       ...(view?.map.chips?.features || []),
     ].forEach((f: any) => include(f?.geometry?.coordinates));
-    fit.current = () => {
+    fit.current = (animate = true) => {
       m.setPadding({ top: 40, bottom: 50, left: 40, right: 40 });
       if (!bounds.isEmpty())
-        m.fitBounds(bounds, { padding: 60, maxZoom: 14, duration });
+        m.fitBounds(bounds, {
+          padding: 60,
+          maxZoom: 14,
+          duration: animate ? duration : 0,
+        });
     };
-    if (!inspecting) fit.current();
+    if (!inspecting) fit.current(false);
   }, [view, ready, preferences.colour]);
   useEffect(() => {
     if (!ready || !map.current) return;
