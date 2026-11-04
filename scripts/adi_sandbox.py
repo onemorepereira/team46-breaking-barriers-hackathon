@@ -34,6 +34,7 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("mode", choices=["ui", "run", "check"])
     p.add_argument("--prompt")
+    p.add_argument("--workshop-proxy", action="store_true")
     p.add_argument("--model", default="sonnet")
     p.add_argument("--port", type=int, default=8787)
     args = p.parse_args()
@@ -52,6 +53,10 @@ def main() -> int:
         return 0
     from harness.cli import main as harness_main
 
+    if args.mode == "ui" and args.workshop_proxy:
+        from scripts.adi_proxy import serve
+
+        return serve(cfg, args.port)
     if args.mode == "ui":
         return harness_main(["ui", "--port", str(args.port)])
     if not args.prompt:

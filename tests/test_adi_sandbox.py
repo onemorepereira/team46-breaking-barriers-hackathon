@@ -27,3 +27,26 @@ def test_guard_refuses_inherited_resources_and_profile(monkeypatch):
     monkeypatch.setenv("AWS_PROFILE", "personal")
     with pytest.raises(ValueError):
         check_identity(GOOD, CFG)
+
+
+def test_workshop_proxy_rewrites_application_urls_not_external_or_escaped_evidence():
+    from scripts.adi_proxy import rewrite
+
+    assert (
+        rewrite(b'<script src="/static/app.js"></script>', "text/html", "/", "/proxy/8787")
+        == b'<script src="/proxy/8787/static/app.js"></script>'
+    )
+    assert (
+        rewrite(b"fetch(`/api/runs`)", "javascript", "/static/app.js", "/proxy/8787")
+        == b"fetch(`/proxy/8787/api/runs`)"
+    )
+    assert (
+        rewrite(b'{"tile_url":"/tiles/a"}', "application/json", "/api/runs", "/proxy/8787")
+        == b'{"tile_url":"/proxy/8787/tiles/a"}'
+    )
+    raw = rb'{"text":"\"tile_url\":\"/original\""}'
+    assert rewrite(raw, "application/json", "/api/runs", "/proxy/8787") == raw
+    assert (
+        rewrite(b"https://example.com/", "javascript", "/static/app.js", "/proxy/8787")
+        == b"https://example.com/"
+    )

@@ -8,7 +8,7 @@ Expected workshop account: **952337755619**, assumed role **WSParticipantRole**,
 cp harness.adi.example.yaml harness.local.yaml
 uv sync
 uv run python -m scripts.adi_sandbox check
-uv run python -m scripts.adi_sandbox ui --port 8787
+uv run python -m scripts.adi_sandbox ui --port 8787 --workshop-proxy
 ```
 
 The launcher refuses personal profiles, wrong account/role/region, another account's runtime/secret, or non-local archives. It does not change IAM or deploy cloud infrastructure.
@@ -26,3 +26,5 @@ RODA catalog tools are enabled. **LGND imagery tools are not connected in this i
 On November 4, actual inference probes succeeded for Sonnet 5.5, Opus 5.5, Kimi K3, Kimi K2.5, Mistral Large 3, DeepSeek V3.2 and Qwen3 235B in this event account. Model availability may change. A real Sonnet dataset-discovery run finished with eight steps, zero tool errors, and three valid judges (Mistral, DeepSeek and Kimi). Detailed run records stay out of Git.
 
 `harness.local.yaml`, credentials, archives and logs are private/ignored. Model calls consume the event budget. Source checks and replay do not prove real-world dataset accuracy.
+
+The optional `--workshop-proxy` adapts application links for code-server’s existing authenticated `/proxy/8787/` route. The server still binds only to localhost. Omit the flag when accessing the app directly on localhost.
