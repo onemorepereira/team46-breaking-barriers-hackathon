@@ -328,6 +328,11 @@ def gateway():
             },
         },
     ]
+    deadline = time.monotonic() + 120
+    while br.get_gateway(gatewayIdentifier=state["gateway_id"])["status"] == "CREATING":
+        if time.monotonic() > deadline:
+            raise RuntimeError("Gateway still creating; rerun gateway stage")
+        time.sleep(4)
     if not state.get("target_id"):
         result = br.create_gateway_target(
             gatewayIdentifier=state["gateway_id"],

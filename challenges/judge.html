@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Team46 · Live challenge proof</title>
+<style>body{background:#101923;color:#e8eef5;font:17px system-ui;margin:36px auto;max-width:1100px;padding:0 20px}h1{font-size:32px}button{background:#33d4c9;color:#082524;border:0;border-radius:8px;padding:14px 24px;font:700 17px system-ui;cursor:pointer}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:22px 0}.card{background:#1c2b3b;border:1px solid #37546c;border-radius:12px;padding:20px}.status{color:#f4c56c}.ok{color:#63f1ac}.muted{color:#a7b9c9}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#172433;padding:18px;border-radius:8px;font:14px ui-monospace}h2{font-size:22px}h3{font-size:18px}a{color:#6be4e3}.small{font-size:14px}#answer{line-height:1.6;white-space:pre-wrap}@media(max-width:800px){.grid{grid-template-columns:1fr}}</style></head><body>
+<p class="muted">TEAM46 · EVENT AWS ACCOUNT 952337755619 · OREGON</p><h1>Live proof for the three remaining tiered challenges</h1>
+<p>AgentCore Runtime → authenticated MCP Gateway → Lambda tools → Bedrock Knowledge Base → cited Bedrock answer.</p>
+<button id="run">Run live proof for judge</button> <span id="progress" class="muted">The button makes a fresh request to the real AWS endpoint.</span>
+<div class="grid"><section class="card"><h2>Know Your Stuff</h2><p id="kb" class="status">Awaiting live verification</p><p>Show: completed ingestion + live agent answer with a source document cited.</p></section><section class="card"><h2>Gateway Builder</h2><p id="gateway" class="status">Awaiting live verification</p><p>Show: deployed Gateway, at least three MCP tools, and the agent calling one.</p></section><section class="card"><h2>Lock the Front Door</h2><p id="oauth" class="status">Awaiting live verification</p><p>Show: JWT/OAuth Runtime configuration, rejection without a token, success with a valid token.</p></section></div>
+<h2>Live answer with source citations</h2><div id="answer" class="card">Run the live proof to populate this panel.</div>
+<h2>Gateway tools and authentication results</h2><pre id="details">No successful proof saved yet.</pre>
+<h2>Ingested source excerpts</h2><div id="sources"></div>
+<details><summary>Resource identifiers for the AWS console</summary><pre id="resources"></pre></details>
+<p class="small muted">OAuth client secret and bearer token stay on the workshop host. AgentCore deployment and observability were already completed by the team. This page verifies the additional three challenges.</p>
+<script>
+const $=id=>document.getElementById(id);
+function render(p){
+ for(const [id,key] of [['kb','know_your_stuff_verified'],['gateway','gateway_builder_verified'],['oauth','lock_front_door_verified']]){$(id).textContent=p[key]?'LIVE PROOF PASSED':'Needs verification';$(id).className=p[key]?'ok':'status';}
+ $('answer').textContent=p.agent_result?.answer||p.agent_result?.error||'No answer returned';
+ $('details').textContent=JSON.stringify({checked_at:p.checked_at,ingestion:p.ingestion_status,statistics:p.ingestion_statistics,gateway_tools:p.agent_result?.gateway_tools,called_tool:p.agent_result?.gateway_tool,tool_call_succeeded:p.agent_result?.tool_call_succeeded,without_token_http:p.unauthenticated_http_status,valid_oauth_token_http:p.authenticated_http_status,runtime:p.runtime_arn,knowledge_base:p.kb_id},null,2);
+ $('sources').replaceChildren();for(const s of p.agent_result?.sources||[]){const box=document.createElement('pre');box.textContent=s.uri+'\n\n'+s.text;$('sources').append(box);}
+}
+fetch('state').then(r=>r.json()).then(p=>{$('resources').textContent=JSON.stringify(p.resources,null,2);if(p.proof)render(p.proof);});
+$('run').onclick=async()=>{$('run').disabled=true;$('progress').textContent='Calling the live AWS endpoint. This can take 30–90 seconds…';try{const r=await fetch('proof',{method:'POST'});const p=await r.json();if(!r.ok)throw Error(p.error||r.status);render(p);$('progress').textContent='Fresh proof returned at '+p.checked_at;}catch(e){$('progress').textContent='Not verified: '+e.message;}finally{$('run').disabled=false;}};
+</script></body></html>
