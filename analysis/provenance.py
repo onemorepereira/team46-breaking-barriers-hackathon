@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -56,6 +57,7 @@ def parse_claims_block(final_output: str) -> list[dict[str, Any]] | None:
     return None
 
 
+UNICODE_ESCAPE_RE = re.compile(r"\\u([0-9a-fA-F]{4})")
 JSON_ESCAPES = {"\\n": " ", "\\t": " ", "\\r": " ", '\\"': '"', "\\/": "/"}
 
 
@@ -66,11 +68,13 @@ def unescape_json_text(s: str) -> str:
     """
     for esc, ch in JSON_ESCAPES.items():
         s = s.replace(esc, ch)
-    return s
+    # \uXXXX escapes (JSON's way to write non-ASCII, e.g. "S\u00e3o Paulo"); found in Verify
+    return UNICODE_ESCAPE_RE.sub(lambda m: chr(int(m.group(1), 16)), s)
 
 
 def normalize_text(s: str) -> str:
-    return re.sub(r"\s+", " ", s.strip().lower())
+    """NFC so composed and decomposed accents compare equal (Verify edge case), then casefold."""
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFC", s).strip().casefold())
 
 
 def value_to_string(value: Any) -> tuple[str, bool]:

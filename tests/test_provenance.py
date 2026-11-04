@@ -138,6 +138,10 @@ def test_number_matching(value, result, ok):
         # JSON-escaped line breaks in a tool result read as spaces (live run regression)
         ("filing history, ERCOT large-load", r'"filing history,\nERCOT large-load queue"', True),
         ('say "hi"', r'{"q": "say \"hi\""}', True),
+        # Unicode (Verify edge cases): JSON \u escapes, NFC vs NFD, casefold
+        ("São Paulo", r'{"city": "S\u00e3o Paulo"}', True),
+        ("S\u00e3o Paulo", "city: Sa\u0303o Paulo", True),
+        ("ÅNGSTRÖM", "ångström units", True),
     ],
 )
 def test_text_matching(value, result, ok):
