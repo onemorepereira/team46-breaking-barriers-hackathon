@@ -36,6 +36,9 @@
   function show(id, on = true) { const n = $(id); if (n) n.hidden = !on; }
 
   // ---------- map ----------
+  // tiles.serve: imagery basemaps load through the console's cache (/tiles/base); OSM always loads from OSM.
+  const PROXY = document.body.dataset.tileProxy === "1";
+  const viaConsole = (b) => (PROXY && b.id !== "osm" ? { ...b, tiles: [`/tiles/base/${b.id}/{z}/{x}/{y}.jpg`] } : b);
   const BASEMAPS = [
     { id: "s2", label: "Sentinel-2", attribution: "Sentinel-2 cloudless 2023 by EOX (contains modified Copernicus Sentinel data)",
       tiles: ["https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg"], maxzoom: 15 },
@@ -45,7 +48,7 @@
       tiles: ["https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage?bbox={bbox-epsg-3857}&bboxSR=3857&imageSR=3857&size=256,256&format=jpg&f=image"], maxzoom: 19 },
     { id: "osm", label: "Streets", attribution: "© OpenStreetMap contributors",
       tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"], maxzoom: 19 },
-  ];
+  ].map(viaConsole);
   const CYAN = "#01d5f9", ORANGE = "#fd8800";
   const empty = () => ({ type: "FeatureCollection", features: [] });
   const data = { chips: empty(), claims: empty(), area: empty() };

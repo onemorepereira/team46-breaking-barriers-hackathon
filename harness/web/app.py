@@ -6,6 +6,7 @@ import asyncio
 import base64
 import binascii
 import json
+import re
 import threading
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
@@ -13,14 +14,14 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from analysis.trace import ArchiveError, Run
 from core.store import open_store
 from harness import config as config_mod
-from harness import invoke, rows
+from harness import imagery, invoke, rows, tiles
 from harness.manifest import Index
 from harness.web import live
 from harness.web.api_docs import (
@@ -28,6 +29,7 @@ from harness.web.api_docs import (
     ERRORS,
     EVENTS_DOC,
     TAGS,
+    TILE_RESPONSES,
     JudgeStarted,
     ModelsResponse,
     RunRequest,
@@ -65,8 +67,16 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
     def agent_models() -> list[str]:
         return [k for k, m in (cfg["models"] or {}).items() if m.get("agent", True)]
 
+    tile_cfg = tiles.settings(cfg)
+    tile_cache = tiles.Cache(cfg)
+    archives = tiles.Archives(cfg, index)
+
     def page(request: Request, name: str, **ctx: Any) -> HTMLResponse:
-        return pages.TemplateResponse(request, name, {"team": TEAM, "models": agent_models(), **ctx})
+        return pages.TemplateResponse(
+            request,
+            name,
+            {"team": TEAM, "models": agent_models(), "tile_proxy": bool(tile_cfg["serve"]), **ctx},
+        )
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     def console(request: Request) -> HTMLResponse:
@@ -111,6 +121,8 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
     # Build any missing rows (older runs, or runs from another machine) in the background at startup, so the
     # first visit to the runs page doesn't wait on S3.
     threading.Thread(target=lambda: _quietly(all_rows), name="rows-warmup", daemon=True).start()
+    # Evict at startup too: the every-200-writes count is per process, so restarts alone never grow it.
+    threading.Thread(target=lambda: _quietly(tile_cache.evict), name="tiles-evict", daemon=True).start()
 
     @app.get("/api/runs", tags=["Runs"], response_model=RunsResponse, summary="List archived runs",
              responses={400: ERRORS[400]})  # fmt: skip
@@ -150,7 +162,7 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         the requested boundary, result footprints, claimed sites), `scorecard` (every criterion, each judge's
         vote and rationale, the seats, failure modes), `claims`, `final_answer`, `narrative` and
         `trouble_spots`."""
-        return run_view(load(run_id))
+        return run_view(load(run_id), serve_tiles=bool(tile_cfg["serve"]))
 
     @app.post("/api/runs", tags=["Runs"], response_model=RunStarted, summary="Start a run",
               responses={400: ERRORS[400]})  # fmt: skip
@@ -192,6 +204,49 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
             raise HTTPException(404, "no live run with that ID")
         return StreamingResponse(stream(state), media_type="text/event-stream",
                                  headers={"cache-control": "no-cache"})  # fmt: skip
+
+    def tile_response(t: tiles.Tile) -> Response:
+        headers = {"Cache-Control": "public, max-age=604800", "X-Tile-Origin": t.origin}
+        return Response(t.data, media_type=t.content_type, headers=headers)
+
+    @app.get("/tiles/base/{source}/{z}/{x}/{y}.jpg", tags=["Tiles"], response_class=Response,
+             summary="A cached imagery basemap tile", responses=TILE_RESPONSES)  # fmt: skip
+    def base_tile(source: str, z: int, x: int, y: int) -> Response:
+        """One 256 px basemap tile, XYZ scheme. `source` is `s2` (Sentinel-2 cloudless 2023 by EOX, zoom
+        ≤ 15), `usgs` (USGS imagery, ≤ 16) or `naip` (USGS NAIP, US only, ≤ 19). It's served from the
+        console's disk cache, else fetched from the provider and kept. OpenStreetMap isn't offered: its tile
+        policy discourages caching proxies, so the page loads it from OSM directly."""
+        if not imagery.valid_xyz(source, z, x, y):
+            raise HTTPException(404, "unknown source or tile out of range")
+        try:
+            return tile_response(tile_cache.base(source, z, x, y))
+        except tiles.TileUnavailable as e:
+            raise HTTPException(502, f"tile unavailable: {e}") from e
+
+    @app.get("/tiles/chip/{idx}/{bbox}.jpg", tags=["Tiles"], response_class=Response,
+             summary="The imagery under one search result", responses=TILE_RESPONSES)  # fmt: skip
+    def chip_tile(
+        idx: str,
+        bbox: str,
+        run: str | None = Query(None, description="The run that found it: its archived copy is used first."),
+    ) -> Response:
+        """The imagery under one result's footprint, 384 px. `idx` is the LGND index (`naip` or `s2`), and
+        `bbox` is `west,south,east,north` in degrees, at most 2° a side. It's served from the disk cache, else
+        the run's archive (`runs/<run>/tiles/`, written when the run's report is), else the provider."""
+        box = imagery.parse_bbox(bbox)
+        if idx not in imagery.CHIP_INDEXES or box is None:
+            raise HTTPException(404, "unknown index or invalid bbox")
+        archive = None
+        state = live.RUNS.get(run) if run else None
+        # Skip the archive only for a run still being made (nothing archived yet); a re-judge keeps it.
+        if run and re.fullmatch(imagery.RUN_ID_RE, run) and (state is None or state.done or state.archived):
+            store = archives.store_for(run)
+            if store is not None:
+                archive = (store, tiles.archive_key(run, idx, box))
+        try:
+            return tile_response(tile_cache.chip(idx, box, archive, on_archive_error=archives.failed))
+        except tiles.TileUnavailable as e:
+            raise HTTPException(502, f"tile unavailable: {e}") from e
 
     @app.get("/reports/{run_id}", response_class=HTMLResponse, tags=["Reports"],
              summary="A run's static HTML report", responses={404: ERRORS[404]})  # fmt: skip

@@ -38,7 +38,7 @@ def cmd_check(cfg: config_mod.Config, index: Index, args: argparse.Namespace) ->
     return 1
 
 
-def write_report(cfg: config_mod.Config, run: Run) -> Path:
+def write_report(cfg: config_mod.Config, run: Run, archive_tiles: bool = True) -> Path:
     out = Path(cfg["out_dir"]) / run.run_id
     out.mkdir(parents=True, exist_ok=True)
     path = out / "report.html"
@@ -46,7 +46,25 @@ def write_report(cfg: config_mod.Config, run: Run) -> Path:
     from harness import rows
 
     rows.save(cfg["out_dir"], run)  # the runs table row, kept in step with the report
+    if archive_tiles:
+        archive_tiles_quietly(cfg, run)
     return path
+
+
+def archive_tiles_quietly(cfg: config_mod.Config, run: Run) -> dict[str, int] | None:
+    """Copy the run's result tiles into its archive (docs/tile-cache AC1). Never fails the caller."""
+    from harness import tiles
+
+    if not tiles.settings(cfg)["archive"]:
+        return None
+    try:
+        counts = tiles.archive_run_tiles(cfg, run)
+    except Exception as e:  # noqa: BLE001 - tiles are a convenience; the report stands without them
+        print(f"run {run.run_id}: tile archiving failed ({e})", file=sys.stderr)
+        return None
+    if counts["failed"]:
+        print(f"run {run.run_id}: tiles {counts}", file=sys.stderr)
+    return counts
 
 
 def cmd_replay(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:

@@ -40,6 +40,10 @@ TAGS: list[dict[str, Any]] = [
     {"name": "Live events", "description": "Server-sent events for a run in progress or being judged."},
     {"name": "Judging", "description": "Send a run to the judge tribunal again."},
     {"name": "Reports", "description": "Static HTML reports, one per run."},
+    {
+        "name": "Tiles",
+        "description": "Map imagery served and cached by the console (docs/tile-cache): imagery basemaps, and the tile under each search result, archived with its run so replays work offline.",
+    },
     {"name": "Setup", "description": "What this console is configured with."},
 ]
 
@@ -52,6 +56,17 @@ ERRORS: dict[int, dict[str, Any]] = {
     409: {"description": "The run is still running or already being judged.",
           "content": {"application/json": {"example": {"detail": "this run is still running or being judged"}}}},
 }  # fmt: skip
+
+TILE_RESPONSES: dict[int | str, dict[str, Any]] = {
+    200: {
+        "description": "The tile. `X-Tile-Origin` says where it came from: `cache`, `archive`, `upstream` or `stale` (an expired copy, served because the provider failed).",
+        "content": {"image/jpeg": {}, "image/png": {}},
+    },
+    404: {"description": "Unknown source or index, a tile out of range, or an invalid bbox."},
+    502: {
+        "description": "No copy anywhere and the provider failed (or answered with something that isn't an image)."
+    },
+}
 
 EVENTS_DOC = """
 A `text/event-stream` of JSON events (`data: {...}`), in order. The stream ends after `done`.

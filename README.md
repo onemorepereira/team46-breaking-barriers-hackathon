@@ -19,6 +19,7 @@ Track 1 evaluates an agent doing an ADB-style "how to use AI / build datasets" t
 A working Track 1 evaluation harness, on branch `design/eval-harness` **[team]**. An agent finds sites from a prompt, for example data centers in Richardson, TX, or farmland in Khammouane, Laos. Every model and tool decision is recorded. Each run is then checked, graded, **scored by a three-judge tribunal**, summarized and reported from the archive alone, and shown in the **Team Foundry console** **[team]**.
 
 - Harness: [spec](docs/eval-harness/spec.md), [design](docs/eval-harness/design.md), [spike results](docs/eval-harness/spikes.md), [handoff and verification](docs/eval-harness/handoff.md).
+- Map imagery: [tile cache and archived result tiles](docs/tile-cache/spec.md) ([design](docs/tile-cache/design.md), [handoff](docs/tile-cache/handoff.md)).
 - Scoring and console: [**how a run is scored**](docs/judging/guide.md), [spec](docs/judging/spec.md), [design](docs/judging/design.md), [paper notes (GRA)](docs/judging/paper-notes.md), [gaps against the briefs](docs/judging/gaps.md), [handoff](docs/judging/handoff.md).
 
 ### How it works

@@ -18,6 +18,8 @@ class Store(Protocol):
 
     def read_text(self, key: str) -> str | None: ...
     def write_text(self, key: str, text: str) -> None: ...
+    def read_bytes(self, key: str) -> bytes | None: ...
+    def write_bytes(self, key: str, data: bytes) -> None: ...
     def list(self, prefix: str) -> list[str]: ...
 
 
@@ -39,6 +41,15 @@ class FileStore:
         p = self._path(key)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text, encoding="utf-8")
+
+    def read_bytes(self, key: str) -> bytes | None:
+        p = self._path(key)
+        return p.read_bytes() if p.is_file() else None
+
+    def write_bytes(self, key: str, data: bytes) -> None:
+        p = self._path(key)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(data)
 
     def list(self, prefix: str) -> list[str]:
         base = self._path(prefix)
@@ -75,15 +86,22 @@ class S3Store:
         return f"{self.prefix.rstrip('/')}/{key}" if self.prefix else key
 
     def read_text(self, key: str) -> str | None:
+        body = self.read_bytes(key)
+        return None if body is None else body.decode("utf-8")
+
+    def write_text(self, key: str, text: str) -> None:
+        self.write_bytes(key, text.encode("utf-8"))
+
+    def read_bytes(self, key: str) -> bytes | None:
         try:
             obj = self.client.get_object(Bucket=self.bucket, Key=self._key(key))
         except self.client.exceptions.NoSuchKey:
             return None
         body: bytes = obj["Body"].read()
-        return body.decode("utf-8")
+        return body
 
-    def write_text(self, key: str, text: str) -> None:
-        self.client.put_object(Bucket=self.bucket, Key=self._key(key), Body=text.encode("utf-8"))
+    def write_bytes(self, key: str, data: bytes) -> None:
+        self.client.put_object(Bucket=self.bucket, Key=self._key(key), Body=data)
 
     def list(self, prefix: str) -> list[str]:
         """List one directory level under prefix (a single run's folder; bounded)."""

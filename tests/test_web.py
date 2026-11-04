@@ -99,7 +99,9 @@ def test_run_view_kpis_map_and_scorecard(tmp_path):
     assert k["agent_cost_usd"] is not None and k["judging_cost_usd"] > 0
     chips = v["map"]["chips"]["features"]
     assert len(chips) == 2 and {c["properties"]["inside"] for c in chips} == {True, False}
-    assert chips[0]["properties"]["tile_url"].startswith("https://imagery.nationalmap.gov/")
+    assert chips[0]["properties"]["tile_url"].startswith(
+        "/tiles/chip/naip/"
+    )  # through the console (tile-cache AC2)
     assert v["map"]["area"]["properties"]["label"] == "Testville"
     assert len(v["map"]["claims"]["features"]) == 2
     t1 = next(e for e in v["timeline"] if e["ref"] == "T1")
@@ -284,3 +286,67 @@ def test_runs_list_pages_by_cursor_filters_and_is_stable_when_a_run_starts(tmp_p
         client.get("/api/runs?limit=0").status_code == 422
         and client.get("/api/runs?limit=201").status_code == 422
     )
+
+
+def test_tile_routes_validate_cache_and_document(tmp_path, monkeypatch):
+    """docs/tile-cache AC2, AC4, AC5, AC8, AC9, AC10 through create_app; only the provider is faked."""
+    from harness import tiles
+
+    calls, reply = [], {"data": b"\xff\xd8\xff\xe0tile"}
+
+    def fake(url):
+        calls.append(url)
+        if isinstance(reply["data"], Exception):
+            raise reply["data"]
+        return reply["data"]
+
+    monkeypatch.setattr(tiles, "fetch_upstream", fake)
+    cfg = cfg_for(tmp_path)
+    run = lgnd_run(tmp_path / "archive")
+    Index(cfg["out_dir"]).record_run(run.run_id, f"file://{tmp_path}/archive")
+    client = TestClient(create_app(cfg))
+
+    bad_urls = [
+        "/tiles/base/osm/1/0/0.jpg",  # OSM is never proxied
+        "/tiles/base/s2/16/0/0.jpg",  # above Sentinel-2's max zoom
+        "/tiles/base/naip/2/4/0.jpg",  # x out of range
+        "/tiles/chip/x/0,0,0.1,0.1.jpg",  # unknown index
+        "/tiles/chip/s2/0,0,3,0.1.jpg",  # wider than 2 degrees
+        "/tiles/chip/s2/nope.jpg",  # not a bbox
+    ]
+    for bad in bad_urls:
+        assert client.get(bad).status_code == 404, bad
+    assert calls == []  # nothing invalid ever reached a provider
+
+    first = client.get("/tiles/base/s2/3/1/2.jpg")
+    assert first.status_code == 200 and first.headers["x-tile-origin"] == "upstream"
+    assert (
+        first.headers["cache-control"] == "public, max-age=604800"
+        and first.headers["content-type"] == "image/jpeg"
+    )
+    warm = client.get("/tiles/base/s2/3/1/2.jpg")
+    assert warm.headers["x-tile-origin"] == "cache" and len(calls) == 1  # AC8: a warm hit makes no fetch
+
+    view = client.get(f"/api/runs/{run.run_id}").json()
+    chip = view["map"]["chips"]["features"][0]["properties"]
+    assert chip["tile_url"].startswith("/tiles/chip/") and f"run={run.run_id}" in chip["tile_url"]
+    assert chip["tile_source"]  # AC9: attribution travels with the tile
+    reply["data"] = OSError("provider down")
+    assert client.get("/tiles/chip/s2/1,1,1.1,1.1.jpg").status_code == 502  # nothing anywhere
+    run.store.write_bytes(tiles.archive_key(run.run_id, "s2", [1.0, 1.0, 1.1, 1.1]), b"\x89PNGarchived")
+    archived = client.get(f"/tiles/chip/s2/1,1,1.1,1.1.jpg?run={run.run_id}")
+    assert archived.headers["x-tile-origin"] == "archive" and archived.headers["content-type"] == "image/png"
+
+    home = client.get("/").text
+    assert 'data-tile-proxy="1"' in home
+    js = (STATIC / "app.js").read_text()
+    for credit in ["EOX", "USGS The National Map", "OpenStreetMap contributors"]:
+        assert credit in js  # AC9: basemap attributions unchanged
+    spec = client.get("/openapi.json").json()
+    for path in ["/tiles/base/{source}/{z}/{x}/{y}.jpg", "/tiles/chip/{idx}/{bbox}.jpg"]:
+        assert spec["paths"][path]["get"]["tags"] == ["Tiles"]  # AC10
+
+    off = TestClient(create_app(cfg_for(tmp_path, tiles={"serve": False})))  # rollback lever
+    assert 'data-tile-proxy="0"' in off.get("/").text
+    url = off.get(f"/api/runs/{run.run_id}").json()["map"]["chips"]["features"][0]["properties"]["tile_url"]
+    assert url.startswith("https://")

@@ -59,6 +59,9 @@ def test_writes_to_s3():
         assert proc.force_flush()
         assert lines(store.read_text("runs/r2/spans-0001.jsonl"))[0]["name"] == "x"
         assert store.list("runs/r2") == ["runs/r2/spans-0001.jsonl"]
+        jpeg = b"\xff\xd8\xff\xe0 tile"
+        store.write_bytes("runs/r2/tiles/s2/k.jpg", jpeg)
+        assert store.read_bytes("runs/r2/tiles/s2/k.jpg") == jpeg and store.read_bytes("runs/r2/nope") is None
 
 
 def test_write_failures_are_counted_not_raised(tmp_path):
@@ -72,3 +75,12 @@ def test_write_failures_are_counted_not_raised(tmp_path):
     writer = ArchiveWriter(Broken(), backoff=(0, 0, 0))
     writer.put("runs/r3/x", "y")
     assert writer.wait(5) and writer.errors == 1
+
+
+def test_file_store_round_trips_bytes(tmp_path):
+    from core.store import FileStore
+
+    store = FileStore(f"file://{tmp_path}")
+    store.write_bytes("runs/r/tiles/naip/k.jpg", b"\x89PNG data")
+    assert store.read_bytes("runs/r/tiles/naip/k.jpg") == b"\x89PNG data"
+    assert store.read_bytes("runs/r/missing.jpg") is None

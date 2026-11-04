@@ -22,13 +22,27 @@ from harness import area as geo
 from harness import config as config_mod
 from harness import imagery, invoke
 from harness.manifest import Index
+from harness.tiles import settings as tiles_settings
 from tools.lgnd import descriptors as lgnd
 from tools.lgnd import results as lgnd_results
 
 
+def archive_later(cfg: config_mod.Config, run: Run) -> threading.Thread:
+    """Archive the run's result tiles in the background, after `done` is set, so the result isn't delayed."""
+    from harness.cli import archive_tiles_quietly
+
+    t = threading.Thread(
+        target=archive_tiles_quietly, args=(cfg, run), name=f"tiles-{run.run_id}", daemon=True
+    )
+    t.start()
+    return t
+
+
 class RunState:
-    def __init__(self, run_id: str, live: Path) -> None:
+    def __init__(self, run_id: str, live: Path, serve_tiles: bool = True, archived: bool = False) -> None:
         self.run_id = run_id
+        self.archived = archived  # a re-judge of an archived run: its tiles may already be in the archive
+        self.serve_tiles = serve_tiles  # tiles.serve: result tiles through the console, else upstream
         self.live = live
         self.done = False
         self.area: geo.Area | None = None
@@ -44,7 +58,11 @@ class RunState:
     def annotate(self, chips: list[dict[str, Any]]) -> None:
         geom = self.area.geometry if self.area else None
         for c in chips:
-            c["tile_url"] = imagery.tile_url(c.get("index"), c["bbox"])
+            c["tile_url"] = (
+                imagery.console_chip_url(c.get("index"), c["bbox"], self.run_id)
+                if self.serve_tiles
+                else imagery.tile_url(c.get("index"), c["bbox"])
+            )
             c["tile_source"] = imagery.ATTRIBUTION.get(c.get("index") or "", imagery.ATTRIBUTION["s2"])
             if geom:
                 try:
@@ -86,12 +104,14 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str,
     live = Path(cfg["out_dir"]) / plan.run_id / "live.jsonl"
     live.parent.mkdir(parents=True, exist_ok=True)
     live.touch()
-    state = RunState(plan.run_id, live)
+    state = RunState(plan.run_id, live, serve_tiles=bool(tiles_settings(cfg)["serve"]))
     RUNS[plan.run_id] = state
 
     def work() -> None:
         from harness.cli import write_report
         from harness.web.view import run_view
+
+        finished: Run | None = None
 
         env = {"HARNESS_EXPORTER": "console", "HARNESS_CONSOLE_PATH": str(live.resolve())}
         scripted = bool(os.environ.get("HARNESS_TEST_SCRIPT"))
@@ -118,13 +138,16 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str,
                 if (cfg.get("judging") or {}).get("auto"):
                     judge_into(cfg, state, run, store)
                 run = Run.load(store, plan.run_id)
-            write_report(cfg, run)
+            write_report(cfg, run, archive_tiles=False)
             state.final = {"type": "done", "status": outcome.status, "error": outcome.error,
-                           "view": run_view(run)}  # fmt: skip
+                           "view": run_view(run, serve_tiles=state.serve_tiles)}  # fmt: skip
+            finished = run
         except Exception as e:  # noqa: BLE001 - shown on the page
             state.final = {"type": "done", "status": "error", "error": f"{type(e).__name__}: {e}"}
         finally:
             state.done = True
+        if finished is not None:
+            archive_later(cfg, finished)  # after `done`: tile archiving never delays the result
 
     threading.Thread(target=work, name=f"run-{plan.run_id}", daemon=True).start()
     return plan.run_id
@@ -150,21 +173,26 @@ def rejudge(cfg: config_mod.Config, index: Index, run_id: str) -> RunState:
     live = Path(cfg["out_dir"]) / run_id / "rejudge.jsonl"
     live.parent.mkdir(parents=True, exist_ok=True)
     live.write_text("", encoding="utf-8")
-    state = RunState(run_id, live)
+    state = RunState(run_id, live, serve_tiles=bool(tiles_settings(cfg)["serve"]), archived=True)
     state.area_event = {"type": "rejudge"}
     RUNS[run_id] = state
 
     def work() -> None:
+        finished: Run | None = None
         try:
             run = Run.load(store, run_id)
             judge_into(cfg, state, run, store)
             run = Run.load(store, run_id)
-            write_report(cfg, run)
-            state.final = {"type": "done", "status": run.status, "error": None, "view": run_view(run)}
+            write_report(cfg, run, archive_tiles=False)
+            state.final = {"type": "done", "status": run.status, "error": None,
+                           "view": run_view(run, serve_tiles=state.serve_tiles)}  # fmt: skip
+            finished = run
         except Exception as e:  # noqa: BLE001
             state.final = {"type": "done", "status": "error", "error": f"{type(e).__name__}: {e}"}
         finally:
             state.done = True
+        if finished is not None:
+            archive_later(cfg, finished)  # after `done`: tile archiving never delays the result
 
     threading.Thread(target=work, name=f"judge-{run_id}", daemon=True).start()
     return state

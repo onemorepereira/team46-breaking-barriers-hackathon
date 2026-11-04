@@ -16,7 +16,9 @@ def _bbox_polygon(b: list[float]) -> dict[str, Any]:
     return {"type": "Polygon", "coordinates": [[[w, s], [e, s], [e, n], [w, n], [w, s]]]}
 
 
-def map_layers(m: measure.Measured) -> dict[str, Any]:
+def map_layers(m: measure.Measured, run_id: str | None = None, serve_tiles: bool = True) -> dict[str, Any]:
+    """GeoJSON for the map. Result tiles load through the console's /tiles/chip endpoint (docs/tile-cache),
+    or straight from the provider when `tiles.serve` is off."""
     chips, claims = [], []
     for x in m.located:
         props = {
@@ -32,7 +34,11 @@ def map_layers(m: measure.Measured) -> dict[str, Any]:
             "lon": x.lon,
         }
         if x.source == "chip" and x.bbox:
-            props["tile_url"] = imagery.tile_url(x.index, x.bbox)
+            props["tile_url"] = (
+                imagery.console_chip_url(x.index, x.bbox, run_id)
+                if serve_tiles
+                else imagery.tile_url(x.index, x.bbox)
+            )
             props["tile_source"] = imagery.ATTRIBUTION.get(x.index or "", imagery.ATTRIBUTION["s2"])
             chips.append({"type": "Feature", "geometry": _bbox_polygon(x.bbox), "properties": props})
         elif x.source == "claim":
@@ -100,7 +106,7 @@ def scorecard(run: Run) -> dict[str, Any] | None:
     }
 
 
-def run_view(run: Run) -> dict[str, Any]:
+def run_view(run: Run, serve_tiles: bool = True) -> dict[str, Any]:
     prov = provenance.grade(run)
     m = measure.measure(run, prov)
     sig = signals.compute(run)
@@ -175,7 +181,7 @@ def run_view(run: Run) -> dict[str, Any]:
         },
         "kpis": kpis,
         "timeline": entries,
-        "map": map_layers(m),
+        "map": map_layers(m, run.run_id, serve_tiles),
         "scorecard": card,
         "claims": claims,
         "final_answer": measure.answer_text(run.final_output),
