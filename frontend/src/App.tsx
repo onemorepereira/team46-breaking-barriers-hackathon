@@ -114,7 +114,17 @@ function DataTable({ rows }: { rows: any[] }) {
     </div>
   );
 }
-function Reviewer({ view, onSaved }: { view: View; onSaved: () => void }) {
+function Reviewer({
+  view,
+  onSaved,
+  onReconsider,
+  busy,
+}: {
+  view: View;
+  onSaved: () => void;
+  onReconsider: (id: string) => void;
+  busy: boolean;
+}) {
   const judged =
     view.scorecard?.criteria?.filter(
       (c: any) => c.kind === "judged" && c.score !== null,
@@ -222,6 +232,15 @@ function Reviewer({ view, onSaved }: { view: View; onSaved: () => void }) {
             )}
           </div>
         )}
+        {criterion && (
+          <p className="fine-print">
+            Current panel score:{" "}
+            {formatScore(judged.find((c: any) => c.id === criterion)?.score)}
+            /100.{" "}
+            {decision === "disagree" &&
+              `Your selected rubric anchor: ${view.scorecard.anchors?.[criterion]?.[score] || "No anchor recorded"}`}
+          </p>
+        )}
         <label>
           Notes
           <textarea
@@ -272,6 +291,20 @@ function Reviewer({ view, onSaved }: { view: View; onSaved: () => void }) {
             </summary>
             <p>{r.note || "Criterion review saved."}</p>
             <pre>{JSON.stringify(r.criteria, null, 2)}</pre>
+            {r.current &&
+              !r.reconsidered &&
+              view.scorecard.reconsider_enabled && (
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => onReconsider(r.id)}
+                >
+                  Ask judges to reconsider
+                </button>
+              )}
+            {r.reconsidered && (
+              <small>Reconsidered {localTime(r.reconsidered)}</small>
+            )}
           </details>
         ))}
       </div>
@@ -405,7 +438,11 @@ export default function App() {
               ev.label ? `Searching ${ev.label}` : "Resolving search area",
             );
           if (ev.type === "step")
-            setPhase(ev.entry?.title || "Gathering evidence");
+            setPhase(
+              ev.entry?.kind === "end"
+                ? "Agent finished; preparing summary and evaluation"
+                : ev.entry?.title || "Gathering evidence",
+            );
           if (ev.type === "judging")
             setPhase("Independent judge panel is reviewing the evidence");
           if (ev.type === "judge")
@@ -485,6 +522,24 @@ export default function App() {
     setPhase("Re-judging saved evidence");
     try {
       await request(`/api/runs/${view.run.id}/judge`, {});
+      active.current = view.run.id;
+      follow(view.run.id);
+    } catch (e) {
+      setError((e as Error).message);
+      setBusy(false);
+    }
+  }
+  async function reconsider(reviewId: string) {
+    if (!view || busy) return;
+    setError("");
+    setBusy(true);
+    setEvents([]);
+    setPhase("Judges are considering the saved human review");
+    try {
+      await request(
+        `/api/runs/${view.run.id}/reviews/${reviewId}/reconsider`,
+        {},
+      );
       active.current = view.run.id;
       follow(view.run.id);
     } catch (e) {
@@ -966,6 +1021,8 @@ export default function App() {
                     <Reviewer
                       key={view.run.id}
                       view={view}
+                      busy={busy}
+                      onReconsider={(id) => void reconsider(id)}
                       onSaved={() =>
                         void request<View>(`/api/runs/${view.run.id}`)
                           .then(setView)
@@ -1021,6 +1078,12 @@ export default function App() {
                         }
                       />
                     </div>
+                    {view.licences?.presentable === false && (
+                      <p className="notice">
+                        Some source licences need review before sharing these
+                        results. Open the source and licence record below.
+                      </p>
+                    )}
                     {view.source_check_note && (
                       <p className="notice">{view.source_check_note}</p>
                     )}
@@ -1157,37 +1220,75 @@ export default function App() {
                       procurement and analyst time are not included unless
                       explicitly recorded.
                     </p>
-                    <details className="source-details">
-                      <summary>Reference benchmark</summary>
-                      {view.reference ? (
+                    <section className="reference-card">
+                      <h3 className="section-title">
+                        Independent reference check
+                      </h3>
+                      {view.reference && !view.reference.error ? (
                         <>
                           <p>
-                            {view.reference.error ||
-                              "Metrics are tied to the archived reference and matching rule."}
+                            {view.reference.concept} · {view.reference.place}
                           </p>
-                          <pre>
-                            {JSON.stringify(
-                              Object.fromEntries(
-                                Object.entries(view.reference).filter(
-                                  ([k]) =>
-                                    !["features", "found", "missed"].includes(
-                                      k,
-                                    ),
+                          <div className="mini-stats">
+                            <Stat
+                              label="Known assets found"
+                              value={
+                                typeof view.reference.site_recall === "number"
+                                  ? `${Math.round(view.reference.site_recall * 100)}%`
+                                  : "Not defined"
+                              }
+                            />
+                            <Stat
+                              label="Cell precision"
+                              value={
+                                typeof view.reference.cell_precision ===
+                                "number"
+                                  ? `${Math.round(view.reference.cell_precision * 100)}%`
+                                  : "Not defined"
+                              }
+                            />
+                            <Stat
+                              label="Reference assets"
+                              value={view.reference.assets ?? "—"}
+                            />
+                          </div>
+                          <p className="fine-print">
+                            Reference completeness:{" "}
+                            {view.reference.completeness}. Matching uses{" "}
+                            {view.reference.cell_m} m cells and the archived
+                            any-touch rule; this is separate from the model
+                            judges’ score.
+                          </p>
+                          {view.reference.notes?.map((note: string) => (
+                            <p key={note} className="fine-print">
+                              {note}
+                            </p>
+                          ))}
+                          <details className="source-details">
+                            <summary>Reference source and full metrics</summary>
+                            <pre>
+                              {JSON.stringify(
+                                Object.fromEntries(
+                                  Object.entries(view.reference).filter(
+                                    ([k]) =>
+                                      !["features", "found", "missed"].includes(
+                                        k,
+                                      ),
+                                  ),
                                 ),
-                              ),
-                              null,
-                              2,
-                            )}
-                          </pre>
+                                null,
+                                2,
+                              )}
+                            </pre>
+                          </details>
                         </>
                       ) : (
-                        <p>
-                          No independent reference set is tied to this run.
-                          Recall, precision and transfer performance are not
-                          established.
+                        <p className="notice">
+                          {view.reference?.error ||
+                            "No independent reference set is tied to this run. Recall, precision and transfer performance are not established."}
                         </p>
                       )}
-                    </details>
+                    </section>
                     <details className="source-details">
                       <summary>
                         Sources, licences and presentation limits

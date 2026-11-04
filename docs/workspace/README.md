@@ -31,7 +31,7 @@ In Aditya's event workshop, keep the private `harness.local.yaml` outside Git an
 - Previous runs load from the real paginated archive; a `?run=<id>` URL opens one directly.
 - MapLibre displays the saved boundary, tool-returned image footprints and deduplicated coordinate claims. Selecting a location links to its saved evidence step. Coordinates are not fabricated from place names.
 - Final answer, imagery chips with recorded dates, complete source-value table, request-condition matrix, independent judge rationales, workflow/output scores, trace integrity and cost estimates come directly from the run view.
-- The review form posts the reviewer's name, selected judged criterion, agreement or suggested rubric score with reason/refs to the existing feedback API. Missing/invalid inputs remain visible as errors. The review does not change the automated score by itself. The existing Guidance/classic-console workflow remains available for reconsideration and approving lessons.
+- The review form posts the reviewer's name, selected judged criterion, agreement or suggested rubric score with reason/refs to the existing feedback API. Missing/invalid inputs remain visible as errors. The review does not change the automated score by itself. A saved current review can be sent to the judges with **Ask judges to reconsider**; the original judgement remains archived. The existing Guidance editor remains available for approving lessons.
 - Re-judge uses archived evidence with the configured judge panel; it makes paid model calls. JSON export and static HTML reports preserve detailed evidence.
 - Mobile layout, keyboard submission, labelled controls, reduced motion and error/empty/not-scored states are included.
 
@@ -46,3 +46,17 @@ Satellite context uses the backend's Sentinel-2/EOX cached basemap with attribut
 The short-request progress endpoint avoids buffering in authenticated workshop proxies; the original SSE endpoint remains available. Reading before the worker creates its trace file returns an empty event list rather than dropping the connection.
 
 CI builds/typechecks the frontend, runs frontend contract tests, checks built assets are current, runs the Python tests and secret scan. Browser QA and event-cloud smoke results are recorded separately below. Passing these checks establishes software integration, not geospatial truth, rubric calibration or domain-expert agreement.
+
+
+## Verified event-cloud smoke checks — November 4
+
+The integration runs separately at `https://d37rt8nwcs1lq3.cloudfront.net/proxy/8791/workspace/`, guarded by the supplied workshop login. Private configuration stays on the event host and LGND login stays in the event Secrets Manager secret. No new public endpoint or AWS permissions were created. The existing 8787 console remains available.
+
+- Run `89e4bb9a-568a-4ae5-8e11-c84463b06736`: real Kimi agent, LGND imagery search and image check, three valid judges, three locations, 10/10 declared values matched, all reported locations in the saved Napa County boundary. The agent took 22 seconds; model-based cost estimates were $0.18 agent / $0.07 judging. The archived report replayed in the new UI, with actual image chips and recorded dates.
+- Run `fdc0285f-7b12-4414-88e5-0948318b5baa`: started through the new browser form with Kimi; seven actual trace entries appeared via progress snapshots, followed by automatic transition to the finished evaluation. Two successful LGND tool calls, three model calls, zero tool errors, two reported locations, 5/5 declared values matched, three valid judges. Agent runtime 37 seconds; estimated $0.16 agent / $0.07 judging.
+
+The second run was also re-judged through the new UI: all three judges returned usable replies and the browser returned to the updated evaluation automatically. Earlier judgements were preserved.
+
+Both panels scored 100 under the current starting rubric. These smoke results demonstrate integration, not independent vineyard identification, completeness, expert agreement or calibrated accuracy. Imagery dates are historical (2020–2022); the answers preserve the uncertainty and current-status limitations. Licence blockers remain visible. The UI exposes reference accuracy only when the backend has a tied reference set. No fabricated human review was added to the event archive during QA.
+
+Local checks: 301 Python tests passed, one infrastructure-only test module skipped because it requires the optional CDK group; four frontend contract tests passed; TypeScript build, Python lint/format/type checks passed. GitHub CI also runs the optional infrastructure checks, frontend rebuild consistency and secret scanning. The finished-source ZIP contains tracked source and built assets only, excluding credentials, local configuration, dependencies, traces and private outputs.

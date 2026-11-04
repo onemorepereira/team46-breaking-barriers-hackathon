@@ -1,5 +1,7 @@
 # Team Foundry (Team 46) — Clay Earth Dataset Foundry
 
+**Connected evidence workspace:** open `/workspace/` on the running backend. See the [UI integration guide](docs/workspace/README.md) for launch, frontend build and validation.
+
 Nov 3, 2026 · @Miguel · updated Nov 4 with what we built
 
 **Team Foundry (Team 46):** Aditya Pasarti · Farhan Shahriar · Uday Kandi · Miguel Pereira **[team]**. Presentation: [`docs/presentation/`](docs/presentation/README.md)
