@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from analysis import provenance, signals, timeline
+from analysis.judging import conditions
 from analysis.trace import Run
 from core import geometry
 from core.spans import MODEL_RESULT, TOOL_RESULT
@@ -52,6 +53,7 @@ class Dossier:
     totals: dict[str, Any]
     known_refs: set[str] = field(default_factory=set)
     perturbation: str | None = None
+    conditions: list[dict[str, Any]] = field(default_factory=list)
     center: tuple[float, float] = DEFAULT_CENTER
 
 
@@ -138,6 +140,7 @@ def build(run: Run, tool_result_chars: int = TOOL_RESULT_CHARS) -> Dossier:
         totals,
         known_refs={s.ref for s in steps},
         center=_center(area),
+        conditions=(conditions.load(run) or {}).get("conditions", []),
     )
 
 
@@ -233,6 +236,8 @@ def render(d: Dossier, max_chars: int = MAX_DOSSIER_CHARS) -> str:
         f"# Run {d.run_id}",
         "## Task (the user's request)",
         d.task.strip() or "(not recorded)",
+        "## Conditions in the request (each needs executed evidence)",
+        json.dumps(d.conditions),
         "## Requested search area",
         d.area,
         "## Tools available to the agent",

@@ -59,7 +59,12 @@ def analyze_for(cfg: config_mod.Config, run: Run) -> report.RunReport:
 
     tie = run.store.read_text(f"runs/{run.run_id}/reference/tie.json")
     sha = reference.repo_sha(json.loads(tie).get("id")) if tie else None
-    return report.analyze(run, repo_sha=sha, narrative_model=cfg.get("narrative_model"))
+    return report.analyze(
+        run,
+        rubric_path=(cfg.get("judging") or {}).get("rubric"),
+        repo_sha=sha,
+        narrative_model=cfg.get("narrative_model"),
+    )
 
 
 def archive_tiles_quietly(cfg: config_mod.Config, run: Run) -> dict[str, int] | None:
@@ -150,6 +155,10 @@ def _run_one(cfg: config_mod.Config, index: Index, plan: invoke.RunPlan) -> tupl
                 file=sys.stderr,
             )
         run = Run.load(store, plan.run_id)
+    if not os.environ.get("HARNESS_TEST_SCRIPT") and run.all_spans:
+        from harness.conditions import ensure
+
+        ensure(cfg, run)
     if (cfg.get("judging") or {}).get("auto") and not os.environ.get("HARNESS_TEST_SCRIPT") and run.all_spans:
         from harness import judge
 

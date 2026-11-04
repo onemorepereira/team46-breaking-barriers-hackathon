@@ -135,6 +135,9 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str,
 
                     model_id = cfg["models"][cfg["narrative_model"]]["id"]
                     narrative.write_summary(run, store, model_id, cfg["region"])
+                from harness.conditions import ensure
+
+                ensure(cfg, run)
                 if (cfg.get("judging") or {}).get("auto"):
                     judge_into(cfg, state, run, store)
                 run = Run.load(store, plan.run_id)
@@ -144,6 +147,7 @@ def start_run(cfg: config_mod.Config, index: Index, prompt: str, model: str,
                 serve_tiles=state.serve_tiles,
                 deploy_store=_deploy_or_none(cfg),
                 reconsider=_reconsider(cfg),
+                rubric_path=(cfg.get("judging") or {}).get("rubric"),
                 narrative_model=cfg.get("narrative_model"),
             )
             state.final = {"type": "done", "status": outcome.status, "error": outcome.error, "view": view}
@@ -206,6 +210,7 @@ def rejudge(cfg: config_mod.Config, index: Index, run_id: str) -> RunState:
                 serve_tiles=state.serve_tiles,
                 deploy_store=_deploy_or_none(cfg),
                 reconsider=_reconsider(cfg),
+                rubric_path=(cfg.get("judging") or {}).get("rubric"),
                 narrative_model=cfg.get("narrative_model"),
             )
             state.final = {"type": "done", "status": run.status, "error": None, "view": view}
@@ -250,6 +255,7 @@ def reconsider_job(cfg: config_mod.Config, index: Index, run_id: str, review_id:
                     serve_tiles=state.serve_tiles,
                     deploy_store=deploy,
                     reconsider=_reconsider(cfg),
+                    rubric_path=(cfg.get("judging") or {}).get("rubric"),
                     narrative_model=cfg.get("narrative_model"),
                 ),
             }

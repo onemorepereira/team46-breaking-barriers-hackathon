@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from analysis import check, provenance
+from analysis.judging import conditions
 from analysis.provenance import FENCE_RE, MATCHED, Provenance
 from analysis.trace import Run
 from core import geometry
@@ -51,10 +52,21 @@ class Measured:
     trace_integrity: bool
     gates: list[dict[str, str]] = field(default_factory=list)
 
+    condition_compliance: float | None = None
+    conditions_supported: int = 0
+    conditions_total: int = 0
+    conditions_need_review: bool = False
+    conditions_error: bool = False
+    condition_cap: float | None = None
+    conditions_not_checked: bool = False
+    conditions: dict[str, Any] | None = None
+
     def score_of(self, criterion_id: str) -> float | None:
-        return {"claim_provenance": self.claim_provenance, "area_compliance": self.area_compliance}.get(
-            criterion_id
-        )
+        return {
+            "claim_provenance": self.claim_provenance,
+            "area_compliance": self.area_compliance,
+            "condition_compliance": self.condition_compliance,
+        }.get(criterion_id)
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -149,6 +161,7 @@ def measure(run: Run, prov: Provenance | None = None) -> Measured:
         gates.append({"id": "no_answer", "reason": "the run produced no final answer beyond a claims block"})
     if not any(s.attr("harness.tool.status") not in ("error", None) for s in run.tool_results):
         gates.append({"id": "no_tool_data", "reason": "no tool call succeeded"})
+    compliance = conditions.evaluate(run, prov)
     return Measured(
         claims_total=total,
         claims_matched=counts[MATCHED],
@@ -167,4 +180,12 @@ def measure(run: Run, prov: Provenance | None = None) -> Measured:
         archive_errors=archive_errors,
         trace_integrity=missing == 0 and archive_errors == 0,
         gates=gates,
+        condition_compliance=compliance["score"] if compliance else None,
+        conditions_supported=compliance["supported"] if compliance else 0,
+        conditions_total=compliance["total"] if compliance else 0,
+        conditions_need_review=bool(compliance and compliance["needs_review"]),
+        conditions_error=bool(compliance and compliance.get("error")),
+        condition_cap=compliance["cap"] if compliance else None,
+        conditions_not_checked=bool(compliance and compliance["status"] == "not_checked"),
+        conditions=compliance,
     )

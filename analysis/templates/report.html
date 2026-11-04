@@ -4,6 +4,22 @@
 <div class="muted"><code>{{ r.run.run_id }}</code> · status <b>{{ r.run.status }}</b> · generated {{ generated_at }}</div>
 {% if r.run.partial %}<div class="banner">Run ended early: {{ r.run.status }}{% if r.run.result and r.run.result.error %} — {{ r.run.result.error }}{% endif %}. Every span that ended is shown below.</div>{% endif %}
 
+<section aria-labelledby="explanation-title">
+<h2 id="explanation-title">What this means</h2>
+<p><strong>{{ explanation.headline }}</strong></p>
+<p>{{ explanation.summary }}</p>
+{% if source_check_note %}<p class="muted">{{ source_check_note }}</p>{% endif %}
+<h3>Check by hand</h3>
+<ul>{% for item in explanation.check_by_hand %}<li>{{ item }}</li>{% endfor %}</ul>
+</section>
+
+{% if conditions %}<h2>Conditions in your request</h2>
+{% if conditions.error %}<p>Request conditions could not be extracted. This request is not fully verified.</p>{% endif %}
+{% if conditions.status == "not_checked" %}<p>Request conditions were not checked: no model is set to read them.</p>
+{% elif not conditions.conditions %}{% if not conditions.error %}<p>No checkable conditions were found in this request.</p>{% endif %}
+{% else %}<table><tr><th>Location</th>{% for c in conditions.conditions %}<th>{{ c.text }}</th>{% endfor %}</tr>
+{% for row in conditions.rows %}<tr><td>{{ row.value }}</td>{% for cell in row.cells %}<td><strong>{{ cell.status }}</strong><br>{{ cell.reason }}</td>{% endfor %}</tr>{% endfor %}</table>{% endif %}
+{% endif %}
 <h2>Run</h2>
 <table><tr><th>Model</th><td>{{ m.model_key }} · <code>{{ m.model_id }}</code></td></tr>
 <tr><th>Prompt</th><td>{{ m.prompt_file }} · <code>{{ m.prompt_sha256 }}</code></td></tr>
@@ -53,7 +69,7 @@
 </div>
 <p class="muted">{{ p.confidence_reasons | join("; ") }}. Confidence measures judge agreement on the evidence, not ground truth. Rubric <code>{{ r.judgement.rubric.id }} v{{ r.judgement.rubric.version }}</code>; seats: {% for s in r.judgement.seats %}{{ s.key }}{% if s.recused_for %} (for {{ s.recused_for }}){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
 <table><tr><th>Criterion</th><th>Dimension</th><th>Kind</th><th>Score</th><th>Votes / value</th></tr>
-{% for c in p.criteria %}<tr><td>{{ c.id }}</td><td>{{ c.dimension }}</td><td>{{ c.kind }}</td><td>{{ "n/a" if c.score is none else c.score }}{% if c.gated %} (gated){% endif %}</td><td>{% if c.kind == "judged" %}{% for k, v in c.votes.items() %}{{ k }} {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}{% else %}{{ c.value }}{% endif %}</td></tr>{% endfor %}</table>
+{% for c in p.criteria %}<tr><td>{{ c.id }}<br><span class="muted">{{ r.plain_names[c.id] }}</span></td><td>{{ c.dimension }}</td><td>{{ c.kind }}</td><td>{{ "n/a" if c.score is none else c.score }}{% if c.gated %} (gated){% endif %}</td><td>{% if c.kind == "judged" %}{% for k, v in c.votes.items() %}{{ k }} {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}{% else %}{{ c.value }}{% endif %}</td></tr>{% endfor %}</table>
 <p>Failure modes (majority): {% for f in p.failure_modes %}<code>{{ f.id }}</code> {{ f.votes }}/{{ f.of }} {% else %}<span class="muted">none</span>{% endfor %}</p>
 {% endif %}
 

@@ -21,6 +21,7 @@ from analysis.judging import feedback as fb
 from analysis.judging import measure, panel
 from analysis.judging.rubric import Rubric
 from analysis.judging.rubric import load as load_rubric
+from analysis.provenance import VALUE_MATCHER_VERSION
 from analysis.trace import Run
 from core import prompts
 from core.store import Store
@@ -295,6 +296,10 @@ def judge_run(cfg: Config, run: Run, store: Store, passes: int | None = None, cl
         return record
     j = judging_cfg(cfg)
     r = load_rubric(j["rubric"])
+    if any(c.id == "condition_compliance" for c in r.criteria):
+        from harness.conditions import ensure
+
+        ensure(cfg, run, client)
     passes = int(passes or j.get("passes") or 1)
     d = dossier_mod.build(run)
     guidance, guidance_error = active_guidance_or_error(cfg, r)
@@ -372,6 +377,7 @@ def assemble(
         "seats": [asdict(s) for s in panel_seats],
         "passes": pass_results,
         "panel": result.as_dict(),
+        "value_matcher_version": VALUE_MATCHER_VERSION,
         "judging_cost_usd": round(cost, 6),
         "guidance": guidance_ref(guidance),
     }

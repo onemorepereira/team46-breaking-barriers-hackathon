@@ -1,6 +1,6 @@
 # Slice: Do the Results Honor Every Condition in the Prompt?
 
-**Status:** Open · **Owner:** unassigned · **Size:** about a day (split point in Plan below) · **Branch:** `slice/prompt-compliance` from `main` · **Merges:** second, after plain language (rebase on its rubric changes)
+**Status:** Implemented; live sandbox validation pending · **Owner:** Aditya · **Size:** about a day (split point in Plan below) · **Branch:** `slice/prompt-compliance` from `main` · **Merges:** second, after plain language (rebase on its rubric changes)
 **Read first:** [how a run is scored](../judging/guide.md), [developer guide](../developer-guide.md), the [factory rules for slices](../factory.md#how-to-take-a-slice).
 
 ## Problem
@@ -25,7 +25,7 @@ The evaluator only checks condition 2 in code (`area_compliance`: is each claime
   - `within_distance` (`distance_km`, plus a reference feature such as "protected natural area");
   - `other` (kept as text, judged only).
 
-  The list is written to `runs/<id>/conditions.json` when a new run's report is first written. Replay and re-judge read the file and never call the model again. A prompt with only an area gives `[target, inside_area]`. **Runs archived before this slice have no file:** they show no conditions table, and `condition_compliance` is N/A for them. No extraction happens on replay.
+  The list is written to `runs/<id>/conditions.json` when a new run's report is first written. Replay reads the file and never calls the model. Explicit re-judging reuses valid conditions and retries missing or failed extraction when the rubric includes condition_compliance. A prompt with only an area gives `[target, inside_area]`. **Runs archived before this slice have no file:** they show no conditions table, and `condition_compliance` is N/A for them. No extraction happens on replay.
 - [ ] **AC2 A claim × condition evidence matrix, computed by code.** For every coordinate claim and every condition, a status (`supported`, `contradicted` or `unverified`), the reason in a few words, and the step refs used:
   - `inside_area`: the existing point-in-polygon check;
   - `within_distance`: `supported` only if the trace holds **a located reference feature**, meaning a tool result or claim with coordinates for it, and the great-circle distance (new `core.geometry.distance_km`, haversine, unit-tested against known pairs) is within the limit. `contradicted` if every located reference is too far. **`unverified` if the trace has no located reference at all.** The trace must show the evidence; the evaluator doesn't assume it;
@@ -54,3 +54,11 @@ uv run harness calibrate <a-known-good-run-id>
 
 ## When done
 Write `docs/prompt-compliance/handoff.md` (each AC with its proof, the AC6 run ID and matrix), set Status to `Built`, update [the factory](../factory.md), and open a PR to `main`.
+
+## Implementation corrections (2026-11-04)
+
+Far-away recorded references alone do not prove a nearer reference is absent. They are unverified, not contradicted. A reference must carry matching feature metadata and coordinates in a successful tool result. The check measures distance to a recorded reference point; it does not claim boundary-distance accuracy. Target and other conditions remain for judges/humans.
+
+Version 2 caps the output dimension at measured spatial-condition coverage. Missing conditions lower confidence; extraction failure makes the overall evaluation not scored, rather than awarding a misleading overall score. New runs extract before judging/reporting; replay never extracts. Explicit re-judging retries missing or failed extraction; successful extraction is reused. An unset narrative model marks conditions not checked (N/A). Caps, confidence adjustments and extraction-error overrides apply only to rubrics containing condition_compliance. Extraction usage and errors are archived.
+
+See [handoff](handoff.md) for actual verification and remaining live checks.

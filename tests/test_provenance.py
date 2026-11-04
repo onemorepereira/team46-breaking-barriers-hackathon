@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 from analysis.provenance import (
@@ -169,3 +171,96 @@ def test_injected_instruction_in_tool_result_is_only_data(tmp_path):
         result=evil,
     )
     assert [c.status for c in grade(run).claims] == [MATCHED, MISMATCH]
+
+
+@pytest.mark.parametrize(
+    "value,result,ok",
+    [
+        ("supported", '{"verdict":"not supported"}', False),
+        ("supported", '{"verdict":"unsupported"}', False),
+        ("confirmed", '{"answer":"unconfirmed"}', False),
+        ("supported", "The finding is not supported.", False),
+        ("supported", '{"verdict":"not supported", "reason":"supported"}', False),
+        ("supported", '{"verdict":"supported"}', True),
+        ("not supported", '{"verdict":"not supported"}', True),
+        ("yes", '{"places":[{"answer":"yes"}]}', True),
+    ],
+)
+def test_verdicts_do_not_match_their_opposites(value, result, ok):
+    assert match_text(value, result) is ok
+
+
+@pytest.mark.parametrize(
+    "result,ok",
+    [
+        ('{"rows":[{"lat":38.3865,"lon":-120},{"lat":35,"lon":-122.3641}]}', False),
+        ('{"columns":["lat","lon"],"rows":[[38.3865,-120],[35,-122.3641]]}', False),
+        ('{"columns":["node","lat","lon"],"rows":[["a",38.38651,-122.36412]]}', True),
+        ('{"results":[{"latitude":38.38651,"longitude":-122.36412}]}', True),
+        ('{"content":[{"text":"{\\"lat\\":38.3865,\\"lon\\":-122.3641}"}]}', True),
+        ('{"type":"Point","coordinates":[-122.3641,38.3865]}', True),
+        ('{"coordinates":[38.3865,-122.3641]}', False),  # coordinate order is not specified
+        ("Location: 38.3865, -122.3641.", True),
+        ('{"lat":-38.3865,"lon":-122.3641}', False),
+    ],
+)
+def test_coordinate_pair_belongs_to_one_source_record(result, ok):
+    from analysis.provenance import matches
+
+    assert matches("38.3865, -122.3641", "coordinate", result) is ok
+
+
+def test_a_failed_tool_cannot_verify_a_claim(tmp_path):
+    run = run_with(tmp_path, '{"claims":[{"value":"Equinix","ref":"T1"}]}', tool_kw={"status": "error"})
+    c = grade(run).claims[0]
+    assert c.status == UNSOURCED and "cited tool call failed" in c.notes
+
+
+def test_old_replays_warn_about_updated_source_checks(tmp_path):
+    from analysis import report
+    from analysis.provenance import VALUE_MATCHER_VERSION, matcher_update_note
+    from harness.web.view import run_view
+    from tests.test_explain import judged
+    from tests.test_judging import lgnd_run
+
+    run, _ = judged(lgnd_run(tmp_path), old=True)
+    before = run.store.read_text(f"runs/{run.run_id}/judgement.json")
+    assert "updated after" in run_view(run)["source_check_note"]
+    assert "updated after" in report.render_run(report.analyze(run), "now")
+    assert run.store.read_text(f"runs/{run.run_id}/judgement.json") == before
+    assert matcher_update_note({"value_matcher_version": VALUE_MATCHER_VERSION}) is None
+    assert matcher_update_note(None) is None
+
+
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_lgnd_per_place_verdict_table_is_checked_beside_overall_verdict(wrapped):
+    # Real LGND result shape: top-level verdict summarises a mixed table of per-place answers.
+    data = {
+        "verdict": "partly supported",
+        "places": {
+            "columns": ["node", "answer", "reason"],
+            "rows": [
+                ["naip/obs:a", "maybe", "Cooling is not clearly visible"],
+                ["naip/obs:b", "yes", "Cooling plant visible"],
+            ],
+        },
+    }
+    if wrapped:
+        data = {"content": [{"type": "text", "text": json.dumps(data)}]}
+    result = json.dumps(data)
+    assert match_text("yes", result)
+    assert match_text("maybe", result)
+    assert not match_text("no", result)
+    assert not match_text("supported", result)
+
+
+def test_verdict_table_reason_text_is_not_an_answer():
+    data = {
+        "verdict": "not supported",
+        "places": {
+            "columns": ["node", "answer", "reason"],
+            "rows": [["a", "no", "The proposed yes answer is unsupported"]],
+        },
+    }
+    assert not match_text("yes", json.dumps(data))
+    assert match_text("no", json.dumps(data))

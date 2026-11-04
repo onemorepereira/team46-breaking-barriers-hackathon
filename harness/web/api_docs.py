@@ -95,6 +95,8 @@ A `text/event-stream` of JSON events (`data: {...}`), in order. The stream ends 
 | `judge_error` | judging failed | `error` |
 | `done` | last | `status`, `error`, and `view`: the same object as **One run, in full** |
 
+The final `view` also includes `explanation` (`headline`, `summary`, `check_by_hand`), and each scorecard criterion includes a `plain` question. `source_check_note` explains when an older judgement is being replayed with newer value checks. These display fields add no model calls.
+
 Live streams exist for runs started or re-judged since the console started; an archived run has none (404).
 """
 
@@ -192,3 +194,8 @@ class ByRequest(BaseModel):
 
 class EvaluateRequest(BaseModel):
     confirm: bool = Field(False, description="False returns the cost estimate and does nothing; true starts.")
+
+
+# Condition-aware run views (v2): `conditions` is null for legacy runs, otherwise contains
+# status (checked / not_checked), extracted conditions, rows of cells (condition_id, status,
+# reason, refs), supported/total, score, cap (weakest condition's coverage), needs_review and error. Cell status: supported / contradicted / unverified.

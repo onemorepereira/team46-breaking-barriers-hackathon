@@ -363,6 +363,35 @@
     setText("k-tokens", `${num(counts.tin)} / ${num(counts.tout)}`);
   }
 
+  // ---------- plain explanation (saved evidence only) ----------
+  function renderExplanation(explanation) {
+    const card = $("explanation-card");
+    card.hidden = !explanation;
+    if (!explanation) return;
+    setText("explanation-headline", explanation.headline);
+    setText("explanation-summary", explanation.summary);
+    $("explanation-checks").replaceChildren(...explanation.check_by_hand.map((text) => el("li", { text })));
+  }
+
+  function renderConditions(data) {
+    show("conditions-card", Boolean(data));
+    const box = $("conditions-content");
+    box.replaceChildren();
+    if (!data) return;
+    if (data.error) box.append(el("p", {text:"Request conditions could not be extracted. This request is not fully verified."}));
+    if (data.status === "not_checked") { box.append(el("p", {text:"Request conditions were not checked: no model is set to read them."})); return; }
+    if (!data.conditions.length) { if (!data.error) box.append(el("p", {text:"No checkable conditions were found in this request."})); return; }
+    const table = el("table", {class:"table table-sm"});
+    table.append(el("thead", {}, el("tr", {}, el("th", {text:"Listed location"}),
+      ...data.conditions.map(c => el("th", {text:c.text})))));
+    const body = el("tbody");
+    for (const row of data.rows) body.append(el("tr", {}, el("td", {text:row.value}),
+      ...row.cells.map(c => el("td", {title:c.reason}, el("strong", {text:c.status}),
+        el("div", {class:"small text-secondary",text:c.reason})))));
+    table.append(body); box.append(table);
+    if (!data.rows.length) box.append(el("p", {text:"No declared coordinate claims are available to check."}));
+  }
+
   // ---------- scorecard ----------
   function renderScorecard(card) {
     const box = $("scorecard");
@@ -409,6 +438,7 @@
               ? Object.entries(c.votes || {}).map(([k, v]) => el("span", { class: `vote vote-${v}`, title: `${k}: ${v}` }, v))
               : el("span", { class: "small text-secondary", text: c.value || "" })),
             el("span", { class: `badge bg-${scoreClass(s)}-lt`, style: "min-width:2.6rem", text: s === null ? "n/a" : Math.round(s) })),
+          el("div", { class: "small text-secondary mt-1", text: c.plain || c.question }),
           el("div", { class: "progress progress-sm mt-1" }, el("div", { class: `progress-bar bg-${scoreClass(s)}`, style: `width:${s || 0}%` })),
           humanLine(c), rationale));
       }
@@ -506,6 +536,10 @@
     setClaims(v.map.claims);
     setText("map-note", v.map.area ? "" : "No area in the prompt: results are shown without a boundary check.");
     fitAll();
+    renderExplanation(v.explanation);
+    renderConditions(v.conditions);
+    setText("source-check-note", v.source_check_note || "");
+    show("source-check-note", Boolean(v.source_check_note));
     renderScorecard(v.scorecard);
     renderJudges(v.scorecard);
     renderClaims(v.claims);

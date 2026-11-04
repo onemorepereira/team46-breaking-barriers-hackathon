@@ -25,6 +25,7 @@ def test_rubric_loads_and_snapshot_round_trips():
     assert len(RUBRIC.judged) == 8 and [c.id for c in RUBRIC.measured] == [
         "claim_provenance",
         "area_compliance",
+        "condition_compliance",
     ]
     assert RUBRIC.calibration == {
         "unscoped": "tool_arguments",
@@ -559,6 +560,7 @@ def test_tribunal_seats_three_and_a_reserve_stands_in_for_a_failed_judge(tmp_pat
     assert [s.key for s in judge.spare_seats(TRIBUNAL, "kimi", seated)] == ["qwen"]
 
     run = lgnd_run(tmp_path)  # a Sonnet run: mistral sits for opus; qwen is the only spare
+    run.store.write_text(f"runs/{run.run_id}/conditions.json", '{"conditions": []}')
     fake, events = FakeBedrock({"kimi": RuntimeError("throttled")}), []
     jd = judge.judge_run(TRIBUNAL, run, run.store, client=fake, on_event=events.append)
     judges = jd["passes"][0]["judges"]

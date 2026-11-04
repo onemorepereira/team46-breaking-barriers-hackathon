@@ -14,6 +14,12 @@ The overall score is the mean of the two. Two criteria are **measured by code**:
 
 Eight criteria are **judged** by a tribunal of three LLMs from three different model families. Each panel score is the median of the three votes. Next to the score sits a **confidence** label (High, Medium or Low). It says how far the judges agreed and whether the trace is intact. It does **not** say the answer is true: that would need an answer key, which is our main open gap ([gaps.md](gaps.md)).
 
+## Plain explanation on each report
+
+The run page and static report start with **What this means**: a short account of the request, listed locations, score, evidence limits, and up to three things to check by hand. It is computed from the saved archive without an AI call. Counts describe the agent's listed locations, not a count of independently confirmed facilities. Image checks that returned "no" or an unclear answer get specific review actions.
+
+Scorecard questions use optional `plain:` labels from the current configured rubric. Old judgements keep their archived scoring definitions; display text falls back to the saved question when no current label exists. Adding a plain label does not change votes, scoring anchors, weights, or aggregation, although the file's hash changes.
+
 ## The rubric
 
 `rubrics/geo-dataset-v1.yaml` is generalized for any agentic geospatial dataset build. Each judged criterion has one sentence per score: 0, 1 and 2.
@@ -32,6 +38,12 @@ Eight criteria are **judged** by a tribunal of three LLMs from three different m
 | Area compliance (`area_compliance`) | output | measured | Share of claimed coordinates inside the requested boundary |
 
 **To use ADB's rubric:** write it in the same YAML shape and point `judging.rubric` in `harness.yaml` at it. No code changes. Code names only the two measured criteria. The rubric's `calibration:` map says which judged criterion each planted defect should lower.
+
+### Value-checker update under review (2026-11-04)
+
+Checker version 2 requires a coordinate pair from the same source record or labelled table row. Verification labels such as "supported" no longer match "not supported", and failed tool calls cannot verify claims. Ordinary text and number checks still compare declared values; they do not prove the meaning of every claim or its real-world truth.
+
+New judgements record `value_matcher_version`. Old judgements remain intact; viewing or replaying them uses current measured checks and shows an update note, so their regenerated scores may differ from earlier reports. Keep the checker version, judge seats, and rubric fixed when comparing runs.
 
 ## The panel
 
@@ -152,3 +164,9 @@ uv run harness ui                            # the console: live runs, scores, m
 
 - **Compare, don't rank in the absolute.** A stricter panel scores everything lower (GRA §6). Comparisons are fair when they use the same rubric and the same panel. Every judgement records `rubric.sha256` and its seats, so that's checkable.
 - **A 100 is not proof.** It means the panel found no material flaw in what the agent executed, and that the agent's claims match its tool outputs. It doesn't mean the agent found every facility. Read the agent's own caveats in its answer, and the honest-uncertainty criterion.
+
+## Request conditions (rubric v2)
+
+New runs archive extracted request conditions before judging. Code checks each declared location against the saved boundary and any evidenced distance reference. A missing reference is unverified. Finding only far references does not prove no nearer one exists. Distance is to the recorded reference point, not the area's edge. Identity and other constraints remain judge/human assessments.
+
+The output dimension is capped at the coverage of the weakest spatial condition, so good scores elsewhere cannot hide missing required evidence. A distance request whose run lists no locations scores 0 on output; code can't tell an honest "none found" from no work, so the page asks for a check by hand. Unverified or contradicted spatial conditions lower confidence. Extraction errors, including a damaged saved file, leave the overall evaluation not scored until Re-judge replaces them. If no narrative model is configured, conditions show as not checked, no cap applies and confidence stays below High. A request with no checkable conditions is not an error. Old archives without conditions remain N/A and are never re-extracted by replay/re-judge. Compare runs only with the same rubric/checker versions.

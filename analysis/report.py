@@ -13,7 +13,8 @@ from markdown_it import MarkdownIt
 
 from analysis import check, licences, provenance, signals, summary
 from analysis import reference as ref_mod
-from analysis.judging import measure, panel
+from analysis.judging import measure, panel, rubric
+from analysis.judging.explain import explain
 from analysis.trace import Run
 
 _env = Environment(loader=PackageLoader("analysis", "templates"), autoescape=select_autoescape(default=True))
@@ -53,6 +54,7 @@ class RunReport:
     measured: measure.Measured
     panel: panel.PanelResult | None
     judgement: dict[str, Any] | None
+    plain_names: dict[str, str]
     reference: dict[str, Any] | None = None
     licences: dict[str, Any] | None = None
 
@@ -71,10 +73,15 @@ def licences_of(
     return licences.for_run(run, ref, judges, narrative_model)
 
 
-def analyze(run: Run, repo_sha: str | None = None, narrative_model: str | None = None) -> RunReport:
+def analyze(
+    run: Run,
+    rubric_path: str | None = None,
+    repo_sha: str | None = None,
+    narrative_model: str | None = None,
+) -> RunReport:
     prov = provenance.grade(run)
-    m = measure.measure(run, prov)
-    ref = reference_of(run, m, prov, repo_sha)
+    measured = measure.measure(run, prov)
+    ref = reference_of(run, measured, prov, repo_sha)
     return RunReport(
         run=run,
         missing=check.check_run(run),
@@ -83,9 +90,14 @@ def analyze(run: Run, repo_sha: str | None = None, narrative_model: str | None =
         summ=summary.build(run, prov),
         tools=signals.tools_available(run),
         datasets=signals.datasets_accessed(run),
-        measured=m,
-        panel=panel.rescore(run.judgement, run) if run.judgement else None,
+        measured=measured,
+        panel=panel.rescore(run.judgement, run, measured) if run.judgement else None,
         judgement=run.judgement,
+        plain_names=(
+            rubric.display_names(rubric.parse(run.judgement["rubric"]["snapshot"]), rubric_path)
+            if run.judgement
+            else {}
+        ),
         reference=ref,
         licences=licences_of(run, ref, narrative_model),
     )
@@ -98,6 +110,9 @@ def render_run(rep: RunReport, generated_at: str) -> str:
         generated_at=generated_at,
         answer=measure.answer_text(rep.run.final_output),
         claims_json=claims_blocks(rep.run.final_output),
+        explanation=explain(rep.run, rep.panel, measured=rep.measured),
+        conditions=rep.measured.conditions,
+        source_check_note=provenance.matcher_update_note(rep.judgement),
     )
 
 

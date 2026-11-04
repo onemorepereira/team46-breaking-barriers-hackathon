@@ -12,7 +12,11 @@ import yaml
 
 DIMENSIONS = ("workflow", "output")
 KINDS = ("judged", "measured")
-MEASURED = ("claim_provenance", "area_compliance")  # the measured criteria code knows how to compute
+MEASURED = (
+    "claim_provenance",
+    "area_compliance",
+    "condition_compliance",
+)  # the measured criteria code knows how to compute
 
 
 class RubricError(ValueError):
@@ -26,6 +30,7 @@ class Criterion:
     kind: str
     question: str
     anchors: dict[int, str] = field(default_factory=dict)
+    plain: str | None = None
 
 
 @dataclass(frozen=True)
@@ -90,7 +95,10 @@ def parse(raw: Any) -> Rubric:
                 anchors[s] = str(text).strip()
         elif cid not in MEASURED:
             raise RubricError(f"{where}.id: no code measures {cid!r} (known: {', '.join(MEASURED)})")
-        criteria.append(Criterion(cid, dim, kind, _need(c, "question", where, str).strip(), anchors))
+        plain = c.get("plain")
+        if plain is not None and (not isinstance(plain, str) or not plain.strip()):
+            raise RubricError(f"{where}.plain: expected non-empty text")
+        criteria.append(Criterion(cid, dim, kind, _need(c, "question", where, str).strip(), anchors, plain))
     if not any(c.kind == "judged" for c in criteria):
         raise RubricError("rubric.criteria: needs at least one judged criterion")
 
@@ -127,3 +135,18 @@ def load(path: str | Path) -> Rubric:
     if not p.is_file():
         raise RubricError(f"rubric file {p} not found")
     return parse(yaml.safe_load(p.read_text(encoding="utf-8")))
+
+
+def plain_names(snapshot: Rubric, current: Rubric | None = None) -> dict[str, str]:
+    """Display text only: prefer current plain labels, without changing archived scoring."""
+    current_by_id = {c.id: c.plain for c in current.criteria} if current else {}
+    return {c.id: current_by_id.get(c.id) or c.plain or c.question for c in snapshot.criteria}
+
+
+def display_names(snapshot: Rubric, path: str | Path | None = None) -> dict[str, str]:
+    """Read current labels for old reports; a missing display file never prevents replay."""
+    try:
+        current = load(path or Path(__file__).resolve().parents[2] / "rubrics/geo-dataset-v1.yaml")
+    except (OSError, RubricError):
+        current = None
+    return plain_names(snapshot, current)
