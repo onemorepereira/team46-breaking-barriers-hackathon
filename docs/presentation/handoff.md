@@ -1,7 +1,7 @@
 # Presentation: Handoff (first version, for Miguel to edit and present)
 
 **What's ready** (branch `feature/presentation-deck`, 2026-11-04):
-- `deck.html`, 10 slides, with a team closing slide (slide 6, human feedback, added after the judge-feedback feature shipped);
+- `deck.html`, 11 slides, with a team closing slide (slide 6, human feedback, and slide 9, the AWS architecture diagram, added later);
 - `deck.pdf`;
 - `demo.md`, the judging-only script with pre-flight and fallbacks;
 - `claims.md`, every deck number with its source;
@@ -13,12 +13,12 @@ The team name, the logo and all four members appear on the title slide (a member
 
 **Verification:**
 - [x] **AC1 Deck.** Rendered in headless Chromium at 1600×900, slide by slide (slide 4 both unrevealed and fully revealed):
-  - 0 page errors, and 0 elements overflowing any slide, apart from slide 9's decorative background glow (slide 4 overflowed at first, so its copy was tightened);
+  - 0 page errors, and 0 elements overflowing any slide, apart from the closing slide's (slide 11) decorative background glow (slide 4 overflowed at first, so its copy was tightened);
   - `N` shows the notes and timer;
   - the only links are to the local console's three demo runs, all of which returned HTTP 200 on the running console. There's no CDN, and the logo is inlined;
   - the print style exports a 9-page PDF (`deck.pdf`).
 - [ ] **AC2 Every claim sourced.** `claims.md` maps each deck number to a repo file and line. **Still to do:** a teammate checks the list against the files.
-- [x] **AC3 Demo script:** `demo.md`, with timed steps, the lines to say, pre-flight and fallbacks, built around **Judge again** on run `a5670c6b`. Not yet rehearsed live (AC6).
+- [x] **AC3 Demo script:** `demo.md`, with timed steps, the lines to say, pre-flight and fallbacks, built around **Judge again** on run `6d5e9d6b` (Pecos County solar, after the 2026-11-04 cleanup; originally `a5670c6b`). Not yet rehearsed live (AC6).
 - [x] **AC4 One-pager:** `one-pager.md`, in plain language, including what the evaluator doesn't prove yet.
 - [x] **AC5 Q&A:** `qa.md`, 12 questions covering every topic the spec lists, each answer sourced.
 - [ ] **AC6 Rehearsed:** a team dry run, with timings and fixes logged in `demo.md`. **Owner: Miguel.**

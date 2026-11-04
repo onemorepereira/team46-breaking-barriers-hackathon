@@ -17,14 +17,13 @@ Tomorrow we present to the judges and to Clay and ADB. The work is spread across
 - **Demo assets:**
   - the console (`uv run harness ui`) with 16 one-click example prompts;
   - archived runs on **Miguel's machine** (see the open question below):
-    - local archive, which replays offline: `a9a69e76` (India solar parks, 87.5 High), `53fd4e2a` (ZIP 75080), `b2bdb4d6` (a FAILED run, which shows that the evaluator says no);
-    - S3 archive, which needs AWS: `a5670c6b` (Texas parks on AgentCore, 85.4 High).
+    - after the 2026-11-04 cleanup, five control runs, all in the S3 archive (needs AWS): `6d5e9d6b` (Pecos County solar, the live demo, tied to the USGS reference), `815fd905` (Texas parks, FAILED), `36efccf9` (Jodhpur solar parks, backup), plus Laos farmland and Dallas ZIP 75080.
 
 ## Where the demo runs live (decided)
 Runtime data is never committed, so the demo runs exist only on Miguel's machine and in his S3 bucket. **The demo runs from Miguel's laptop.** The slice owner writes the script against the run IDs above, using screenshots Miguel shares (or runs of their own made in their sandbox), and rehearses on Miguel's laptop.
 
 ## Acceptance criteria
-- [x] **AC1 An interactive HTML deck of 10 slides** (9 decided 2026-11-04; slide 6, human feedback, added the same day), `docs/presentation/deck.html`:
+- [x] **AC1 An interactive HTML deck of 11 slides** (9 decided 2026-11-04; slide 6, human feedback, and slide 9, the AWS architecture diagram (PR #10), added the same day), `docs/presentation/deck.html`:
   - **one self-contained file:** no framework or CDN, so it opens from disk; arrow keys or a click advance it;
   - **a presenter view:** `N` shows notes and a slide timer;
   - **a print style:** prints to `docs/presentation/deck.pdf` for the judges and as a backup;
@@ -40,14 +39,14 @@ Runtime data is never committed, so the demo runs exist only on Miguel's machine
   Each of the four judging criteria is answered visibly on at least one slide.
 - [ ] **AC2 Every claim is sourced.** `docs/presentation/claims.md` lists each number or factual claim in the deck with the repo file and line it comes from (e.g. "α = 0.50, docs/judging/handoff.md"). Anything without a source is cut or marked as our opinion. A teammate checks the list against the files.
 - [x] **AC3 A demo script that can't fail.** The demo **judges an already-built run; it doesn't build one** (decided 2026-11-04). `docs/presentation/demo.md` is a timed walkthrough of about 2 minutes:
-  1. open the Texas parks run (`a5670c6b`), whose judges disagreed (43.8, 81.2, 93.8);
-  2. click **Judge again**, and point out the recusal ("Mistral seated for Kimi");
-  3. while they think, show the code-measured checks (15/15 claims verified, 8/8 inside Texas, on the map);
+  1. open the Pecos County solar run (`6d5e9d6b`);
+  2. click **Judge again**, and point out the recusal ("Mistral seated for Opus");
+  3. while they think, show the code-measured checks (14/14 claims verified and inside the county, on the map);
   4. the verdicts land: score and confidence;
-  5. open one criterion: each judge's vote, reason and step reference, then click a reference to jump to the evidence;
-  6. contrast it with the FAILED Laos run (`b2bdb4d6`).
+  5. show the reference check: 7 of USGS's 12 farms found;
+  6. contrast it with the FAILED Texas parks run (`815fd905`).
 
-  Say on stage that the re-judged score moves a little from 85.4 each time, and that the confidence label exists for exactly that. Calibration is shown as a static table on a slide, not run live. The script also includes:
+  Say on stage that the re-judged score moves a little each time, and that the confidence label exists for exactly that. Calibration is shown as a static table on a slide, not run live. The script also includes:
   - **a pre-flight checklist**: fresh AWS credentials sourced, `harness ui` running, LGND login valid, a test run done within the hour, the browser zoomed for the projector;
   - **a fallback path**: if the network or a model fails, open the local-archive runs (IDs above) and replay them offline. The S3 run needs AWS credentials;
   - **a timing**: rehearse it at least once, end to end, and record how long it took.
@@ -71,7 +70,7 @@ Runtime data is never committed, so the demo runs exist only on Miguel's machine
 ## How to check your work
 ```sh
 uv run harness ui                      # rehearse against the real console
-uv run harness replay a9a69e76-f4ae-49a8-b03c-e88682cdb60b   # offline fallback (on Miguel's machine): rebuild a report from the local archive
+uv run harness replay 36efccf9-63ea-45b2-84b2-9a7c9d57ea3f   # rebuild the backup run's report from the archive (needs AWS: it's in S3)
 ```
 
 ## When done

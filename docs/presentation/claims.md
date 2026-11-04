@@ -2,19 +2,22 @@
 
 Every number or factual claim in `deck.html`, with the file it comes from. If a number changes, change it here and in the deck together. Checked 2026-11-04.
 
+**Run archive cleanup (2026-11-04):** all earlier runs were deleted, and five control runs were re-run. Claims about earlier runs (the FAILED → 85.4 bug-fix story, calibration, agreement, Opus's correction) are cited to the handoffs that recorded them; those run IDs no longer open in the console. The live-demo claims (slides 1 and 3) cite the new runs, read from the console's run view on 2026-11-04.
+
 | Slide | Claim | Source |
 | --- | --- | --- |
-| 1, 10 | Team Foundry, Team 46: Aditya Pasarti, Farhan Shahriar, Uday Kandi, Miguel Pereira | The team **[team]** |
-| 10 | Open source, Apache-2.0 | `LICENSE` |
+| 1, 11 | Team Foundry, Team 46: Aditya Pasarti, Farhan Shahriar, Uday Kandi, Miguel Pereira | The team **[team]** |
+| 11 | Open source, Apache-2.0 | `LICENSE` |
 | 1 | Evaluating agentic workflows is Clay's #1 unmet need (speaker note) | `docs/Clay-Foundry-Vision-Hackathon.md:17` |
-| 1 | "15 data centers" | Run `a5670c6b`: 15/15 claims verified (`docs/console-polish/handoff.md:38`) |
+| 1 | "14 solar farms" | Run `6d5e9d6b` (Pecos County solar, Sonnet 5.5 on AgentCore): 14 coordinate claims, 14/14 verified |
 | 2 | Every model and tool call is an OpenTelemetry span | `README.md`, "What we built"; `docs/eval-harness/handoff.md` |
 | 2 | Claims cite a tool result, and code checks the value and the area | `docs/judging/guide.md` (measured criteria) |
 | 2, 4 | Three judges from three companies: Opus 5.5, DeepSeek V3.2, Kimi K3 | `harness.yaml` (`judging.panel`); `docs/judging/guide.md:38–46` |
-| 3 | The Texas parks run was built by Kimi K3 on AgentCore | `docs/console-polish/handoff.md:38` |
-| 3 | Kimi steps down for its own agent, and Mistral sits | `docs/judging/guide.md` (recusal); seats recorded in run `a5670c6b`'s judgement |
-| 3 | 15/15 claims verified, 8/8 sites inside Texas | `docs/console-polish/handoff.md:38` |
-| 3 (demo) | The judges disagreed on the Texas run: Opus 43.8, DeepSeek 81.2, Mistral 93.8 | Run `a5670c6b`'s `judgement.json` in Miguel's S3 archive; the harness printed these votes when it judged the run (`harness run` output, 2026-11-04) |
+| 3 | The Pecos run was built by Sonnet 5.5 on AgentCore | Run `6d5e9d6b` manifest (`model_key: sonnet`, backend `agentcore`) |
+| 3 | Opus steps down for its own family's agent, and Mistral sits | `docs/judging/guide.md` (recusal); run `6d5e9d6b` seats: mistral (for opus), deepseek, kimi |
+| 3 | 14/14 claims verified, 14/14 inside the county; judges 100, 100, 100, High confidence | Run `6d5e9d6b` view (`kpis`, `scorecard`), 2026-11-04 |
+| 3 | Against the USGS inventory: 7 of 12 farms found (site recall 0.583, precision 1.0) | Run `6d5e9d6b` `reference`, against `references/uspvdb-tx-pecos-v4` |
+| 3 (contrast) | Texas parks on Kimi K3: FAILED at the 40-step limit with no answer; judges 18.8, 43.8, 93.8 | Run `815fd905` (`harness run` output and view, 2026-11-04) |
 | 3 | The score varies slightly when re-judged | Judges are LLMs; `docs/judging/guide.md` ("Repeat stability") |
 | 4 | 2 measured and 8 judged criteria; median per criterion; High/Medium/Low confidence; no answer means FAILED | `docs/judging/guide.md:15–80`; `rubrics/geo-dataset-v1.yaml` |
 | 4 | No judge grades its own family's agent | `docs/judging/guide.md` (recusal); `harness.yaml` `recuse_same_family: true` |
@@ -37,8 +40,12 @@ Every number or factual claim in `deck.html`, with the file it comes from. If a 
 | 8 | The exporter is swapped by config, proved in CI | `README.md`: "OpenTelemetry is the only telemetry API" and goal 5, "Keep observation pluggable" |
 | 8 | ADB's rubric is one YAML file | `docs/judging/guide.md`, "To use ADB's rubric" |
 | 8 | Replays work offline from the trace | `README.md` ("Reports work offline"); `docs/tile-cache/handoff.md:24` (31/31 tiles from the archive with every provider blocked) |
-| 9 | Checks claims against the tool output, not the world; no answer key yet | `docs/judging/gaps.md`; `docs/factory.md`, "Open work" |
-| 9 | Next steps: answer key, ADB rubric, ADB's experts reviewing runs (the loop is built), plain-language verdicts, prompt compliance | `docs/factory.md` ("Open work" and "Slices open for the team") |
+| 9 | Runs in AWS us-west-2: AgentCore Runtime, Amazon ECR (agent image), Secrets Manager (LGND login), CloudWatch (logs and traces), S3 run archive | `infra/app.py` (stack region, `DockerImageAsset`, `LgndGeoLogin` secret, archive bucket, runtime log group) |
+| 9 | Strands agent; RODA and LGND Geo MCP servers; AWS Open Data | `README.md`, "How it works"; `agent/`, `tools/` |
+| 9 | Agents Sonnet 5.5 and Kimi K3; judges Opus 5.5, DeepSeek V3.2, Kimi K3 | `harness.yaml` (`models`, `judging.panel`) |
+| 9 | Six steps: start a run (cost caps), the agent builds, traces are saved, code checks, three-family judges score by median, a person reviews | `README.md`, "How it works"; `docs/judging/guide.md`; `docs/judge-feedback/spec.md` |
+| 10 | Checks claims against the tool output, not the world; no answer key yet | `docs/judging/gaps.md`; `docs/factory.md`, "Open work" |
+| 10 | Next steps: answer key, ADB rubric, ADB's experts reviewing runs (the loop is built), plain-language verdicts, prompt compliance | `docs/factory.md` ("Open work" and "Slices open for the team") |
 
 **Costs for Q&A** (not on a slide):
 - **Judging:** $0.10–0.31 per run with the tribunal: run `3d7ac12a` cost $0.10 (`docs/judging/handoff.md`, "Tribunal of three") and `a5670c6b` cost $0.31.
