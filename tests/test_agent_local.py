@@ -59,6 +59,10 @@ def test_scripted_run_end_to_end(tmp_path):
     delta = json.dumps(run.model_results[1].json_attr("harness.model.input_messages_delta"))
     assert "[ref T1]" in delta and "[ref" not in run.tool_result_text(run.tool_results[0])
     assert run.model_results[0].attr("harness.reasoning.text") == "Look up the facility first."
+    # cached prompt tokens count as input (the scripted model reports 50 cache-read tokens on call 2)
+    second = run.model_results[1]
+    assert second.attr("harness.usage.input_tokens") == 150
+    assert second.attr("harness.usage.cache_read_input_tokens") == 50
     # 100% of decision spans archived (spike S2's check)
     harness_spans = [s for s in run.spans if s.scope == "harness"]
     assert run.run_end.attr("harness.decision_spans_emitted") == len(harness_spans)

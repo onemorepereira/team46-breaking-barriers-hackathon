@@ -169,7 +169,13 @@ class HarnessHooks(HookProvider):
                 if isinstance(c, dict) and "reasoningContent" in c
             )
             usage = ((message or {}).get("metadata") or {}).get("usage") or {}
-            in_tok, out_tok = int(usage.get("inputTokens", 0) or 0), int(usage.get("outputTokens", 0) or 0)
+            # Converse reports cached prompt tokens outside inputTokens (seen with Kimi K3's automatic
+            # caching), so total input = uncached + cache read + cache write. Undercounting would weaken
+            # the input-token cap and the cost estimate.
+            cache_read = int(usage.get("cacheReadInputTokens", 0) or 0)
+            cache_write = int(usage.get("cacheWriteInputTokens", 0) or 0)
+            in_tok = int(usage.get("inputTokens", 0) or 0) + cache_read + cache_write
+            out_tok = int(usage.get("outputTokens", 0) or 0)
             self.input_tokens += in_tok
             self.output_tokens += out_tok
             self.last_input_tokens = in_tok
@@ -184,6 +190,8 @@ class HarnessHooks(HookProvider):
                 "harness.stop_reason": str(resp.stop_reason) if resp is not None else "error",
                 "harness.usage.input_tokens": in_tok,
                 "harness.usage.output_tokens": out_tok,
+                "harness.usage.cache_read_input_tokens": cache_read,
+                "harness.usage.cache_write_input_tokens": cache_write,
                 "harness.model.latency_ms": latency_ms,
             }
             if event.exception is not None:

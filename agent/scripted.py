@@ -70,7 +70,12 @@ class ScriptedModel(Model):
         yield {"messageStop": {"stopReason": stop}}
         yield {
             "metadata": {
-                "usage": {"inputTokens": 100, "outputTokens": 20, "totalTokens": 120},
+                "usage": {
+                    "inputTokens": 100,
+                    "outputTokens": 20,
+                    "totalTokens": 120,
+                    "cacheReadInputTokens": 50 if self.i > 1 else 0,
+                },
                 "metrics": {"latencyMs": 5},
             }
         }
