@@ -2,7 +2,7 @@
 
 The ledger of work on the Team Foundry eval harness: every spec-to-handoff effort, the changes made without a spec, and what is still open. Each effort follows the same path: **spec** (problem and testable acceptance criteria), then **design** (options, failure modes, rollback), then **build**, then **verify** (each criterion proven by something that ran, recorded in the **handoff**). Small efforts skip the design. Update this page when an effort starts, changes status or ships (see [CONTRIBUTING](../CONTRIBUTING.md#documentation-conventions)).
 
-**Status key:** **Shipped**: built, verified and merged to the working branch. **In progress**: being built or verified. **Open**: decided but not started. **Blocked**: waiting on someone outside the team.
+**Status key:** **Shipped**: built, verified and merged. **In progress**: being built or verified. **Open**: decided but not started. **Blocked**: waiting on someone outside the team.
 
 ## Efforts with a spec
 
@@ -13,8 +13,43 @@ The ledger of work on the Team Foundry eval harness: every spec-to-handoff effor
 | 3 | **Judging and console** (2026-11-04) | Score each run's workflow and output against a generalized rubric with a cross-family judge panel, with agreement, confidence and calibration. The Team Foundry console (FastAPI) to run, watch and score | Standard | Shipped (panel revised: [tribunal of three](judging/handoff.md)) | 15/15 | [spec](judging/spec.md) · [design](judging/design.md) · [guide](judging/guide.md) · [gaps](judging/gaps.md) · [paper notes](judging/paper-notes.md) · [handoff](judging/handoff.md) |
 | 4 | **Example cards** (2026-11-04) | One-click example prompts for every continent, Asia first, mostly in ADB developing member countries, each with a verified official boundary | Quick | Shipped | 8/8 | [spec](example-cards/spec.md) · [handoff](example-cards/handoff.md) |
 | 5 | **Tile cache** (2026-11-04) | Archive each run's result tiles so archived runs replay their imagery offline; serve basemaps and tiles from a disk cache | Standard | Shipped | 10/10 | [spec](tile-cache/spec.md) · [design](tile-cache/design.md) · [launch](tile-cache/launch.md) · [handoff](tile-cache/handoff.md) |
-| 7 | **Console polish** (2026-11-04) | Dark theme across the console, report and API docs; a docked result panel instead of clipped popups; step links that scroll the timeline, not the page; the area-narrowing fix and the LGND token refresh behind run `fdacf7cf` | Standard | Shipped | 8/8 | [spec](console-polish/spec.md) · [design](console-polish/design.md) · [handoff](console-polish/handoff.md) |
 | 6 | **Docs pass** (2026-11-04) | Documentation in ship shape: an accuracy audit against the code, the developer guide, CONTRIBUTING, the docs index, this ledger, and a test that keeps the links and references true | Quick | Shipped | 5/5 | [spec](docs-pass/spec.md) · [handoff](docs-pass/handoff.md) |
+| 7 | **Console polish** (2026-11-04) | Dark theme across the console, report and API docs; a docked result panel instead of clipped popups; step links that scroll the timeline, not the page; the area-narrowing fix and the LGND token refresh behind run `fdacf7cf` | Standard | Shipped | 8/8 | [spec](console-polish/spec.md) · [design](console-polish/design.md) · [handoff](console-polish/handoff.md) |
+
+## Slices open for the team (2026-11-04)
+
+Four self-contained slices, one per person. Each spec says what exists, the testable acceptance criteria, what not to touch, and how to check the work, so you can hand it to Kiro or your tool of choice as is. Take one, put your name in its Owner line and in the table below, and follow "How to take a slice".
+
+| Slice | Purpose | Size | Status | Owner | Spec |
+| --- | --- | --- | --- | --- | --- |
+| **Evals in plain language** | A plain summary on every run ("what was found, how much to trust it, what to check by hand"), built from the archive with no new model calls | about half a day | Open | — | [spec](plain-verdict/spec.md) |
+| **Prompt compliance** | Check each result against **every** condition in the prompt (e.g. "within 10 miles of a protected area, inside ZIP 75082") and show evidence or its absence, per claim | about a day (splits in two) | Open | — | [spec](prompt-compliance/spec.md) |
+| **Visual design** | Make the console read as a designed product on a projector: type, spacing, hierarchy, a matching report; visual only, behavior unchanged | about a day | Open | — | [spec](visual-design/spec.md) |
+| **Presentation** | A deck of 12 slides or fewer, a 5-minute demo script that can't fail, a one-pager for ADB, and Q&A prep; every number sourced to the repo | about a day | Open | — | [spec](presentation/spec.md) |
+
+**Before anyone starts:** `design/eval-harness` must be merged to `main` (Miguel). Until then, `main` holds only the README and the briefs.
+
+**Who owns what, and the merge order:** the slices touch some of the same files, so they merge in this order, each rebasing on `main` before its PR:
+1. **Plain language** merges first, as the smallest change. It adds `analysis/judging/explain.py`, the optional `plain:` line in the rubric (with its loader support in `rubric.py`), `run_view(...)["explanation"]`, and one card in `run.html`, `app.js` and `report.html`.
+2. **Prompt compliance** merges second. It owns `analysis/judging/measure.py`, `dossier.py`, `harness/area.py`, `core/geometry.py`, and the rubric's new criterion and version bump. It rebases on plain language's rubric and `rubric.py` changes.
+3. **Visual design** merges last, because it restyles the pages the other two add cards to. Until then, style by class names (new cards use Tabler `card` markup), and rebase and restyle the new cards before merging.
+4. **Presentation** changes no code, and freezes its deck at the time set in its spec.
+
+### Accounts and credentials (open question; owner: Miguel; default below)
+`harness.yaml` points at Miguel's sandbox account (892605951158): its S3 archive, its LGND login secret and its AgentCore runtime.
+- **Default:** teammates use the same sandbox account (Miguel shares temporary credentials) and the `local` backend. **Don't run `harness lgnd-login`** against the shared secret: the harness refreshes the shared LGND token by itself, and a new login replaces it for everyone.
+- **With your own stack:** copy `harness.yaml` to a git-ignored file, e.g. `harness.local.yaml` (add it to `.gitignore` in your branch), and set your own `archive_uri`, `lgnd_secret_id` and `runtime_arn` from your CDK outputs. Then run `harness --config harness.local.yaml …`, and `lgnd-login` against your own secret.
+
+### How to take a slice
+1. **Set up:** follow the [developer guide](developer-guide.md) (`uv sync`; `uv run pytest` passes offline). For anything live you need sandbox AWS credentials in your shell (they expire every few hours) and a one-time `uv run harness lgnd-login`.
+2. **Branch:** `git switch -c slice/<name> main`. Never commit to `main` directly, and never commit credentials.
+3. **Get runs to look at:** a fresh clone has no runs, because `archive/` and `out/` aren't in git. Make a few with `uv run harness ui` and the example cards, or `uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend local`. Each costs about $0.20–1.00 in Bedrock and takes 1–7 minutes. Don't restart the console while one of your runs is going, or the run dies.
+4. **Build to the spec:** keep to its non-goals, and if the spec is wrong or unclear, fix the spec first and say so in the PR. Run the checks it lists, plus `uv run pytest && uv run ruff check . && uv run ruff format --check . && uv run mypy`. The browser probe needs a run that exists on your machine: `uv run --no-project --with playwright python tests/browser/console_probe.py <your-run-id>`.
+5. **Finish:**
+   - write `docs/<slice>/handoff.md`: what shipped, and each acceptance criterion with what proved it (a test name, a command, a screenshot, a run ID);
+   - set the spec's Status to `Built`;
+   - update the slice's row here;
+   - open a PR to `main`, and ask a teammate who didn't build it to review it.
 
 ## Changes without a spec
 
