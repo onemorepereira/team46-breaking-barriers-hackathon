@@ -232,7 +232,7 @@ class RunBuilder:
         status: str = "ok",
         write_result: bool = True,
         prices: dict[str, Any] | None = None,
-        rubric: dict[str, Any] | None = None,
+        search_area: dict[str, Any] | None = None,
         started_at: str = "2026-11-04T15:00:00Z",
         ended_at: str = "2026-11-04T15:01:30Z",
         part_size: int = 50,
@@ -260,9 +260,8 @@ class RunBuilder:
             "archive_errors": 0,
             "snapshot": {
                 "prices_per_mtok": prices or {"haiku": {"in": 1.0, "out": 5.0}},
-                "rubric": rubric,
-                "scorer": "none",
                 "harness_version": "test",
+                **({"search_area": search_area} if search_area else {}),
             },
         }
         (self.run_dir / "run.json").write_text(json.dumps(manifest, indent=1), encoding="utf-8")

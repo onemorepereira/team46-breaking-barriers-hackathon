@@ -22,6 +22,9 @@ ALLOWED = {
         "tools.lgnd.descriptors",
         "tools.lgnd.results",
         "tools.roda.descriptors",
+        "tools.describe",  # pure plain-English describers (no clients)
+        "tools.lgnd.describe",
+        "tools.roda.describe",
     },
     "harness": {"core", "analysis", "tools", "harness"},
 }
@@ -84,6 +87,7 @@ def test_ac2_no_inline_model_instructions():
         "agent/search_area_enforced",
         "harness/narrative",
         "harness/area_extract",
+        "judge/system",
     ]:
         assert (REPO / "prompts" / f"{name}.md").is_file(), name
 

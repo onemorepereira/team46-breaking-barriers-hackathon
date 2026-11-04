@@ -9,7 +9,8 @@ from typing import Any
 
 from jinja2 import Environment, PackageLoader, select_autoescape
 
-from analysis import check, provenance, score, signals, summary
+from analysis import check, provenance, signals, summary
+from analysis.judging import measure, panel
 from analysis.trace import Run
 
 _env = Environment(loader=PackageLoader("analysis", "templates"), autoescape=select_autoescape(default=True))
@@ -24,7 +25,9 @@ class RunReport:
     summ: summary.Summary
     tools: list[dict[str, Any]]
     datasets: list[dict[str, str]]
-    scores: list[score.CriterionScore] | None
+    measured: measure.Measured
+    panel: panel.PanelResult | None
+    judgement: dict[str, Any] | None
 
 
 def analyze(run: Run) -> RunReport:
@@ -37,7 +40,9 @@ def analyze(run: Run) -> RunReport:
         summ=summary.build(run, prov),
         tools=signals.tools_available(run),
         datasets=signals.datasets_accessed(run),
-        scores=score.score(run),
+        measured=measure.measure(run, prov),
+        panel=panel.rescore(run.judgement, run) if run.judgement else None,
+        judgement=run.judgement,
     )
 
 
@@ -48,7 +53,8 @@ def render_run(rep: RunReport, generated_at: str) -> str:
 COMPARE_COLUMNS = [
     "run_id", "prompt_file", "model_key", "model_id", "status", "steps", "tool_calls", "errors", "retries",
     "input_tokens", "output_tokens", "estimated_cost_usd", "runtime_s", "matched", "mismatch", "unsourced",
-    "claims_block_missing", "datasets_accessed",
+    "claims_block_missing", "claims_in_area", "search_footprint", "score", "workflow_score", "output_score",
+    "confidence", "within_one", "judging_cost_usd", "datasets_accessed",
 ]  # fmt: skip
 
 
@@ -68,15 +74,25 @@ def compare_rows(reports: list[RunReport]) -> list[dict[str, Any]]:
                 "runtime_s": rep.sig.runtime_s,
                 **c,
                 "claims_block_missing": rep.prov.claims_block_missing,
+                "claims_in_area": f"{rep.measured.claims_inside}/{rep.measured.claims_located}",
+                "search_footprint": f"{rep.measured.chips_inside}/{rep.measured.chips_total}",
+                "score": rep.panel.overall if rep.panel else None,
+                "workflow_score": rep.panel.dimensions.get("workflow") if rep.panel else None,
+                "output_score": rep.panel.dimensions.get("output") if rep.panel else None,
+                "confidence": rep.panel.confidence if rep.panel else None,
+                "within_one": rep.panel.within_one if rep.panel else None,
+                "judging_cost_usd": (rep.judgement or {}).get("judging_cost_usd"),
                 "datasets_accessed": "; ".join(d["dataset"] for d in rep.datasets),
             }
         )
     return rows
 
 
-def render_compare(suite_id: str, rows: list[dict[str, Any]], generated_at: str) -> str:
+def render_compare(
+    suite_id: str, rows: list[dict[str, Any]], generated_at: str, agreement: dict[str, Any] | None = None
+) -> str:
     return _env.get_template("compare.html").render(
-        suite_id=suite_id, rows=rows, columns=COMPARE_COLUMNS, generated_at=generated_at
+        suite_id=suite_id, rows=rows, columns=COMPARE_COLUMNS, generated_at=generated_at, agreement=agreement
     )
 
 

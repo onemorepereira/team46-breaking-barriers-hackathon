@@ -7,3 +7,6 @@ opentelemetry-sdk
 opentelemetry-exporter-otlp-proto-http
 mcp
 bedrock-agentcore
+# Console web stack (docs/judging/design.md: Foundry console; brief T99 names FastAPI). Not observability.
+fastapi
+uvicorn

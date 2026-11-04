@@ -1,0 +1,115 @@
+# Generalized rubric for agentic geospatial dataset-build runs (docs/judging/design.md: Rubric).
+# Task-agnostic: it asks what ADB needs to trust the dataset a run produced. Replace with ADB's rubric when it
+# arrives; code names only the measured criteria (claim_provenance, area_compliance). Calibration targets are
+# declared below, so a replacement rubric maps its own criteria.
+id: geo-dataset
+version: 1
+title: Agentic geospatial dataset build — workflow and output
+scale: [0, 1, 2]
+
+criteria:
+  # ---- Workflow (from the trace) ----
+  - id: tool_selection
+    dimension: workflow
+    kind: judged
+    question: Did the agent pick tools able to answer the task, without substituting a weaker proxy?
+    anchors:
+      0: The tools used cannot answer the task (e.g. only a dataset catalog for a question about physical sites), or the agent answered without the tools that could.
+      1: Some suitable tools were used, but an obviously better available tool was skipped or a proxy stood in for direct evidence.
+      2: Every essential step used a tool suited to it (imagery search or classification for physical features, dataset tools for datasets, verification where available).
+
+  - id: tool_arguments
+    dimension: workflow
+    kind: judged
+    question: Were tool arguments correct — search area scoped to the request, right index or dataset, valid parameters?
+    anchors:
+      0: Key calls had wrong or missing arguments that change what was searched (e.g. no area so the whole index was searched, wrong place, wrong index).
+      1: Arguments were mostly right, with a flaw that narrows or widens the search noticeably (e.g. a radius instead of the named boundary, a too-small limit).
+      2: Arguments match the request on every material call (area, index, time range, query terms, limits).
+
+  - id: sequencing_recovery
+    dimension: workflow
+    kind: judged
+    question: Was the order of steps logical, and were errors, empty results and retries handled well?
+    anchors:
+      0: Steps were illogical, or the agent looped, gave up early on a recoverable error, or ignored a failed step.
+      1: Mostly logical, with one wasted detour or one error handled poorly.
+      2: Search, then verify, then answer; errors and empty results were handled with a sensible next step.
+
+  - id: efficiency
+    dimension: workflow
+    kind: judged
+    question: Were steps, tokens and cost proportionate to the task?
+    anchors:
+      0: Many redundant or repeated calls, or the run hit a budget limit.
+      1: Some avoidable calls or excess tokens, but no runaway.
+      2: About the minimum steps the task needed for the evidence gathered.
+
+  # ---- Output (vs. the request) ----
+  - id: result_relevance
+    dimension: output
+    kind: judged
+    question: Do the returned results match the requested target, based on the evidence the tools returned?
+    anchors:
+      0: Most reported results are not the requested target, or relevance is not supported by any tool evidence.
+      1: A mix — some results are clearly the target, others are doubtful or a different class (e.g. warehouses reported as data centers).
+      2: Reported results are the requested target, and the tool evidence (labels, similarity, verification verdicts) supports it.
+
+  - id: grounding
+    dimension: output
+    kind: judged
+    question: Does every stated fact trace to executed tool output, faithfully?
+    anchors:
+      0: Key facts (names, operators, counts, coordinates) come from nowhere in the tool outputs, or contradict them.
+      1: Most facts are grounded, but some are parametric knowledge presented as findings, or overstate what a tool said.
+      2: Every material fact is supported by a cited tool output and is faithful to it; background knowledge is labeled as such.
+
+  - id: completeness
+    dimension: output
+    kind: judged
+    question: Does the answer address every part of the request?
+    anchors:
+      0: The main question is unanswered, or the answer is only a plan.
+      1: The main question is answered, but a requested part (attributes, locations, evidence, datasets) is missing.
+      2: Every part of the request is answered.
+
+  - id: calibration
+    dimension: output
+    kind: judged
+    question: Does the answer state uncertainty and limits honestly, without overclaiming?
+    anchors:
+      0: Presents unverified results as confirmed, or claims coverage it didn't achieve.
+      1: Mentions limits, but confidence is still overstated in places.
+      2: Confidence matches the evidence; unverified items and coverage gaps are stated plainly.
+
+  - id: claim_provenance
+    dimension: output
+    kind: measured
+    question: Share of declared claims whose value appears in the tool result they cite (code-checked). 0 when the claims block is missing, or empty while the answer has text.
+
+  - id: area_compliance
+    dimension: output
+    kind: measured
+    question: Share of coordinate claims (the dataset's locations) inside the requested area (code-checked). N/A with no area or no coordinates. Search results inside the area are shown separately as search footprint, not scored.
+
+failure_modes:
+  - {id: premature_fallback, meaning: Gave up on a capable tool or approach too early and fell back to a weaker one.}
+  - {id: overconfidence, meaning: Stated results with more certainty than the evidence supports.}
+  - {id: retry_loop, meaning: Repeated the same or near-identical call without new information.}
+  - {id: budget_abort, meaning: Stopped because a step, token or time limit was hit.}
+  - {id: proxy_substitution, meaning: Answered a different, easier question (e.g. large buildings for data centers).}
+  - {id: parametric_guess, meaning: Presented model memory as a finding from the tools.}
+  - {id: scope_violation, meaning: Searched or reported outside the requested area or constraints.}
+  - {id: hallucinated_value, meaning: Reported a value (name, number, coordinate) no tool returned.}
+  - {id: wrong_tool, meaning: Used a tool that cannot answer the step it was used for.}
+  - {id: incomplete_answer, meaning: Left a requested part of the answer out.}
+
+fatal:
+  - {id: no_answer, meaning: The run produced no final answer beyond a claims block.}
+  - {id: no_tool_data, meaning: No tool call succeeded, so nothing in the answer can rest on executed work.}
+
+# harness calibrate: which judged criterion each planted defect must lower. Omit one to skip it.
+calibration:
+  unscoped: tool_arguments
+  fabricated: grounding
+  no_answer: completeness

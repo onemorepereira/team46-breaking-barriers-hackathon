@@ -20,8 +20,7 @@ DEFAULTS: dict[str, Any] = {
     "max_runs_per_suite": 8,
     "max_suite_usd": 50,
     "prices_per_mtok": {},
-    "rubric": None,
-    "scorer": "none",
+    "judging": {},
     "area_mode": "enforce",  # enforce | observe | off: how the prompt's area is applied to LGND searches
     "out_dir": "out",
 }

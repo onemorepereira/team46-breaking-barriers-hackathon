@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ team }}{% endblock %} · Agentic eval console</title>
+  <link rel="icon" type="image/png" href="/static/favicon.png">
+  <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css">
+  <link rel="stylesheet" href="/static/vendor/tabler-icons/tabler-icons.min.css">
+  <link rel="stylesheet" href="/static/vendor/maplibre/maplibre-gl.css">
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div class="page">
+  <header class="navbar navbar-expand-md d-print-none foundry-nav" data-bs-theme="dark">
+    <div class="container-xl">
+      <a href="/" class="navbar-brand d-flex align-items-center gap-2 pe-3">
+        <img src="/static/foundry-mark.png" alt="" width="38" height="26" class="foundry-mark">
+        <span class="lh-1">
+          <span class="foundry-name">{{ team }}</span>
+          <span class="d-block foundry-tag">Agentic geospatial eval</span>
+        </span>
+      </a>
+      <div class="navbar-nav flex-row gap-1">
+        <a class="nav-link {{ 'active' if active == 'console' }}" href="/"><i class="ti ti-player-play me-1"></i>Console</a>
+        <a class="nav-link {{ 'active' if active == 'runs' }}" href="/runs"><i class="ti ti-history me-1"></i>Runs</a>
+        <a class="nav-link" href="/api/docs"><i class="ti ti-code me-1"></i>API</a>
+      </div>
+      <div class="ms-auto d-none d-lg-flex align-items-center gap-2 text-secondary small">
+        <i class="ti ti-scale"></i> Clay Earth Dataset Foundry · Track 1
+      </div>
+    </div>
+  </header>
+  <div class="page-wrapper">
+    {% block body %}{% endblock %}
+    <footer class="footer footer-transparent d-print-none">
+      <div class="container-xl text-secondary small d-flex flex-wrap gap-3 justify-content-between">
+        <span><img src="/static/foundry-mark.png" alt="" width="18" height="12" class="me-1"> {{ team }} · Breaking Barriers hackathon</span>
+        <span>Every score is replayable from the archive. Confidence measures judge agreement on the evidence, not ground truth.</span>
+      </div>
+    </footer>
+  </div>
+</div>
+<script src="/static/vendor/tabler/tabler.min.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

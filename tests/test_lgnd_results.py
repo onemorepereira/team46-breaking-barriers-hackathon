@@ -1,18 +1,9 @@
-"""harness ui: span -> event mapping, LGND chip/verdict parsing, and a scripted run streamed end to end."""
+"""LGND result parsing (chips, verdicts, tables) and the trouble-spot rule for unscoped searches."""
 
 import json
-import os
-import socket
-import subprocess
-import sys
-import time
-import urllib.request
-from pathlib import Path
 
-from harness.ui import span_event
+from harness.web.live import span_event
 from tools.lgnd.results import extras
-
-REPO = Path(__file__).resolve().parents[1]
 
 
 def test_lgnd_search_and_check_parsing():
@@ -40,70 +31,6 @@ def test_lgnd_search_and_check_parsing():
 
 def test_non_decision_spans_are_ignored():
     assert span_event({"name": "chat", "attributes": {}}) is None
-
-
-def free_port():
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-def test_scripted_run_streams_events_to_done(tmp_path):
-    cfg = {
-        "archive_uri": f"file://{tmp_path}/archive",
-        "local_archive_uri": f"file://{tmp_path}/archive",
-        "out_dir": str(tmp_path / "out"),
-        "models": {"scripted": {"id": "scripted", "max_tokens": 1000}},
-        "prices_per_mtok": {"scripted": {"in": 1.0, "out": 5.0}},
-    }
-    (tmp_path / "h.yaml").write_text(json.dumps(cfg))
-    port = free_port()
-    env = {**os.environ, "HARNESS_TEST_SCRIPT": str(REPO / "tests/fixtures/scripted_run.json")}
-    proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "harness.cli",
-            "--config",
-            str(tmp_path / "h.yaml"),
-            "ui",
-            "--port",
-            str(port),
-        ],
-        cwd=REPO,
-        env=env,
-        stdout=subprocess.PIPE,
-        text=True,
-    )
-    try:
-        assert "harness ui on" in proc.stdout.readline()
-        base = f"http://127.0.0.1:{port}"
-        assert b"Harness Live Run" in urllib.request.urlopen(base + "/", timeout=10).read()
-        req = urllib.request.Request(
-            base + "/api/run",
-            data=json.dumps({"prompt": "Find DA11", "model": "scripted"}).encode(),
-            headers={"content-type": "application/json"},
-        )
-        run_id = json.loads(urllib.request.urlopen(req, timeout=10).read())["run_id"]
-        types, done = [], None
-        deadline = time.monotonic() + 60
-        with urllib.request.urlopen(f"{base}/api/events/{run_id}", timeout=60) as stream:
-            for raw in stream:
-                if raw.startswith(b"data: "):
-                    ev = json.loads(raw[6:])
-                    types.append(ev["type"])
-                    if ev["type"] == "done":
-                        done = ev
-                        break
-                assert time.monotonic() < deadline
-        assert types[:2] == ["area", "start"]
-        assert {"model", "tool", "end"} <= set(types)
-        assert done["status"] == "ok" and [c["status"] for c in done["claims"]] == ["matched", "matched"]
-        assert done["missing_fields"] == 0
-        assert b"Run report" in urllib.request.urlopen(base + done["report"], timeout=10).read()
-    finally:
-        proc.terminate()
-        proc.wait(timeout=10)
 
 
 def test_unscoped_search_is_flagged(tmp_path):

@@ -73,7 +73,12 @@ def cmd_compare(cfg: config_mod.Config, index: Index, args: argparse.Namespace) 
     rows = report.compare_rows(reports)
     out = Path(cfg["out_dir"]) / args.suite_id
     out.mkdir(parents=True, exist_ok=True)
-    (out / "compare.html").write_text(report.render_compare(args.suite_id, rows, _now()), encoding="utf-8")
+    from analysis.judging import panel
+
+    judged = [rep.judgement for rep in reports if rep.judgement]
+    agreement = panel.corpus_alpha(judged) if judged else None
+    html = report.render_compare(args.suite_id, rows, _now(), agreement)
+    (out / "compare.html").write_text(html, encoding="utf-8")
     (out / "compare.csv").write_text(report.compare_csv(rows), encoding="utf-8")
     print(f"→ {out / 'compare.html'} ({len(rows)} rows), compare.csv")
     return 0
@@ -101,6 +106,16 @@ def _run_one(cfg: config_mod.Config, index: Index, plan: invoke.RunPlan) -> tupl
                 file=sys.stderr,
             )
         run = Run.load(store, plan.run_id)
+    if (cfg.get("judging") or {}).get("auto") and not os.environ.get("HARNESS_TEST_SCRIPT") and run.all_spans:
+        from harness import judge
+
+        try:
+            judge.judge_run(cfg, run, store, on_event=_print_judge)
+            run = Run.load(store, plan.run_id)
+        except Exception as e:  # noqa: BLE001 - the run and its report stand without a score
+            print(
+                f"run {plan.run_id}: judging failed ({e}); run 'harness judge {plan.run_id}'", file=sys.stderr
+            )
     path = write_report(cfg, run)
     rep = report.analyze(run)
     c = rep.prov.counts()
@@ -205,6 +220,83 @@ def cmd_suite(cfg: config_mod.Config, index: Index, args: argparse.Namespace, ba
     return 0 if not failed else 1
 
 
+def cmd_judge(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
+    from harness import judge
+
+    store = _run_store(cfg, index, args.run_id)
+    run = Run.load(store, args.run_id)
+    jd = judge.judge_run(cfg, run, store, passes=args.passes, on_event=_print_judge)
+    write_report(cfg, Run.load(store, args.run_id))
+    p = jd["panel"]
+    print(
+        f"{args.run_id}: {p['verdict']} overall {p['overall']} (workflow {p['dimensions']['workflow']}, "
+        f"output {p['dimensions']['output']}), confidence {p['confidence']}, "
+        f"judging ${jd['judging_cost_usd']:.3f}"
+    )
+    return 0 if p["status"] == "scored" else 1
+
+
+def _print_judge(ev: dict[str, object]) -> None:
+    if ev.get("type") == "judging":
+        seats = ev.get("seats") or []
+        assert isinstance(seats, list)
+        names = [
+            f"{s['key']}" + (f" (for {s['recused_for']})" if s.get("recused_for") else "") for s in seats
+        ]
+        print(f"panel: {', '.join(names)}; passes {ev.get('passes')}")
+    elif ev.get("type") == "judge":
+        tail = f"{ev.get('score')}" if ev.get("status") == "ok" else f"failed: {ev.get('error')}"
+        print(f"  pass {ev.get('pass')} {ev.get('key')}: {tail} ({ev.get('latency_s')} s)")
+
+
+def cmd_calibrate(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
+    from harness import calibrate
+
+    store = _run_store(cfg, index, args.run_id)
+    out = calibrate.calibrate(cfg, Run.load(store, args.run_id), store, passes=args.passes)
+    print(f"calibration of {args.run_id} (panel: {', '.join(out['seats'])}; passes {out['passes']}):")
+    for r in out["rows"]:
+        if r["verdict"] == "skipped":
+            print(f"  {r['perturbation']:<11} skipped (no target in the rubric)")
+            continue
+        flag = "  non-specific" if r.get("non_specific") else ""
+        print(
+            f"  {r['perturbation']:<11} → {r['target']:<20} {r['original']} → {r['perturbed']} "
+            f"(drop {r['drop']}, largest other drop {r['max_other_drop']}): {r['verdict']}{flag}"
+        )
+    print(f"cost ${out['cost_usd']:.3f} → runs/{args.run_id}/calibration.json")
+    return int(out["exit_code"])
+
+
+def cmd_agreement(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
+    from analysis.judging import panel
+
+    ids = list(args.run_ids)
+    if args.suite:
+        uri = index.suite_uri(args.suite) or cfg["archive_uri"]
+        text = open_store(uri).read_text(f"suites/{args.suite}/suite.json")
+        if text is None:
+            print(f"no suite {args.suite}")
+            return 1
+        ids += json.loads(text).get("run_ids", [])
+    if args.all:
+        ids += index.run_ids()
+    judgements = []
+    for rid in dict.fromkeys(ids):
+        try:
+            jd = Run.load(_run_store(cfg, index, rid), rid).judgement
+        except ArchiveError:
+            continue
+        if jd:
+            judgements.append(jd)
+    res = panel.corpus_alpha(judgements)
+    print(
+        f"{len(judgements)} judged runs, {res['units']} units, {res['coders']} judges: "
+        f"Krippendorff's alpha (ordinal) = {res['alpha']}, 95% CI {res['ci95']}"
+    )
+    return 0
+
+
 def cmd_lgnd_login(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
     from tools.lgnd import login as lgnd
 
@@ -218,9 +310,9 @@ def cmd_lgnd_login(cfg: config_mod.Config, index: Index, args: argparse.Namespac
 
 
 def cmd_ui(cfg: config_mod.Config, index: Index, args: argparse.Namespace) -> int:
-    from harness import ui
+    from harness.web import app
 
-    return ui.serve(cfg, args.port)
+    return app.serve(cfg, args.port)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -233,13 +325,25 @@ def build_parser() -> argparse.ArgumentParser:
     what.add_argument("--suite", help="suite file, e.g. suites/dallas-dc-v1.yaml")
     run.add_argument("--model", default=None, help="model key from harness.yaml models")
     run.add_argument("--backend", choices=["agentcore", "local"], default=None)
-    ui = sub.add_parser("ui", help="local page to start a run, watch it live, and see the NAIP tiles")
+    ui = sub.add_parser("ui", help="the Team Foundry console: run, watch, score, map")
     ui.add_argument("--port", type=int, default=8787)
     lg = sub.add_parser(
         "lgnd-login", help="one-time OAuth browser login to LGND Geo; saves to Secrets Manager"
     )
     lg.add_argument("--secret", default=None, help="secret ID (default: lgnd_secret_id in harness.yaml)")
     lg.add_argument("--device", action="store_true", help="use the device-code flow instead of the browser")
+    j = sub.add_parser("judge", help="score an archived run with the judge panel (docs/judging)")
+    j.add_argument("run_id")
+    j.add_argument("--passes", type=int, default=None, help="judge N times for repeat stability")
+    cal = sub.add_parser(
+        "calibrate", help="plant known defects in a run's dossier and check the panel sees them"
+    )
+    cal.add_argument("run_id")
+    cal.add_argument("--passes", type=int, default=1)
+    ag = sub.add_parser("agreement", help="Krippendorff's alpha of the judges across a set of judged runs")
+    ag.add_argument("run_ids", nargs="*")
+    ag.add_argument("--suite", default=None)
+    ag.add_argument("--all", action="store_true", help="every run in out/index.json")
     c = sub.add_parser("check", help="run the AC2 trace checker on an archived run")
     c.add_argument("run_id")
     r = sub.add_parser("replay", help="rebuild a run's report from the archive only")
@@ -261,6 +365,9 @@ def main(argv: list[str] | None = None) -> int:
             "compare": cmd_compare,
             "lgnd-login": cmd_lgnd_login,
             "ui": cmd_ui,
+            "judge": cmd_judge,
+            "calibrate": cmd_calibrate,
+            "agreement": cmd_agreement,
         }[args.command]
         return handler(cfg, index, args)
     except (ArchiveError, FileNotFoundError, ValueError) as e:

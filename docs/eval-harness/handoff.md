@@ -70,7 +70,7 @@
 **Follow-ups:**
 - **S2 not tested:** a 13-minute synchronous call (the documented fallback is AgentCore background tasks), and a 16 KB attribute in CloudWatch.
 - **S6 not done:** the OSM answer-key count, because both Overpass mirrors were unavailable.
-- **Open in the spec:** the rubric and scorer (only `none` ships), the workflow-scoring method, and the final prompts.
+- **Open in the spec:** the final prompts. The rubric, scorer and workflow-scoring method shipped on 2026-11-04 in [docs/judging](../judging/handoff.md).
 - **Known limits:** matching uses only the claim's value, coordinate parts match independently, and a value with a unit is classed as text.
 - **The Sonnet price** comes from the global cross-region table; the `us.` profile may differ slightly.
 

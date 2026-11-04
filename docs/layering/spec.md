@@ -19,7 +19,7 @@ The code mixes concerns across packages, so it's hard to see, change or review a
 | Tools | `tools/` | One subpackage per tool server (`tools/roda/`, `tools/lgnd/`), plus `tools/scripted.py` test fakes and the `tools/registry.py` that builds the MCP clients. Each server package owns its descriptors (tool names, which tools read an area, dataset fields), result parsing, client construction and auth | `core` |
 | Agent runtime | `agent/` | Strands agent, hooks, telemetry, archive processor, entry points | `core`, `tools` |
 | Analysis | `analysis/` | Pure functions over archived runs | `core`, `tools.*.descriptors` (static metadata only) |
-| Harness | `harness/` | CLI, config, invoking runs, UI, narrative and area-resolution services | `core`, `analysis`, `tools` (never `agent`: runs it as a subprocess or remotely) |
+| Harness | `harness/` | CLI, config, invoking runs, narrative and area-resolution services; the judge panel (`judge.py`, `calibrate.py`) and the console (`web/`), added on 2026-11-04 | `core`, `analysis`, `tools` (never `agent`: runs it as a subprocess or remotely) |
 
 ## Acceptance criteria
 

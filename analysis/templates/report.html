@@ -27,18 +27,34 @@
 <table><tr><th>#</th><th>Span</th><th>Step</th><th>Detail</th></tr>{% for s in r.summ.steps %}<tr><td>{{ loop.index }}</td><td><code>{{ s.span_id }}</code></td><td>{{ s.label }}</td><td>{{ s.detail }}</td></tr>{% endfor %}</table>
 
 <h2>Workflow signals</h2>
-<p class="muted">Raw numbers; no score.</p>
+<p class="muted">Raw numbers from the trace (the judges see these too).</p>
 <div class="grid">{% for k, v in r.sig.as_dict().items() %}<div class="tile"><span class="muted">{{ k.replace("_", " ") }}</span><b>{{ "—" if v is none else v }}</b></div>{% endfor %}</div>
 
 <h2>Claim provenance</h2>
+<p class="muted">Claims in the requested area: {{ r.measured.claims_inside }}/{{ r.measured.claims_located }} · search footprint {{ r.measured.chips_inside }}/{{ r.measured.chips_total }}{% if r.measured.area_label %} · area {{ r.measured.area_label }}{% endif %}</p>
 {% set c = r.prov.counts() %}<p><span class="ok">{{ c.matched }} matched</span> · <span class="warn">{{ c.mismatch }} mismatch</span> · <span class="bad">{{ c.unsourced }} unsourced</span></p>
 {% if r.prov.claims_block_missing %}<div class="banner">Claims block missing from the final answer (span <code>{{ r.prov.anchor_span_id }}</code>).</div>{% endif %}
 {% if r.prov.claims %}<table><tr><th>Claim</th><th>Value</th><th>Ref</th><th>Status</th><th>Span</th><th>Notes</th></tr>
 {% for x in r.prov.claims %}<tr><td>{{ x.claim }}</td><td><code>{{ x.value }}</code></td><td>{{ x.ref or "—" }}</td><td class="{{ 'ok' if x.status == 'matched' else ('warn' if x.status == 'mismatch' else 'bad') }}">{{ x.status }}</td><td><code>{{ x.span_id }}</code></td><td>{{ x.notes | join(", ") }}</td></tr>{% endfor %}</table>{% endif %}
 
-<h2>Output score</h2>
-{% if r.scores is none %}<p class="muted">awaiting rubric</p>
-{% else %}<table><tr><th>Criterion</th><th>Question</th><th>Score</th><th>Rationale</th></tr>{% for s in r.scores %}<tr><td>{{ s.criterion_id }}</td><td>{{ s.question }}</td><td>{{ "—" if s.score is none else s.score }}</td><td>{{ s.rationale }}</td></tr>{% endfor %}</table>{% endif %}
+<h2>Panel score</h2>
+{% set p = r.panel %}
+{% if p is none %}<p class="muted">Not judged. Run <code>harness judge {{ r.run.run_id }}</code> to score it with the judge panel.</p>
+{% else %}
+{% if p.gates %}<div class="banner">FAILED: {% for g in p.gates %}{{ g.reason }}{% if not loop.last %}; {% endif %}{% endfor %}</div>{% endif %}
+<div class="grid">
+<div class="tile"><span class="muted">overall</span><b>{{ "FAILED" if p.verdict == "FAILED" else ("—" if p.overall is none else p.overall) }}</b></div>
+<div class="tile"><span class="muted">workflow</span><b>{{ "—" if p.dimensions.workflow is none else p.dimensions.workflow }}</b></div>
+<div class="tile"><span class="muted">output</span><b>{{ "—" if p.dimensions.output is none else p.dimensions.output }}</b></div>
+<div class="tile"><span class="muted">confidence</span><b>{{ p.confidence }}</b></div>
+<div class="tile"><span class="muted">judges within one point</span><b>{{ "—" if p.within_one is none else (p.within_one * 100) | round | int ~ "%" }}</b></div>
+<div class="tile"><span class="muted">judging cost usd</span><b>{{ r.judgement.judging_cost_usd }}</b></div>
+</div>
+<p class="muted">{{ p.confidence_reasons | join("; ") }}. Confidence measures judge agreement on the evidence, not ground truth. Rubric <code>{{ r.judgement.rubric.id }} v{{ r.judgement.rubric.version }}</code>; seats: {% for s in r.judgement.seats %}{{ s.key }}{% if s.recused_for %} (for {{ s.recused_for }}){% endif %}{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+<table><tr><th>Criterion</th><th>Dimension</th><th>Kind</th><th>Score</th><th>Votes / value</th></tr>
+{% for c in p.criteria %}<tr><td>{{ c.id }}</td><td>{{ c.dimension }}</td><td>{{ c.kind }}</td><td>{{ "n/a" if c.score is none else c.score }}{% if c.gated %} (gated){% endif %}</td><td>{% if c.kind == "judged" %}{% for k, v in c.votes.items() %}{{ k }} {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}{% else %}{{ c.value }}{% endif %}</td></tr>{% endfor %}</table>
+<p>Failure modes (majority): {% for f in p.failure_modes %}<code>{{ f.id }}</code> {{ f.votes }}/{{ f.of }} {% else %}<span class="muted">none</span>{% endfor %}</p>
+{% endif %}
 
 <h2>Trace check (AC2)</h2>
 {% if r.missing %}<p class="bad">{{ r.missing | length }} missing fields</p><ul>{% for x in r.missing %}<li><code>{{ x.line() }}</code></li>{% endfor %}</ul>{% else %}<p class="ok">0 missing fields</p>{% endif %}

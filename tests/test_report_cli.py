@@ -92,24 +92,10 @@ def test_report_has_every_section_and_escapes(tmp_path):
     assert r.returncode == 0, r.stderr
     html = (tmp_path / "out/run-0001/report.html").read_text()
     for section in ["Tools available", "Datasets accessed", "Summary", "Trouble spots", "Timeline",
-                    "Workflow signals", "Claim provenance", "Output score", "awaiting rubric",
+                    "Workflow signals", "Claim provenance", "Panel score", "Not judged",
                     "estimated cost usd", "runtime s", "osm-dc", "get_dataset_details"]:  # fmt: skip
         assert section in html, section
     assert "<script>" not in html and "&lt;script&gt;" in html
-
-
-def test_rubric_criteria_shown_as_not_scored(tmp_path):
-    rubric = {
-        "rubric": "adb",
-        "version": 1,
-        "criteria": [{"id": "a", "question": "Q1?"}, {"id": "b", "question": "Q2?"}],
-    }
-    b = standard_run(tmp_path / "archive")
-    b.write(final_output=json.loads((b.run_dir / "run.json").read_text())["final_output"], rubric=rubric)
-    write_config(tmp_path)
-    assert harness(tmp_path, "replay", "run-0001").returncode == 0
-    html = (tmp_path / "out/run-0001/report.html").read_text()
-    assert html.count("not scored (no evaluator configured)") == 2 and "awaiting rubric" not in html
 
 
 @pytest.mark.disable_socket

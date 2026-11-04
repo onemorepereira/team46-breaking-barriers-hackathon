@@ -164,6 +164,25 @@ class Run:
     def span_ids(self) -> set[str]:
         return {s.span_id for s in self.all_spans}
 
+    @cached_property
+    def prompt(self) -> str:
+        """The user's prompt: run.json (newer runs), else the first model call's input messages."""
+        if self.manifest.get("prompt"):
+            return str(self.manifest["prompt"])
+        first = self.model_results[0] if self.model_results else None
+        msgs = first.json_attr("harness.model.input_messages_delta", []) if first else []
+        for m in msgs if isinstance(msgs, list) else []:
+            for c in m.get("content", []) if isinstance(m, dict) else []:
+                if isinstance(c, dict) and c.get("text"):
+                    return str(c["text"])
+        return ""
+
+    @cached_property
+    def judgement(self) -> dict[str, Any] | None:
+        """runs/<id>/judgement.json from `harness judge` (docs/judging), or None if never judged."""
+        text = self.store.read_text(f"runs/{self.run_id}/judgement.json")
+        return json.loads(text) if text else None
+
     def tool_result_text(self, span: Span) -> str | None:
         """The full, raw tool result from tool_results/<ref>.a<attempt>.txt (design ADR-AC6)."""
         uri = span.attr("harness.tool.result_uri")

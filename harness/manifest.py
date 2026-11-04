@@ -35,3 +35,9 @@ class Index:
 
     def suite_uri(self, suite_id: str) -> str | None:
         return self._load()["suites"].get(suite_id)
+
+    def run_ids(self) -> list[str]:
+        return list(self._load()["runs"])
+
+    def runs(self) -> dict[str, str]:
+        return dict(self._load()["runs"])

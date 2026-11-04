@@ -96,20 +96,12 @@ def plan_run(
                "model_params": model_params, "limits": DEFAULT_LIMITS}  # fmt: skip
     manifest = {"schema_version": 1, "run_id": run_id, "suite_id": suite_id, "backend": backend,
                 "model_key": model_key, "model_id": m["id"], "prompt_file": prompt_file, "prompt_sha256": sha,
+                "prompt": prompt,
                 "started_at": _now(), "ended_at": None, "status": "running", "final_output": "",
                 "archive_uri": archive_uri, "archive_errors": 0,
-                "snapshot": {"prices_per_mtok": cfg["prices_per_mtok"], "rubric": _rubric(cfg),
-                             "scorer": cfg["scorer"], "harness_version": _git_sha()}}  # fmt: skip
+                "snapshot": {"prices_per_mtok": cfg["prices_per_mtok"],
+                             "harness_version": _git_sha()}}  # fmt: skip
     return RunPlan(run_id, suite_id, backend, model_key, archive_uri, payload, manifest, usd)
-
-
-def _rubric(cfg: Config) -> Any:
-    path = cfg.get("rubric")
-    if not path:
-        return None
-    import yaml
-
-    return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
 
 
 def _git_sha() -> str:

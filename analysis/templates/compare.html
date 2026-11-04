@@ -1,7 +1,8 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Suite comparison {{ suite_id }}</title>{% include "_style.html" %}</head><body>
 <h1>Suite comparison</h1><div class="muted"><code>{{ suite_id }}</code> · {{ rows | length }} runs · generated {{ generated_at }}</div>
-<p class="muted">Raw numbers side by side; no winner is declared.</p>
+<p class="muted">Numbers side by side, with each run's panel score; no winner is declared.</p>
+{% if agreement %}<p>Judge agreement across these runs: Krippendorff's α (ordinal) = <b>{{ "—" if agreement.alpha is none else agreement.alpha }}</b>{% if agreement.ci95 %}, 95% CI {{ agreement.ci95[0] }}–{{ agreement.ci95[1] }}{% endif %} ({{ agreement.runs }} runs, {{ agreement.units }} run × criterion units, {{ agreement.coders }} judges).</p>{% endif %}
 <table><tr>{% for c in columns %}<th>{{ c.replace("_", " ") }}</th>{% endfor %}</tr>
 {% for row in rows %}<tr>{% for c in columns %}<td{% if c == "status" and row[c] != "ok" %} class="bad"{% endif %}>{{ "—" if row[c] is none else row[c] }}</td>{% endfor %}</tr>{% endfor %}</table>
 </body></html>

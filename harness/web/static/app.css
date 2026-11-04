@@ -1,0 +1,79 @@
+/* Team Foundry console: Tabler + brand accents. Brand: cyan #01D5F9, orange #FD8800 (from the TF logo). */
+:root {
+  --foundry-cyan: #01d5f9;
+  --foundry-cyan-ink: #0891b2;
+  --foundry-orange: #fd8800;
+  --foundry-orange-ink: #c2410c;
+  --foundry-ink: #0b1220;
+  --tblr-primary: #0891b2;
+  --tblr-primary-rgb: 8, 145, 178;
+}
+.foundry-nav { background: var(--foundry-ink); border-bottom: 3px solid var(--foundry-cyan); }
+.foundry-nav .nav-link.active { color: #fff; box-shadow: inset 0 -3px 0 var(--foundry-orange); }
+.foundry-mark { object-fit: contain; }
+.foundry-name { font-weight: 700; letter-spacing: .02em; font-size: 1.05rem; color: #fff; }
+.foundry-tag { font-size: .7rem; color: #94a3b8; letter-spacing: .06em; text-transform: uppercase; }
+.btn-primary { --tblr-btn-bg: var(--foundry-cyan-ink); --tblr-btn-border-color: var(--foundry-cyan-ink);
+  --tblr-btn-hover-bg: #0e7490; --tblr-btn-hover-border-color: #0e7490; }
+.bg-cyan { background-color: var(--foundry-cyan-ink) !important; }
+.bg-orange { background-color: var(--foundry-orange) !important; }
+
+.foundry-prompt { font-size: 1rem; white-space: pre-wrap; border-left: 3px solid var(--foundry-cyan); padding-left: .75rem; }
+.foundry-score-card { border-top: 3px solid var(--foundry-cyan); }
+.foundry-score { font-size: 3.2rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.foundry-score.failed { color: var(--tblr-danger); font-size: 2.4rem; }
+.foundry-kpi-icon { background: rgba(1, 213, 249, .12); color: var(--foundry-cyan-ink); }
+.foundry-kpi-value { font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.2; }
+.foundry-kpi-sub { color: var(--tblr-secondary); }
+.min-w-0 { min-width: 0; }
+
+.foundry-map { height: 520px; }
+.foundry-legend { position: absolute; left: 10px; bottom: 10px; background: rgba(11, 18, 32, .82); color: #e2e8f0;
+  padding: .45rem .6rem; border-radius: 6px; line-height: 1.6; pointer-events: none; }
+.foundry-map-note { position: absolute; right: 10px; top: 10px; background: rgba(11, 18, 32, .82); color: #e2e8f0;
+  padding: .35rem .6rem; border-radius: 6px; max-width: 60%; }
+.foundry-map-note:empty { display: none; }
+.swatch { display: inline-block; width: 14px; height: 10px; margin-right: 6px; vertical-align: middle; border-radius: 2px; }
+.swatch-area { border: 2px dashed var(--foundry-cyan); }
+.swatch-in { background: rgba(1, 213, 249, .45); border: 2px solid var(--foundry-cyan); }
+.swatch-out { background: rgba(253, 136, 0, .45); border: 2px dashed var(--foundry-orange); }
+.swatch-claim { width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 3px solid var(--foundry-orange); }
+.maplibregl-popup-content { padding: 8px; border-radius: 8px; }
+.foundry-popup img { width: 220px; height: 220px; object-fit: cover; border-radius: 4px; display: block; background: #0b1220; }
+
+.foundry-tiles { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; min-height: 8px; }
+.foundry-tile { flex: 0 0 auto; position: relative; width: 92px; height: 92px; border-radius: 6px; overflow: hidden;
+  border: 3px solid var(--foundry-cyan); cursor: pointer; background: #0b1220; padding: 0; }
+.foundry-tile.out { border-style: dashed; border-color: var(--foundry-orange); }
+.foundry-tile img { width: 100%; height: 100%; object-fit: cover; }
+.foundry-tile span { position: absolute; left: 0; right: 0; bottom: 0; font-size: .65rem; color: #fff;
+  background: rgba(0, 0, 0, .55); padding: 1px 4px; text-align: left; white-space: nowrap; overflow: hidden; }
+
+.foundry-timeline { max-height: 760px; overflow-y: auto; }
+.foundry-timeline .list-group-item { cursor: default; }
+.foundry-timeline .list-group-item.has-bounds { cursor: pointer; }
+.foundry-timeline .list-group-item.has-bounds:hover { background: rgba(1, 213, 249, .06); }
+.foundry-timeline .step-ref { font-family: var(--tblr-font-monospace); font-size: .72rem; }
+.foundry-timeline pre { max-height: 320px; overflow: auto; font-size: .72rem; margin: .5rem 0 0; }
+.step-icon-model { background: rgba(99, 102, 241, .12); color: #4f46e5; }
+.step-icon-lgnd { background: rgba(1, 213, 249, .14); color: var(--foundry-cyan-ink); }
+.step-icon-roda { background: rgba(253, 136, 0, .14); color: var(--foundry-orange-ink); }
+.step-icon-run { background: rgba(100, 116, 139, .14); color: #475569; }
+.step-detail { white-space: pre-wrap; font-size: .82rem; }
+
+.criterion { cursor: pointer; }
+.criterion .name { font-weight: 600; }
+.votes { display: inline-flex; gap: 3px; }
+.vote { width: 18px; height: 18px; border-radius: 50%; font-size: .65rem; line-height: 18px; text-align: center;
+  color: #fff; font-weight: 700; }
+.vote-0 { background: #d63939; } .vote-1 { background: #f59f00; color: #1f2937; } .vote-2 { background: #2fb344; }
+.vote-na { background: #cbd5e1; color: #334155; }
+.rationale { font-size: .8rem; border-left: 2px solid var(--tblr-border-color); padding-left: .5rem; margin-top: .35rem; }
+.foundry-claims { max-height: 340px; overflow-y: auto; }
+.foundry-answer { font-size: .9rem; color: var(--tblr-body-color) !important; }
+.foundry-answer-plain { white-space: pre-wrap; }
+.foundry-answer table { font-size: .8rem; }
+.foundry-answer pre { font-size: .75rem; max-height: 260px; overflow: auto; }
+.ref-link { font-family: var(--tblr-font-monospace); font-size: .72rem; cursor: pointer; }
+.flash { animation: flash 1.4s ease-out; }
+@keyframes flash { from { background: rgba(253, 136, 0, .25); } to { background: transparent; } }
