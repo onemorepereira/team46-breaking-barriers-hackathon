@@ -26,6 +26,10 @@ dev = [
   "boto3-stubs[s3]",
   "opentelemetry-proto>=1.45",
 ]
+infra = [
+    "aws-cdk-lib>=2.220",
+    "constructs>=10",
+]
 
 [project.scripts]
 harness = "harness.cli:main"
@@ -54,3 +58,6 @@ check_untyped_defs = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff.lint.per-file-ignores]
+"infra/app.py" = ["E501"]

@@ -16,3 +16,7 @@ __pycache__/
 .ruff_cache/
 out/
 archive/
+
+# CDK
+infra/cdk.out/
+cdk.context.json

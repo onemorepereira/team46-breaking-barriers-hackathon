@@ -64,6 +64,7 @@ class HarnessHooks(HookProvider):
         self.limits = limits
         self.server_of = server_of
         self.cancel = threading.Event()
+        self.emitted = 0
         self.limit_reason: str | None = None
         self._lock = threading.Lock()
         self.steps = 0
@@ -90,6 +91,7 @@ class HarnessHooks(HookProvider):
             name, attributes={k: to_attr(v) for k, v in attrs.items() if v is not None}
         )
         span.end()
+        self.emitted += 1
         return f"{span.get_span_context().span_id:016x}"
 
     def run_start(self) -> None:
@@ -105,6 +107,7 @@ class HarnessHooks(HookProvider):
                 "harness.status": status,
                 "harness.tool_refs": self.refs,
                 "harness.archive_errors": archive_errors,
+                "harness.decision_spans_emitted": self.emitted + 1,  # including this run.end span
             },
         )
 

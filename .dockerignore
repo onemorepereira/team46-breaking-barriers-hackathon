@@ -1,0 +1,12 @@
+.git
+.venv
+archive
+out
+spikes
+tests
+infra
+docs
+cdk.out
+**/__pycache__
+*.env
+aws-sandbox*

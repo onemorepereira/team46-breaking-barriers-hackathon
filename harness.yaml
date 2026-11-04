@@ -1,10 +1,10 @@
 # harness.yaml — committed config, no secrets (design: Data and contracts).
 region: us-west-2
 backend: local                 # agentcore | local; --backend overrides per run
-archive_uri: file://./archive  # set to s3://<bucket> from the CDK output after slice 3
+archive_uri: s3://team46evalharness-archiveda4cb258-qgbj570ey9mw  # CDK output ArchiveUri
 local_archive_uri: file://./archive
 local_exporter: console
-runtime_arn: null              # from the CDK output after slice 3
+runtime_arn: arn:aws:bedrock-agentcore:us-west-2:892605951158:runtime/team46_eval_harness-VzYWReDy9h  # CDK output RuntimeArn
 out_dir: out
 
 models:
