@@ -21,7 +21,7 @@ NUMBER_IN_TEXT_RE = re.compile(r"-?\d+(?:\.\d+)?")
 FENCE_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL)
 
 MATCHED, MISMATCH, UNSOURCED = "matched", "mismatch", "unsourced"
-VALUE_MATCHER_VERSION = 2
+VALUE_MATCHER_VERSION = 3
 VERDICTS = {"supported", "not supported", "unsupported", "confirmed", "not confirmed", "unconfirmed",
             "yes", "no", "maybe"}  # fmt: skip
 PAIR_RE = re.compile(r"(?<![\d.])(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)(?!(?:\d|\.\d))")
@@ -38,6 +38,11 @@ def matcher_update_note(judgement: dict[str, Any] | None) -> str | None:
 
 def _verdict_values(data: Any) -> Iterator[str]:
     if isinstance(data, dict):
+        cols, rows = data.get("columns"), data.get("rows")
+        if isinstance(cols, list) and all(isinstance(c, str) for c in cols) and isinstance(rows, list):
+            for row in rows:
+                if isinstance(row, list):
+                    yield from _verdict_values(dict(zip(cols, row, strict=False)))
         for key, value in data.items():
             if key.lower() in ("verdict", "answer") and isinstance(value, str):
                 yield normalize_text(value)
@@ -46,6 +51,13 @@ def _verdict_values(data: Any) -> Iterator[str]:
     elif isinstance(data, list):
         for value in data:
             yield from _verdict_values(value)
+    elif isinstance(data, str):
+        try:
+            nested = json.loads(data)
+        except ValueError:
+            return
+        if isinstance(nested, dict | list):
+            yield from _verdict_values(nested)
 
 
 def _coordinate_pairs(data: Any) -> Iterator[tuple[float, float]]:
