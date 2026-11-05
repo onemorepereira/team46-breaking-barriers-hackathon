@@ -5,6 +5,7 @@ import {
   candidatesOf,
   chipFor,
   draftPayload,
+  fitCoordinates,
   formatScore,
   reviewPayload,
   visualCaption,
@@ -234,4 +235,81 @@ test("reported sites carry their visual verdict", () => {
   const c = candidatesOf(view);
   assert.equal(c[0].visual?.verdict, "absent");
   assert.equal(c[1].visual, null);
+});
+
+test("map fit: the area's polygons holding evidence (else the largest), plus all evidence", () => {
+  const sq = (x: number, y: number, d: number) => [
+    [
+      [x, y],
+      [x + d, y],
+      [x + d, y + d],
+      [x, y + d],
+      [x, y],
+    ],
+  ];
+  const point = (c: [number, number]) => ({
+    geometry: { type: "Point", coordinates: c },
+  });
+  const mainland = sq(3, 50, 4); // ~Netherlands
+  const island = sq(-68.4, 12.0, 0.3); // ~Bonaire
+  const view = (area: any, claims: any[] = [], chips: any[] = []): any => ({
+    map: {
+      area: area && { geometry: area },
+      claims: { features: claims },
+      chips: { features: chips },
+    },
+  });
+  const xs = (cs: [number, number][]) => cs.map((c) => c[0]);
+  // MultiPolygon: the island is left out of the fit
+  const multi = fitCoordinates(
+    view({ type: "MultiPolygon", coordinates: [island, mainland] }),
+  );
+  assert.ok(Math.min(...xs(multi)) >= 3 && multi.length === 5);
+  // ...unless evidence sits on it
+  const withIsland = fitCoordinates(
+    view({ type: "MultiPolygon", coordinates: [island, mainland] }, [
+      point([-68.3, 12.1]),
+    ]),
+  );
+  assert.ok(xs(withIsland).includes(-68.3));
+  // Polygon area and chip footprints
+  const poly = fitCoordinates(
+    view(
+      { type: "Polygon", coordinates: mainland },
+      [],
+      [{ geometry: { type: "Polygon", coordinates: sq(4, 51, 0.01) } }],
+    ),
+  );
+  assert.equal(poly.length, 10);
+  // no area: evidence only; nothing: empty
+  assert.deepEqual(fitCoordinates(view(null, [point([5, 52])])), [[5, 52]]);
+  assert.deepEqual(fitCoordinates(view(null)), []);
+  assert.deepEqual(fitCoordinates(null), []);
+});
+
+test("map fit: a big sea polygon without evidence loses to the small one holding the sites (Tokyo)", () => {
+  const sq = (x: number, y: number, dx: number, dy: number) => [
+    [
+      [x, y],
+      [x + dx, y],
+      [x + dx, y + dy],
+      [x, y + dy],
+      [x, y],
+    ],
+  ];
+  const tokyo = sq(139.0, 35.5, 0.9, 0.3);
+  const izu = sq(139.0, 33.0, 1.5, 1.5); // bigger, but no evidence
+  const v: any = {
+    map: {
+      area: { geometry: { type: "MultiPolygon", coordinates: [izu, tokyo] } },
+      claims: {
+        features: [
+          { geometry: { type: "Point", coordinates: [139.78, 35.55] } },
+        ],
+      },
+      chips: { features: [] },
+    },
+  };
+  const ys = fitCoordinates(v).map((c) => c[1]);
+  assert.ok(Math.min(...ys) >= 35.5, "Izu islands are not framed");
 });

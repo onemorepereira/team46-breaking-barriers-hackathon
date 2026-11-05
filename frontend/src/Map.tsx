@@ -3,6 +3,7 @@ import {
   candidatesOf,
   imageForCandidate,
   endpoint,
+  fitCoordinates,
   VISUAL_MARK,
   VISUAL_SOURCE,
   visualCaption,
@@ -416,22 +417,8 @@ export default function EvidenceMap({
       );
     });
     const bounds = new lib.LngLatBounds();
-    function include(c: any): void {
-      if (
-        Array.isArray(c) &&
-        Number.isFinite(c[0]) &&
-        Number.isFinite(c[1]) &&
-        Math.abs(c[0]) <= 180 &&
-        Math.abs(c[1]) <= 90
-      )
-        bounds.extend(c as [number, number]);
-      else if (Array.isArray(c)) c.forEach(include);
-    }
-    include(view?.map.area?.geometry?.coordinates);
-    [
-      ...(view?.map.claims?.features || []),
-      ...(view?.map.chips?.features || []),
-    ].forEach((f: any) => include(f?.geometry?.coordinates));
+    // The area's main polygon plus the evidence, not every outlying island (docs/map-fit).
+    fitCoordinates(view).forEach((c) => bounds.extend(c));
     fit.current = (animate = true) => {
       m.setPadding({ top: 40, bottom: 50, left: 40, right: 40 });
       if (!bounds.isEmpty())

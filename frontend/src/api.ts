@@ -278,3 +278,68 @@ export function chipFor(c: Candidate, chips: any[]): number {
   });
   return bestD <= 300 ? best : -1;
 }
+
+// What the map fits to (docs/map-fit): all evidence, plus the area's polygons that hold evidence (or, with
+// none, its largest polygon). Administrative areas can include remote parts (the Netherlands' Caribbean islands,
+// Tokyo's Izu and Ogasawara islands); fitting all of them opens the map at world or ocean zoom. They're still
+// drawn, and evidence on them is still framed.
+export function fitCoordinates(view: View | null): [number, number][] {
+  const ok = (c: any): c is [number, number] =>
+    Array.isArray(c) &&
+    Number.isFinite(c[0]) &&
+    Number.isFinite(c[1]) &&
+    Math.abs(c[0]) <= 180 &&
+    Math.abs(c[1]) <= 90;
+  const flat = (c: any): [number, number][] =>
+    ok(c) ? [c] : Array.isArray(c) ? c.flatMap(flat) : [];
+  const inside = (ring: [number, number][], [x, y]: [number, number]) => {
+    let hit = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, yi] = ring[i],
+        [xj, yj] = ring[j];
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi)
+        hit = !hit;
+    }
+    return hit;
+  };
+  const g = view?.map?.area?.geometry;
+  const rings: [number, number][][] = (
+    g?.type === "Polygon"
+      ? [g.coordinates]
+      : g?.type === "MultiPolygon" && Array.isArray(g.coordinates)
+        ? g.coordinates
+        : []
+  )
+    .map((p: any) => flat(p?.[0])) // outer rings
+    .filter((r: [number, number][]) => r.length > 2);
+  const features = [
+    ...(view?.map?.claims?.features || []),
+    ...(view?.map?.chips?.features || []),
+  ];
+  const evidence = features.flatMap((f: any) => flat(f?.geometry?.coordinates));
+  const marks = features
+    .map((f: any) => {
+      const pts = flat(f?.geometry?.coordinates);
+      if (!pts.length) return null;
+      const xs = pts.map((c) => c[0]),
+        ys = pts.map((c) => c[1]);
+      return [
+        (Math.min(...xs) + Math.max(...xs)) / 2,
+        (Math.min(...ys) + Math.max(...ys)) / 2,
+      ] as [number, number];
+    })
+    .filter((c): c is [number, number] => c !== null);
+  let chosen = rings.filter((r) => marks.some((m) => inside(r, m)));
+  if (!chosen.length && rings.length) {
+    const size = (r: [number, number][]) => {
+      const xs = r.map((c) => c[0]),
+        ys = r.map((c) => c[1]);
+      return (
+        (Math.max(...xs) - Math.min(...xs)) *
+        (Math.max(...ys) - Math.min(...ys))
+      );
+    };
+    chosen = [rings.reduce((a, b) => (size(b) > size(a) ? b : a))];
+  }
+  return [...chosen.flat(), ...evidence];
+}
