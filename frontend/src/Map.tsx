@@ -72,7 +72,9 @@ export default function EvidenceMap({
     [layer, setLayer] = useState("s2"),
     [imageError, setImageError] = useState(false),
     [imageAttempt, setImageAttempt] = useState(0),
-    [imageLoaded, setImageLoaded] = useState(false),
+    // The URL whose image finished loading: "loaded" belongs to one image, so a cached image that loads
+    // before the reset effect runs can't leave the frame stuck on "Fetching" (a thumbnail's URL is cached).
+    [loadedSrc, setLoadedSrc] = useState<string | null>(null),
     [imageMode, setImageMode] = useState<"checked" | "agent">("checked"),
     [overlays, setOverlays] = useState({
       area: true,
@@ -89,6 +91,11 @@ export default function EvidenceMap({
       visual?.image_url && imageMode === "checked" ? visual.image_url : null,
     shownUrl: string | undefined = checkedUrl || chip?.properties?.tile_url,
     caption = visualCaption(view?.map.visual);
+  const imgSrc =
+    shownUrl && imageAttempt
+      ? `${shownUrl}${shownUrl.includes("?") ? "&" : "?"}retry=${imageAttempt}`
+      : shownUrl;
+  const imageLoaded = !!imgSrc && loadedSrc === imgSrc;
   const reduced =
     preferences.reducedMotion ||
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -161,7 +168,6 @@ export default function EvidenceMap({
   useEffect(() => {
     setImageError(false);
     setImageAttempt(0);
-    setImageLoaded(false);
     // A new tile starts at its title, even when it was picked from thumbnails further down.
     tileBody.current?.scrollTo({ top: 0 });
   }, [chipIndex, selected, imageMode, view?.run.id]);
@@ -637,30 +643,36 @@ export default function EvidenceMap({
               <img
                 key={`${imageMode}-${imageAttempt}`}
                 className="inspected-image"
-                src={
-                  imageAttempt
-                    ? `${shownUrl}${shownUrl.includes("?") ? "&" : "?"}retry=${imageAttempt}`
-                    : shownUrl
-                }
+                src={imgSrc}
                 alt={
                   checkedUrl
                     ? `Checked image of location ${(candidate?.id ?? 0) + 1}`
                     : `Saved tool imagery ${chip?.properties?.node || ""}`
                 }
-                onLoad={() => setImageLoaded(true)}
+                onLoad={(e) =>
+                  setLoadedSrc(e.currentTarget.getAttribute("src"))
+                }
                 onError={() =>
                   // A cold imagery provider can be slow; retry once on our own before giving up.
                   imageAttempt === 0 ? setImageAttempt(1) : setImageError(true)
                 }
               />
             )}
-            {checkedUrl && imageLoaded && visual?.source && (
-              <span className="image-pill">
-                {VISUAL_SOURCE[visual.source] || visual.source}{" "}
-                {visual.gsd_m != null && `${formatGsd(visual.gsd_m)} m`}
-                {visual.date ? ` · ${visual.date}` : ""}
-              </span>
-            )}
+            {imageLoaded &&
+              (checkedUrl && visual?.source ? (
+                <span className="image-pill">
+                  {VISUAL_SOURCE[visual.source] || visual.source}{" "}
+                  {visual.gsd_m != null && `${formatGsd(visual.gsd_m)} m`}
+                  {visual.date ? ` · ${visual.date}` : ""}
+                </span>
+              ) : (
+                !checkedUrl &&
+                chip?.properties && (
+                  <span className="image-pill">
+                    {chipPill(chip.properties)}
+                  </span>
+                )
+              ))}
             {!shownUrl ? (
               <p className="tile-frame-note">
                 No imagery was saved for this location’s cited tool result.
@@ -674,7 +686,6 @@ export default function EvidenceMap({
                   className="secondary small"
                   onClick={() => {
                     setImageError(false);
-                    setImageLoaded(false);
                     setImageAttempt((n) => n + 1);
                   }}
                 >
@@ -837,4 +848,11 @@ function VisualVerdict({
       )}
     </div>
   );
+}
+
+// The agent's LGND image: its index, resolution and observed date (the scene shown), or the mosaic it falls
+// back to when no date was recorded. NAIP is 1 m before 2018 and 0.6 m in most states since, so no single figure.
+function chipPill(p: any): string {
+  const name = p.index === "naip" ? "NAIP 0.6–1 m" : "Sentinel-2 10 m";
+  return p.observed ? `${name} · ${p.observed}` : `${name} · mosaic`;
 }
