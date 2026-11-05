@@ -87,6 +87,9 @@ export default function EvidenceMap({
             container: host.current,
             center: [78, 23],
             zoom: 2.3,
+            // Added below as compact: by default MapLibre only compacts the credit on maps up to 640px
+            // wide, so on a desktop it sat fully expanded under the legend.
+            attributionControl: false,
             style: {
               version: 8,
               sources: {
@@ -103,6 +106,7 @@ export default function EvidenceMap({
           });
           map.current = m;
           m.addControl(new lib.NavigationControl(), "bottom-right");
+          m.addControl(new lib.AttributionControl({ compact: true }), "bottom-right");
           // Evidence overlays must load even if a context basemap tile is unavailable.
           m.on("style.load", () => setReady(true));
           // MapLibre's compact attribution starts expanded and only folds after the first drag, so it

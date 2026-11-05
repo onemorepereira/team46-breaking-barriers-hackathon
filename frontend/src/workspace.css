@@ -87,6 +87,9 @@
   position: absolute;
   bottom: 14px;
   left: 14px;
+  /* Leave the bottom-right corner to the zoom buttons and the folded credit. */
+  max-width: calc(100% - 96px);
+  flex-wrap: wrap;
   background: #152735e8;
   border: 1px solid #ffffff20;
   border-radius: 7px;
