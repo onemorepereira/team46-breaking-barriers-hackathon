@@ -184,3 +184,24 @@ export function imageForCandidate(
   });
   return best;
 }
+// The imagery result behind a reported location: the chip the claim names ("chip naip/obs:123"),
+// else the chip at the same coordinates, else the nearest chip within ~300 m. -1 when none.
+export function chipFor(c: Candidate, chips: any[]): number {
+  const node = c.name.match(/\bchip\s+([^\s,;)]+)/)?.[1];
+  const named = node
+    ? chips.findIndex((f) => String(f?.properties?.node) === node)
+    : -1;
+  if (named >= 0) return named;
+  let best = -1,
+    bestD = Infinity;
+  chips.forEach((f, i) => {
+    const lat = Number(f?.properties?.lat),
+      lon = Number(f?.properties?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    const dy = (lat - c.lat) * 111_320,
+      dx = (lon - c.lon) * 111_320 * Math.cos((c.lat * Math.PI) / 180),
+      d = Math.hypot(dx, dy);
+    if (d < bestD) [best, bestD] = [i, d];
+  });
+  return bestD <= 300 ? best : -1;
+}

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { basePath, candidatesOf, formatScore, reviewPayload } from "./api.ts";
+import { basePath, candidatesOf, chipFor, formatScore, reviewPayload } from "./api.ts";
 test("API URLs preserve workshop authentication proxy and work on localhost", () => {
   assert.equal(basePath("/proxy/8787/workspace/"), "/proxy/8787");
   assert.equal(basePath("/workspace/"), "");
@@ -105,4 +105,15 @@ test("candidates skip features with no geometry instead of throwing", () => {
   assert.equal(sites.length, 1);
   assert.equal(sites[0].id, 0);
   assert.equal(sites[0].name, "ok");
+});
+test("a location's imagery is the chip it names, else the nearest one within 300 m", () => {
+  const chip = (node: string, lat: number, lon: number) => ({
+    properties: { node, lat, lon },
+  });
+  const chips = [chip("naip/obs:2", 31, -103), chip("naip/obs:22", 31.001, -103)];
+  const at = (name: string, lat: number, lon: number): any => ({ name, lat, lon });
+  assert.equal(chipFor(at("site (chip naip/obs:22)", 0, 0), chips), 1);
+  assert.equal(chipFor(at("site", 31.0002, -103), chips), 0);
+  assert.equal(chipFor(at("site", 31.1, -103), chips), -1);
+  assert.equal(chipFor(at("site", 31, -103), []), -1);
 });

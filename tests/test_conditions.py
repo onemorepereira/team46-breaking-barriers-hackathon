@@ -54,7 +54,9 @@ def test_missing_reference_is_unverified_and_outside_area_is_contradicted(tmp_pa
     assert "Conditions in the request" in dossier.render(dossier.build(run))
 
 
-def test_reference_must_have_the_right_type_and_coordinates(tmp_path):
+def test_reference_must_have_the_right_type_and_coordinates(tmp_path, monkeypatch):
+    from analysis import trace
+
     run = lgnd_run(tmp_path)
     save(run)
     s = run.tool_results[0]
@@ -69,6 +71,9 @@ def test_reference_must_have_the_right_type_and_coordinates(tmp_path):
         # Claims still need their own coordinate evidence in the same successful result.
         data["sites"] = [{"lat": 32.5, "lon": -96.5}, {"lat": 34, "lon": -96.5}]
         run.store.write_text(f"runs/{run.run_id}/{uri}", json.dumps(data))
+        # The agent writes each tool result once; this test rewrites one, so forget what was read.
+        run._tool_text.clear()
+        monkeypatch.setattr(trace, "_ARCHIVE_CACHE", trace._LRU(10_000_000))
         cell = conditions.evaluate(run)["rows"][0]["cells"][2]
         assert cell["status"] == expected
         if expected == "supported":
