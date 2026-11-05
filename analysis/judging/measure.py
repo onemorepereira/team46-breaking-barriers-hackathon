@@ -7,6 +7,7 @@ from typing import Any
 
 from analysis import check, provenance
 from analysis.judging import conditions
+from analysis.judging import visual as visual_mod
 from analysis.provenance import FENCE_RE, MATCHED, Provenance
 from analysis.trace import Run
 from core import geometry
@@ -60,12 +61,17 @@ class Measured:
     condition_cap: float | None = None
     conditions_not_checked: bool = False
     conditions: dict[str, Any] | None = None
+    visual_confirmation: float | None = None  # seen / (seen + not seen) among visually checked sites
+    visual_seen: int = 0
+    visual_checked: int = 0
+    visual: dict[str, Any] | None = None  # the check's summary (analysis/judging/visual.py), None if not run
 
     def score_of(self, criterion_id: str) -> float | None:
         return {
             "claim_provenance": self.claim_provenance,
             "area_compliance": self.area_compliance,
             "condition_compliance": self.condition_compliance,
+            "visual_confirmation": self.visual_confirmation,
         }.get(criterion_id)
 
     def as_dict(self) -> dict[str, Any]:
@@ -162,6 +168,7 @@ def measure(run: Run, prov: Provenance | None = None) -> Measured:
     if not any(s.attr("harness.tool.status") not in ("error", None) for s in run.tool_results):
         gates.append({"id": "no_tool_data", "reason": "no tool call succeeded"})
     compliance = conditions.evaluate(run, prov)
+    seen = visual_mod.evaluate(run)
     return Measured(
         claims_total=total,
         claims_matched=counts[MATCHED],
@@ -188,4 +195,8 @@ def measure(run: Run, prov: Provenance | None = None) -> Measured:
         condition_cap=compliance["cap"] if compliance else None,
         conditions_not_checked=bool(compliance and compliance["status"] == "not_checked"),
         conditions=compliance,
+        visual_confirmation=seen["score"] if seen else None,
+        visual_seen=seen["seen"] if seen else 0,
+        visual_checked=seen["checked"] if seen else 0,
+        visual=seen,
     )

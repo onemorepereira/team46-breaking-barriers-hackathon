@@ -26,6 +26,7 @@ def test_rubric_loads_and_snapshot_round_trips():
         "claim_provenance",
         "area_compliance",
         "condition_compliance",
+        "visual_confirmation",
     ]
     assert RUBRIC.calibration == {
         "unscoped": "tool_arguments",

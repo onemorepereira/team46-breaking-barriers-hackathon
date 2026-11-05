@@ -628,6 +628,12 @@ export default function App() {
             setPhase(
               `${ev.key}: ${ev.status === "ok" ? "judgement received" : "judge unavailable"}`,
             );
+          if (ev.type === "visual_check")
+            setPhase(
+              ev.checked
+                ? `Visual check: ${ev.seen} of ${ev.checked} sites seen`
+                : "Visual check finished",
+            );
           if (ev.type === "judge_error")
             setError(ev.error || "A judging service was unavailable.");
           if (ev.type === "done") {

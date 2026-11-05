@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 from analysis import provenance, signals, summary, timeline
 from analysis.judging import measure, rubric
+from analysis.judging import visual as visual_mod
 from analysis.judging.explain import explain
 from analysis.trace import Run
 from core import geometry
@@ -18,12 +20,30 @@ def _bbox_polygon(b: list[float]) -> dict[str, Any]:
     return {"type": "Polygon", "coordinates": [[[w, s], [e, s], [e, n], [w, n], [w, s]]]}
 
 
-def map_layers(m: measure.Measured, run_id: str | None = None, serve_tiles: bool = True) -> dict[str, Any]:
+_VISUAL_FIELDS = ("n", "verdict", "reason", "source", "gsd_m", "date", "licence", "credit", "model")
+
+
+def _visual_by_site(record: dict[str, Any] | None, run_id: str | None) -> dict[str, dict[str, Any]]:
+    """The visual check's record per site position (docs/visual-check), with the checked image's URL."""
+    out: dict[str, dict[str, Any]] = {}
+    for x in (record or {}).get("sites") or []:
+        if not isinstance(x, dict) or not isinstance(x.get("lat"), int | float):
+            continue
+        v = {k: x.get(k) for k in _VISUAL_FIELDS}
+        if x.get("image_key") and run_id and re.fullmatch(r"[0-9a-f]{12}", str(x.get("site_id") or "")):
+            v["image_url"] = f"/api/runs/{run_id}/visual/{x['site_id']}.jpg"
+        out[f"{float(x['lat']):.4f},{float(x['lon']):.4f}"] = v
+    return out
+
+
+def map_layers(m: measure.Measured, run_id: str | None = None, serve_tiles: bool = True,
+               visual: dict[str, Any] | None = None) -> dict[str, Any]:  # fmt: skip
     """GeoJSON for the map. Result tiles load through the console's /tiles/chip endpoint (docs/tile-cache),
-    or straight from the provider when `tiles.serve` is off."""
+    or straight from the provider when `tiles.serve` is off. `visual` is the run's visual-check record."""
     chips, claims = [], []
+    checked = _visual_by_site(visual, run_id)
     for x in m.located:
-        props = {
+        props: dict[str, Any] = {
             "ref": x.ref,
             "node": x.node,
             "inside": x.inside,
@@ -46,6 +66,9 @@ def map_layers(m: measure.Measured, run_id: str | None = None, serve_tiles: bool
             ) or imagery.ATTRIBUTION.get(x.index or "", imagery.ATTRIBUTION["s2"])
             chips.append({"type": "Feature", "geometry": _bbox_polygon(x.bbox), "properties": props})
         elif x.source == "claim":
+            site = checked.get(f"{x.lat:.4f},{x.lon:.4f}")
+            if site:
+                props["visual"] = site
             claims.append(
                 {
                     "type": "Feature",
@@ -60,6 +83,7 @@ def map_layers(m: measure.Measured, run_id: str | None = None, serve_tiles: bool
         "area": area,
         "chips": {"type": "FeatureCollection", "features": chips},
         "claims": {"type": "FeatureCollection", "features": claims},
+        "visual": m.visual,
     }
 
 
@@ -289,7 +313,7 @@ def run_view(
         },
         "kpis": kpis,
         "timeline": entries,
-        "map": map_layers(m, run.run_id, serve_tiles),
+        "map": map_layers(m, run.run_id, serve_tiles, visual_mod.load(run)),
         "scorecard": card,
         "conditions": m.conditions,
         "explanation": explain(run, result, measured=m),

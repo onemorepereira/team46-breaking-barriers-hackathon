@@ -40,7 +40,7 @@
 | Tracing tool, OpenTelemetry default (T88) | Done |
 | boto3 (T90) | Done |
 | FastAPI, the thin API behind the UI (T99) | **Done** (it was the stdlib `http.server` until 2026-11-04) |
-| Geospatial stack: rasterio / GDAL / xarray / pystac (T89) | **Not used.** The agent reaches imagery through LGND Geo's MCP tools, and the harness only does point-in-polygon and simplification (`core/geometry.py`, stdlib). Adding pystac is worth it once a task reads STAC assets directly |
+| Geospatial stack: rasterio / GDAL / xarray / pystac (T89) | **Partly used.** The agent reaches imagery through LGND Geo's MCP tools. The harness reads COG windows with rasterio for result tiles ([observed scenes](../observed-scenes/handoff.md)) and the [visual check](../visual-check/handoff.md), and queries STAC catalogues over plain HTTP (no pystac). Geometry stays stdlib (`core/geometry.py`) |
 | scikit-learn / numpy for scoring metrics (T97) | **Not used.** Our metrics (medians, MAD, Krippendorff's α, bootstrap) are small and stdlib-only, and α is checked against Krippendorff's published example. numpy would only matter at corpus scale |
 | SQL as a lightweight trace/metadata store (T77, T167) | Not used: a JSONL archive in S3, plus `out/index.json`. That's adequate at hackathon scale |
 

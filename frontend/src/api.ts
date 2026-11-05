@@ -65,6 +65,49 @@ export async function request<T>(
     );
   return data;
 }
+// One reported site's visual check (docs/visual-check): the sharpest open image and a model's verdict.
+export type Visual = {
+  n?: number;
+  verdict:
+    | "present"
+    | "absent"
+    | "unclear"
+    | "no_image"
+    | "error"
+    | "not_checked";
+  reason?: string | null;
+  source?: "vantor" | "oam" | "naip" | "s2" | null;
+  gsd_m?: number | null;
+  date?: string | null;
+  licence?: string | null;
+  credit?: string | null;
+  model?: string | null;
+  image_url?: string;
+};
+export const VISUAL_SOURCE: Record<string, string> = {
+  vantor: "Vantor",
+  oam: "OpenAerialMap",
+  naip: "NAIP",
+  s2: "Sentinel-2",
+};
+export const VISUAL_MARK: Record<string, string> = {
+  present: "✓",
+  absent: "✕",
+  unclear: "?",
+};
+export function visualCaption(summary: any): string | null {
+  if (!summary) return null;
+  if (
+    summary.status === "error" ||
+    (summary.status === "not_checked" && !summary.checked)
+  )
+    return `Visual check not run${summary.reason ? `: ${summary.reason}` : ""}`;
+  if (!summary.sites)
+    return "Visual check: the answer listed no locations to check";
+  if (!summary.checked)
+    return "Visual check: no site could be confirmed or ruled out";
+  return `Visually checked: ${summary.seen} of ${summary.checked} sites seen`;
+}
 export type Candidate = {
   id: number;
   lat: number;
@@ -73,6 +116,7 @@ export type Candidate = {
   ref: string | null;
   inside: boolean | null;
   coordinates: [number, number];
+  visual: Visual | null;
 };
 export function candidatesOf(view: View | null): Candidate[] {
   const seen = new Set<string>();
@@ -97,6 +141,7 @@ export function candidatesOf(view: View | null): Candidate[] {
       ref: f.properties.ref,
       inside: f.properties.inside,
       coordinates: f.geometry.coordinates,
+      visual: f.properties.visual || null,
     }));
 }
 export function formatScore(value: unknown): string {

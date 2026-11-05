@@ -2327,7 +2327,14 @@ html[data-colour="colour-safe"] .vote.v0 {
   padding: 10px 12px;
   border: 1px dashed #b9dadd;
   border-radius: 8px;
-  background: linear-gradient(90deg, #f2fafb, #f2fafb 40%, #e3f5f8 50%, #f2fafb 60%, #f2fafb);
+  background: linear-gradient(
+    90deg,
+    #f2fafb,
+    #f2fafb 40%,
+    #e3f5f8 50%,
+    #f2fafb 60%,
+    #f2fafb
+  );
   background-size: 300% 100%;
   animation: live-shimmer 2.4s linear infinite;
 }
@@ -2826,11 +2833,152 @@ html[data-colour="colour-safe"] .vote.v0 {
 /* MapLibre re-expands its compact attribution whenever the attribution list refreshes (load, basemap
    switch), so it kept opening over the legend. Keep it folded to its (i) unless hovered or focused
    (a tap focuses it on touch screens); the credit is always one gesture away. */
-.evidence-map .maplibregl-ctrl-attrib.maplibregl-compact:not(:hover):not(:focus-within) {
+.evidence-map
+  .maplibregl-ctrl-attrib.maplibregl-compact:not(:hover):not(:focus-within) {
   padding: 2px 24px 2px 0 !important;
 }
 .evidence-map
   .maplibregl-ctrl-attrib.maplibregl-compact:not(:hover):not(:focus-within)
   .maplibregl-ctrl-attrib-inner {
   display: none !important;
+}
+
+/* Visual check of reported sites (docs/visual-check): marker badges, the image switch, pill and verdict. */
+.evidence-marker {
+  position: relative;
+}
+.visual-badge {
+  position: absolute;
+  top: -7px;
+  right: -8px;
+  width: 16px;
+  height: 16px;
+  border-radius: 100%;
+  border: 1.5px solid #fff;
+  display: grid;
+  place-content: center;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
+  color: #fff;
+  box-shadow: 0 1px 4px #0006;
+}
+.visual-badge.v-present {
+  background: #1f8a4c;
+}
+.visual-badge.v-absent {
+  background: #c2362f;
+}
+.visual-badge.v-unclear {
+  background: #5d6b70;
+}
+html[data-colour="colour-safe"] .visual-badge.v-present {
+  background: #0072b2;
+}
+html[data-colour="colour-safe"] .visual-badge.v-absent {
+  background: #d55e00;
+}
+.image-switch {
+  display: flex;
+  gap: 0;
+  margin: 10px 14px 8px;
+  border: 1px solid #c9d6d9;
+  border-radius: 7px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.image-switch button {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #36505a;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+.image-switch button + button {
+  border-left: 1px solid #c9d6d9;
+}
+.image-switch button[aria-pressed="true"] {
+  background: #e3f4f6;
+  color: #0b4655;
+}
+.image-switch .short {
+  display: none;
+}
+@media (max-width: 420px) {
+  .image-switch .long {
+    display: none;
+  }
+  .image-switch .short {
+    display: inline;
+  }
+}
+.image-pill {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  max-width: calc(100% - 16px);
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #0d1d24cc;
+  color: #f2f7f8;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.visual-verdict {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  border-left: 3px solid #8a9a9f;
+  background: #f1f5f6;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #1d3640;
+}
+.visual-verdict p {
+  margin: 0;
+}
+.visual-verdict .fine-print {
+  margin-top: 4px;
+}
+.visual-verdict.v-present {
+  border-left-color: #1f8a4c;
+  background: #eaf6ef;
+}
+.visual-verdict.v-absent {
+  border-left-color: #c2362f;
+  background: #fbeceb;
+}
+html[data-colour="colour-safe"] .visual-verdict.v-present {
+  border-left-color: #0072b2;
+  background: #e4edf9;
+}
+html[data-colour="colour-safe"] .visual-verdict.v-absent {
+  border-left-color: #d55e00;
+  background: #fff0e3;
+}
+
+/* Legend for the visual-check badges: the same marks as on the map, inline. */
+.map-key-visual {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.map-key-visual .visual-badge {
+  position: static;
+  font-style: normal;
+  width: 15px;
+  height: 15px;
+  font-size: 9.5px;
+  border-width: 1px;
+  box-shadow: none;
+}
+.map-key-visual .visual-badge + .visual-badge,
+.map-key-visual .visual-badge:not(:first-child) {
+  margin-left: 6px;
 }

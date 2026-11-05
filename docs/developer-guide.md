@@ -105,6 +105,12 @@ Committed, and it holds no secrets. Unset keys take the defaults in `harness/con
 | `tiles.serve` | `true` | The console serves imagery through its cache; `false` sends the browser straight to the providers |
 | `tiles.cache_max_mb` | `1024` | Disk cache cap (least recently used are evicted) |
 | `tiles.max_age_days` | `30` | Refetch a cached tile after this long |
+| `visual_check.enabled` | `false` (repo file: `true`) | Look at each reported site in the sharpest open image and score it as `visual_confirmation` ([visual check](visual-check/handoff.md)) |
+| `visual_check.sources` | `[vantor, oam, naip, s2]` | Image sources, first covering the site wins. Vantor Open Data is CC BY-NC 4.0 |
+| `visual_check.models` | `[opus, kimi, grok]` | Checker models, image-capable; the first not sharing the agent's family is used |
+| `visual_check.max_sites` | `12` | Reported sites checked per run |
+| `visual_check.window_m` | `250` | Footprint for a site with no matched LGND chip (widened to 1280 m for images coarser than 2 m) |
+| `visual_check.deadline_s` | `60` | Sites unfinished by then are `not_checked` and checked on the next re-judge |
 | `area_mode` | `enforce` | How the prompt's area applies to LGND searches: `enforce` (searches kept inside), `observe` (recorded only) or `off` |
 | `narrative_model` | none | Model key that writes each run's summary, and reads the area from the prompt |
 | `max_runs_per_suite` | `8` | A suite with more runs is refused |

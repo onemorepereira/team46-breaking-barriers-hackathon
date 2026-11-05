@@ -333,7 +333,7 @@ def test_proposal_reads_only_training_runs_and_drops_bad_lessons(tmp_path):
     assert all(i in seen["text"] for i in train_ids) and not any(i in seen["text"] for i in held_ids)
     assert [x["text"] for x in v["lessons"]] == ["Judge step count against the area's size."]
     assert v["proposal"]["dropped"] == 3 and v["status"] == "draft" and v["version"] == 1
-    assert (tmp_path / "deploy/feedback/guidance/geo-dataset-v2/versions/1.json").is_file()
+    assert (tmp_path / "deploy/feedback/guidance/geo-dataset-v3/versions/1.json").is_file()
 
 
 def test_no_disagreement_means_nothing_to_propose(tmp_path):

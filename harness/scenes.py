@@ -9,7 +9,8 @@ Cloud-Optimized GeoTIFF (docs/observed-scenes):
 - s2: Sentinel-2 L2A true-colour (`visual`, 10 m) via Element84 Earth Search (AWS open data, no key).
 - naip: NAIP RGB(N) via Microsoft Planetary Computer, with its anonymous read token.
 
-Presentation only: nothing here reaches the agent or the judges.
+Shown in the console, and read by the visual check (harness/sharp.py, docs/visual-check); nothing here reaches
+the agent.
 """
 
 from __future__ import annotations
@@ -44,6 +45,14 @@ GDAL_ENV = {
     "VSI_CACHE": "TRUE",
     "CPL_VSIL_CURL_ALLOWED_EXTENSIONS": ".tif,.TIF,.tiff",
 }
+
+
+_QUERY = re.compile(r"\?[^\s'\"]*")
+
+
+def redact(text: str) -> str:
+    """Error text without URL query strings: a signed NAIP href carries a Planetary Computer SAS token."""
+    return _QUERY.sub("?…", text)
 
 
 def label(index: str | None, observed: str | None) -> str | None:
@@ -109,8 +118,12 @@ def _signed(index: str, href: str) -> str:
         return f"{href}?{_token['value']}"
 
 
-def render(href: str, bbox: tuple[float, ...], size: int = 384) -> bytes:
-    """Read the chip's window from a COG (RGB bands), keeping its proportions, as a JPEG."""
+def render(href: str, bbox: tuple[float, ...], size: int = 384, min_coverage: float = 0.0) -> bytes:
+    """Read the chip's window from a COG (RGB bands), keeping its proportions, as a JPEG.
+
+    min_coverage: the share of pixels that must hold data (any non-zero band); below it, TileUnavailable.
+    A catalogue footprint can be looser than the image's data (an OpenAerialMap mosaic whose bbox covered a
+    point held data in 21% of its extent), so a caller that needs the place itself asks for most of it."""
     import numpy as np
     import rasterio
     from PIL import Image
@@ -118,7 +131,8 @@ def render(href: str, bbox: tuple[float, ...], size: int = 384) -> bytes:
     from rasterio.warp import transform_bounds
     from rasterio.windows import from_bounds
 
-    with rasterio.Env(**GDAL_ENV), rasterio.open(href) as src:
+    # GeoTIFF only: detection would let a VRT saved as .tif on an allowed host open other URLs or files.
+    with rasterio.Env(**GDAL_ENV), rasterio.open(href, driver="GTiff") as src:
         window = from_bounds(*transform_bounds("EPSG:4326", src.crs, *bbox), transform=src.transform)
         ratio = float(window.height) / float(window.width) if window.width else 1.0
         w, h = (size, max(1, round(size * ratio))) if ratio <= 1 else (max(1, round(size / ratio)), size)
@@ -128,6 +142,8 @@ def render(href: str, bbox: tuple[float, ...], size: int = 384) -> bytes:
         )  # fmt: skip
     if not data.any():
         raise TileUnavailable("the scene has no data over this footprint")
+    if min_coverage and float(data.any(axis=0).mean()) < min_coverage:
+        raise TileUnavailable("the scene has data over only part of this footprint")
     buf = io.BytesIO()
     Image.fromarray(np.ascontiguousarray(data.transpose(1, 2, 0)).astype("uint8")).save(
         buf, "JPEG", quality=88
@@ -143,7 +159,7 @@ def scene_jpeg(index: str, bbox: list[float], observed: str) -> bytes:
     try:
         href = find(index, key, observed)
     except Exception as e:  # noqa: BLE001 - catalogue down or slow
-        raise TileUnavailable(f"scene catalogue: {e}") from e
+        raise TileUnavailable(redact(f"scene catalogue: {e}")) from None
     if not href:
         raise TileUnavailable(f"no {index} scene observed {observed} covers this footprint")
     try:
@@ -151,4 +167,4 @@ def scene_jpeg(index: str, bbox: list[float], observed: str) -> bytes:
     except TileUnavailable:
         raise
     except Exception as e:  # noqa: BLE001 - storage unreachable, bad window
-        raise TileUnavailable(f"scene read: {e}") from e
+        raise TileUnavailable(redact(f"scene read: {e}")) from None  # the 502 detail must not carry the token
