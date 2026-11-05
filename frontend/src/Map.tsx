@@ -194,19 +194,21 @@ export default function EvidenceMap({
     // A dot per imagery result: its ~150 m footprint is invisible until zoomed in (PR #14).
     source("chip-dots", {
       type: "FeatureCollection",
-      features: (view?.map.chips?.features || []).flatMap((f: any, i: number) => {
-        const lon = Number(f?.properties?.lon),
-          lat = Number(f?.properties?.lat);
-        return Number.isFinite(lon) && Number.isFinite(lat)
-          ? [
-              {
-                type: "Feature",
-                geometry: { type: "Point", coordinates: [lon, lat] },
-                properties: { i, inside: f.properties.inside },
-              },
-            ]
-          : [];
-      }),
+      features: (view?.map.chips?.features || []).flatMap(
+        (f: any, i: number) => {
+          const lon = Number(f?.properties?.lon),
+            lat = Number(f?.properties?.lat);
+          return Number.isFinite(lon) && Number.isFinite(lat)
+            ? [
+                {
+                  type: "Feature",
+                  geometry: { type: "Point", coordinates: [lon, lat] },
+                  properties: { i, inside: f.properties.inside },
+                },
+              ]
+            : [];
+        },
+      ),
     });
     source("reference", view?.reference?.features || empty);
     source("false-alarms", {
@@ -261,20 +263,30 @@ export default function EvidenceMap({
         maxzoom: 14,
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 3, 13, 6],
-          "circle-color": ["case", ["==", ["get", "inside"], false], orange, blue],
+          "circle-color": [
+            "case",
+            ["==", ["get", "inside"], false],
+            orange,
+            blue,
+          ],
           "circle-stroke-width": 1.5,
           "circle-stroke-color": "#ffffff",
         },
       });
       // Clicking an imagery result opens it in the inspector (dot when zoomed out, footprint up close).
       m.on("click", (e: any) => {
-        const dot = m.queryRenderedFeatures(e.point, { layers: ["chip-dots"] })[0];
+        const dot = m.queryRenderedFeatures(e.point, {
+          layers: ["chip-dots"],
+        })[0];
         if (dot) return onSelectChipRef.current(Number(dot.properties.i));
-        const hit = m.queryRenderedFeatures(e.point, { layers: ["chips-fill"] })[0];
+        const hit = m.queryRenderedFeatures(e.point, {
+          layers: ["chips-fill"],
+        })[0];
         if (!hit) return;
         const chips = viewRef.current?.map.chips?.features || [];
         const i = chips.findIndex(
-          (f: any) => f?.properties?.node && f.properties.node === hit.properties.node,
+          (f: any) =>
+            f?.properties?.node && f.properties.node === hit.properties.node,
         );
         if (i >= 0) onSelectChipRef.current(i);
       });
@@ -524,19 +536,14 @@ export default function EvidenceMap({
       </div>
       {inspecting && (
         <aside className="tile-inspector" aria-label="Map imagery inspector">
-          <div className="tile-inspector-heading">
-            <h3>
-              {candidate ? `Location ${candidate.id + 1}` : "Tool imagery"}
-            </h3>
-            <button
-              ref={tileFocus}
-              className="icon-button"
-              aria-label="Close imagery inspector"
-              onClick={onClose}
-            >
-              <Icon name="x" />
-            </button>
-          </div>
+          <button
+            ref={tileFocus}
+            className="icon-button tile-inspector-close"
+            aria-label="Close imagery inspector"
+            onClick={onClose}
+          >
+            <Icon name="x" />
+          </button>
           {chip?.properties?.tile_url && !imageError ? (
             <img
               className="inspected-image"
@@ -551,55 +558,62 @@ export default function EvidenceMap({
                 : "No imagery from this location’s cited tool result was saved."}
             </p>
           )}
-          <p>{candidate?.name || chip?.properties?.node}</p>
-          <dl>
-            <dt>Location</dt>
-            <dd>
-              {candidate
-                ? `${candidate.lat.toFixed(5)}, ${candidate.lon.toFixed(5)}`
-                : "See tool footprint on map"}
-            </dd>
-            <dt>Observed</dt>
-            <dd>{chip?.properties?.observed || "Not recorded"}</dd>
-            <dt>Source</dt>
-            <dd>
-              {chip?.properties?.index || "Not recorded"} ·{" "}
-              {chip?.properties?.ref || candidate?.ref || "No reference"}
-            </dd>
-            <dt>Similarity</dt>
-            <dd>
-              {chip?.properties?.similarity ?? "Not recorded"} (retrieval rank,
-              not confidence)
-            </dd>
-          </dl>
-          {(chip?.properties?.ref || candidate?.ref) && (
-            <button
-              className="secondary"
-              onClick={() => onTrace(chip?.properties?.ref || candidate?.ref!)}
-            >
-              Inspect cited step
-            </button>
-          )}
-          <p className="fine-print">
-            {selectedChip === null
-              ? "Nearest imagery within the cited tool result. "
-              : ""}
-            Imagery does not independently establish asset identity or current
-            status.
-          </p>
-          <div className="tile-thumbs">
-            {(view?.map.chips?.features || []).map((f: any, i: number) =>
-              f.properties?.tile_url ? (
-                <button
-                  key={i}
-                  aria-label={`Inspect tool image ${i + 1}`}
-                  aria-pressed={chipIndex === i}
-                  onClick={() => onSelectChip(i)}
-                >
-                  <img src={f.properties.tile_url} alt="" loading="lazy" />
-                </button>
-              ) : null,
+          <div className="tile-inspector-body">
+            <h3>
+              {candidate ? `Location ${candidate.id + 1}` : "Tool imagery"}
+            </h3>
+            <p>{candidate?.name || chip?.properties?.node}</p>
+            <dl>
+              <dt>Location</dt>
+              <dd>
+                {candidate
+                  ? `${candidate.lat.toFixed(5)}, ${candidate.lon.toFixed(5)}`
+                  : "See tool footprint on map"}
+              </dd>
+              <dt>Observed</dt>
+              <dd>{chip?.properties?.observed || "Not recorded"}</dd>
+              <dt>Source</dt>
+              <dd>
+                {chip?.properties?.index || "Not recorded"} ·{" "}
+                {chip?.properties?.ref || candidate?.ref || "No reference"}
+              </dd>
+              <dt>Similarity</dt>
+              <dd>
+                {chip?.properties?.similarity ?? "Not recorded"} (retrieval
+                rank, not confidence)
+              </dd>
+            </dl>
+            {(chip?.properties?.ref || candidate?.ref) && (
+              <button
+                className="secondary"
+                onClick={() =>
+                  onTrace(chip?.properties?.ref || candidate?.ref!)
+                }
+              >
+                Inspect cited step
+              </button>
             )}
+            <p className="fine-print">
+              {selectedChip === null
+                ? "Nearest imagery within the cited tool result. "
+                : ""}
+              Imagery does not independently establish asset identity or current
+              status.
+            </p>
+            <div className="tile-thumbs">
+              {(view?.map.chips?.features || []).map((f: any, i: number) =>
+                f.properties?.tile_url ? (
+                  <button
+                    key={i}
+                    aria-label={`Inspect tool image ${i + 1}`}
+                    aria-pressed={chipIndex === i}
+                    onClick={() => onSelectChip(i)}
+                  >
+                    <img src={f.properties.tile_url} alt="" loading="lazy" />
+                  </button>
+                ) : null,
+              )}
+            </div>
           </div>
         </aside>
       )}
