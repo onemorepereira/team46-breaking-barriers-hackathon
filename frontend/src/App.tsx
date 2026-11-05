@@ -25,6 +25,7 @@ import {
 } from "./api";
 import "./index.css";
 import "./workspace.css";
+import foundryMark from "./assets/foundry-mark.png";
 const examples = [
   {
     label: "Solar farms",
@@ -776,11 +777,7 @@ export default function App() {
           onClick={() => !busy && reset()}
           aria-label="Team Foundry home"
         >
-          <span className="brand-mark" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-          </span>
+          <img className="brand-logo" src={foundryMark} alt="" width={38} height={26} />
           <span className="brand-name">Team Foundry</span>
           <span className="brand-context">Evidence workspace</span>
         </button>
