@@ -49,7 +49,7 @@ Each folder holds a feature's spec (problem and acceptance criteria), its design
 | Map fit | [spec](map-fit/spec.md) · [handoff](map-fit/handoff.md) | Runs open and finish framed on the searched area's main part and the evidence, not on far-flung islands |
 | Presentation | [README](presentation/README.md) · [deck](presentation/deck.html) · [demo script](presentation/demo.md) · [claims](presentation/claims.md) · [Q&A](presentation/qa.md) · [one-pager](presentation/one-pager.md) · [spec](presentation/spec.md) · [handoff](presentation/handoff.md) | The interactive HTML deck, the judging-only live demo, and their sources |
 
-**Roadmap** (in [the factory](factory.md#roadmap)): fifteen specified efforts (R1–R15) that take the evaluator toward the LGND/Ode benchmark's requirements for ADB, ordered Now, Next and Later. The team slices of 2026-11-04 have all shipped except [visual design](visual-design/spec.md), which was not taken.
+**Roadmap** (in [the factory](factory.md#roadmap)): fifteen efforts (R1–R15) that take the evaluator toward the LGND/Ode benchmark's requirements for ADB, ordered Now, Next and Later (R4, ranking metrics, has shipped); and eight (H1–H8) for site-risk screening, answering and evaluating "is this place too risky to build in?" from open hazard data, with a [hazard source catalog](site-risk-sources/catalog.md). The team slices of 2026-11-04 have all shipped except [visual design](visual-design/spec.md), which was not taken.
 
 ## Data and configuration in the repo
 

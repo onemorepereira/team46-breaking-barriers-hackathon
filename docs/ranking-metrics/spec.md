@@ -1,6 +1,6 @@
 # Ranking Metrics: recall@k, AUROC, AP, Review Effort — Spec
 
-**Roadmap:** R4 · **Track:** Standard · **Product stage:** Introduction · **Status:** In progress · **Last updated:** 2026-11-05
+**Roadmap:** R4 · **Track:** Standard · **Product stage:** Introduction · **Status:** Built · **Last updated:** 2026-11-05
 **Depends on:** none (works on the Pecos set today; R1 and R2 add places)
 **Size:** S–M (about 2 days)
 
