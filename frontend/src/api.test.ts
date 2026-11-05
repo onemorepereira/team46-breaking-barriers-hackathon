@@ -8,7 +8,9 @@ import {
   fitCoordinates,
   formatScore,
   reviewPayload,
+  sectionIssues,
   visualCaption,
+  weakCriterion,
 } from "./api.ts";
 test("API URLs preserve workshop authentication proxy and work on localhost", () => {
   assert.equal(basePath("/proxy/8787/workspace/"), "/proxy/8787");
@@ -312,4 +314,52 @@ test("map fit: a big sea polygon without evidence loses to the small one holding
   };
   const ys = fitCoordinates(v).map((c) => c[1]);
   assert.ok(Math.min(...ys) >= 35.5, "Izu islands are not framed");
+});
+
+test("evaluation issues: each section's rule, and an unjudged run counts nothing", () => {
+  const view: any = {
+    kpis: { confidence: "Low", errors: 2 },
+    scorecard: {
+      criteria: [
+        { id: "a", score: 100 },
+        { id: "b", score: 83.3 },
+        { id: "c", score: null },
+        { id: "d", score: 75 },
+      ],
+      judges: [{ status: "ok" }, { status: "error" }],
+      judges_in_doubt: false,
+      gates: [{ id: "no_answer" }],
+      failure_modes: [{ id: "overconfidence" }],
+    },
+    conditions: {
+      status: "checked",
+      rows: [
+        { cells: [{ status: "supported" }, { status: "unverified" }] },
+        { cells: [{ status: "contradicted" }] },
+      ],
+    },
+    reference: { missed: ["r1", "r2", "r3"] },
+    licences: { presentable: false, blockers: ["LGND Geo service"] },
+  };
+  assert.deepEqual(sectionIssues(view), {
+    rubric: 2,
+    conditions: 2,
+    judges: 2,
+    failures: 3,
+    reference: 3,
+    licences: 1,
+  });
+  assert.equal(weakCriterion({ score: 99.9 }), true);
+  assert.equal(weakCriterion({ score: null }), false);
+  const clean = sectionIssues({ kpis: {}, scorecard: null } as any);
+  assert.ok(Object.values(clean).every((n) => n === 0));
+  assert.equal(
+    sectionIssues({
+      kpis: {},
+      scorecard: null,
+      conditions: { status: "not_checked", rows: [] },
+      licences: { presentable: false },
+    } as any).licences,
+    1,
+  );
 });

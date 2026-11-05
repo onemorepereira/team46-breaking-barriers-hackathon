@@ -343,3 +343,43 @@ export function fitCoordinates(view: View | null): [number, number][] {
   }
   return [...chosen.flat(), ...evidence];
 }
+
+// Issues per Evaluation section (docs/evaluation-issues): what a reviewer should look at first.
+export function weakCriterion(c: any): boolean {
+  return typeof c?.score === "number" && c.score < 100;
+}
+export function sectionIssues(view: View | null): Record<string, number> {
+  const card = view?.scorecard,
+    k = view?.kpis || {},
+    conditions: any = (view as any)?.conditions,
+    reference: any = (view as any)?.reference,
+    licences: any = (view as any)?.licences;
+  const list = (v: any) => (Array.isArray(v) ? v : []);
+  const cells = list(conditions?.rows).flatMap((r: any) => list(r?.cells));
+  return {
+    rubric: card ? list(card.criteria).filter(weakCriterion).length : 0,
+    conditions:
+      cells.filter(
+        (c: any) => c?.status === "contradicted" || c?.status === "unverified",
+      ).length +
+      (conditions && (conditions.status === "not_checked" || conditions.error)
+        ? 1
+        : 0),
+    judges: card
+      ? list(card.judges).filter((j: any) => j?.status !== "ok").length +
+        (k.confidence === "Low" || card.judges_in_doubt ? 1 : 0)
+      : 0,
+    failures: card
+      ? list(card.gates).length +
+        list(card.failure_modes).length +
+        ((k.errors ?? 0) > 0 ? 1 : 0)
+      : 0,
+    reference: reference
+      ? list(reference.missed).length + (reference.error ? 1 : 0)
+      : 0,
+    licences:
+      licences?.presentable === false
+        ? Math.max(1, list(licences.blockers).length)
+        : 0,
+  };
+}

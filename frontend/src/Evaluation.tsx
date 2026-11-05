@@ -5,12 +5,14 @@ import { Stat } from "./UI";
 import {
   endpoint,
   formatScore,
+  sectionIssues,
+  weakCriterion,
   money,
   localTime,
   request,
   type View,
 } from "./api";
-import { scoreLabel } from "./preferences";
+import { readPreference, scoreLabel, writePreference } from "./preferences";
 export default function Evaluation({
   view,
   busy,
@@ -29,6 +31,14 @@ export default function Evaluation({
   const card = view.scorecard,
     k = view.kpis,
     reference = view.reference;
+  // Issue badges and the "only sections with issues" filter (docs/evaluation-issues).
+  const issues = sectionIssues(view),
+    totalIssues = Object.values(issues).reduce((a, b) => a + b, 0);
+  const [issuesOnly, setIssuesOnly] = useState<boolean>(
+    () => readPreference<boolean>("evaluation.issuesOnly", false) === true,
+  );
+  const filtering = issuesOnly && totalIssues > 0;
+  const show = (id: string) => !filtering || (issues[id] || 0) > 0;
   const [reactions, setReactions] = useState<Reaction[]>([]),
     [reactionError, setReactionError] = useState("");
   useEffect(() => {
@@ -125,21 +135,43 @@ export default function Evaluation({
           {k.not_scored_cause}
         </p>
       )}
+      <label className={`issue-filter ${totalIssues ? "" : "is-clean"}`}>
+        <input
+          type="checkbox"
+          checked={filtering}
+          disabled={!totalIssues}
+          onChange={(e) => {
+            setIssuesOnly(e.target.checked);
+            writePreference("evaluation.issuesOnly", e.target.checked);
+          }}
+        />
+        {totalIssues
+          ? `Show only sections with issues (${totalIssues})`
+          : "Nothing needs attention"}
+      </label>
       <Disclosure
         id="detailed-human-review"
+        hidden={!show("detailed-human-review")}
+        badge={issues["detailed-human-review"] || undefined}
         title="Detailed human review and reconsideration"
       >
         {reviewer}
       </Disclosure>
-      <Disclosure id="score-method" title="What this score means">
+      <Disclosure
+        id="score-method"
+        hidden={!show("score-method")}
+        badge={issues["score-method"] || undefined}
+        title="What this score means"
+      >
         <p>
           Each judged question averages every judge’s rubric rating across all
           passes (three per judging), normalised to 100. Judging the same
-          evidence again adds votes, so the score settles rather than flips. Workflow and output are the averages of their applicable
-          questions and measured checks; the overall result averages those two
-          dimensions. Required spatial conditions can cap the output dimension.
-          Fatal gates force zero; missing valid judgements or required
-          extraction can leave it not scored.
+          evidence again adds votes, so the score settles rather than flips.
+          Workflow and output are the averages of their applicable questions and
+          measured checks; the overall result averages those two dimensions.
+          Required spatial conditions can cap the output dimension. Fatal gates
+          force zero; missing valid judgements or required extraction can leave
+          it not scored.
         </p>
         <p>
           Judge agreement and trace reliability are reported separately below.
@@ -150,7 +182,12 @@ export default function Evaluation({
           {card?.rubric?.version ?? "—"} · Judged {localTime(card?.judged_at)}
         </p>
       </Disclosure>
-      <Disclosure id="score-breakdown" title="Workflow and output breakdown">
+      <Disclosure
+        id="score-breakdown"
+        hidden={!show("score-breakdown")}
+        badge={issues["score-breakdown"] || undefined}
+        title="Workflow and output breakdown"
+      >
         <div className="mini-stats">
           <div>
             <Stat label="Workflow" value={formatScore(k.workflow)} />
@@ -169,11 +206,18 @@ export default function Evaluation({
           <p className="notice">{view.source_check_note}</p>
         )}
       </Disclosure>
-      <Disclosure id="rubric" title="Rubric scorecard">
+      <Disclosure
+        id="rubric"
+        hidden={!show("rubric")}
+        badge={issues["rubric"] || undefined}
+        title="Rubric scorecard"
+      >
         {card?.criteria?.map((c: any) => (
           <Disclosure
             key={c.id}
             id={`criterion-${c.id}`}
+            hidden={filtering && !weakCriterion(c)}
+            badge={weakCriterion(c) ? "dot" : undefined}
             title={`${c.plain || c.question} · ${formatScore(c.score)}${c.score !== null ? "/100" : ""}`}
             accessory={quick(c.id, c.plain || c.question, c.score)}
           >
@@ -226,7 +270,12 @@ export default function Evaluation({
           </Disclosure>
         ))}
       </Disclosure>
-      <Disclosure id="conditions" title="Every condition in your request">
+      <Disclosure
+        id="conditions"
+        hidden={!show("conditions")}
+        badge={issues["conditions"] || undefined}
+        title="Every condition in your request"
+      >
         {view.conditions ? (
           <>
             <p>
@@ -275,6 +324,8 @@ export default function Evaluation({
       </Disclosure>
       <Disclosure
         id="judges"
+        hidden={!show("judges")}
+        badge={issues["judges"] || undefined}
         title="Judge panel, agreement and evaluation reliability"
       >
         <div className="mini-stats">
@@ -331,7 +382,12 @@ export default function Evaluation({
           </Disclosure>
         ))}
       </Disclosure>
-      <Disclosure id="failures" title="Failures, retries and evidence gaps">
+      <Disclosure
+        id="failures"
+        hidden={!show("failures")}
+        badge={issues["failures"] || undefined}
+        title="Failures, retries and evidence gaps"
+      >
         <div className="mini-stats">
           <Stat label="Tool errors" value={k.errors ?? 0} />
           <Stat label="Retries" value={k.retries ?? 0} />
@@ -361,7 +417,12 @@ export default function Evaluation({
           </pre>
         ))}
       </Disclosure>
-      <Disclosure id="cost" title="Cost, usage and review effort">
+      <Disclosure
+        id="cost"
+        hidden={!show("cost")}
+        badge={issues["cost"] || undefined}
+        title="Cost, usage and review effort"
+      >
         <div className="mini-stats">
           <Stat label="Agent estimate" value={money(k.agent_cost_usd)} />
           <Stat label="Judge estimate" value={money(k.judging_cost_usd)} />
@@ -387,7 +448,12 @@ export default function Evaluation({
           procurement are not measured unless explicitly recorded.
         </p>
       </Disclosure>
-      <Disclosure id="reference" title="Independent reference benchmark">
+      <Disclosure
+        id="reference"
+        hidden={!show("reference")}
+        badge={issues["reference"] || undefined}
+        title="Independent reference benchmark"
+      >
         {reference && !reference.error ? (
           <>
             <p>
@@ -463,6 +529,8 @@ export default function Evaluation({
       </Disclosure>
       <Disclosure
         id="licences"
+        hidden={!show("licences")}
+        badge={issues["licences"] || undefined}
         title="Sources, licences and presentation limits"
       >
         <p>
@@ -494,7 +562,12 @@ export default function Evaluation({
           </div>
         ))}
       </Disclosure>
-      <Disclosure id="revisions" title="Human revisions and earlier judgement">
+      <Disclosure
+        id="revisions"
+        hidden={!show("revisions")}
+        badge={issues["revisions"] || undefined}
+        title="Human revisions and earlier judgement"
+      >
         {card?.revision ? (
           <>
             <p>
@@ -529,6 +602,8 @@ export default function Evaluation({
       </Disclosure>
       <Disclosure
         id="quick-feedback-records"
+        hidden={!show("quick-feedback-records")}
+        badge={issues["quick-feedback-records"] || undefined}
         title={`Recorded score feedback${reactions.length ? ` · ${reactions.length}` : ""}`}
       >
         {reactionError ? (
@@ -544,7 +619,12 @@ export default function Evaluation({
           correction.
         </p>
       </Disclosure>
-      <Disclosure id="exports" title="Reports and evidence exports">
+      <Disclosure
+        id="exports"
+        hidden={!show("exports")}
+        badge={issues["exports"] || undefined}
+        title="Reports and evidence exports"
+      >
         <div className="export-actions">
           <a
             className="secondary"
@@ -590,5 +670,7 @@ function judgeMean(card: any, key: string): number | null {
   const all = Object.values(card?.votes_all || {}).flatMap(
     (v: any) => v[key] || [],
   ) as number[];
-  return all.length ? (all.reduce((a, b) => a + b, 0) / all.length / 2) * 100 : null;
+  return all.length
+    ? (all.reduce((a, b) => a + b, 0) / all.length / 2) * 100
+    : null;
 }

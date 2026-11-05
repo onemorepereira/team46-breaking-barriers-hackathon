@@ -12,16 +12,21 @@ export function Disclosure({
   children,
   defaultOpen = false,
   accessory,
+  badge,
+  hidden = false,
 }: {
   id: string;
   title: string;
   children: ReactNode;
   defaultOpen?: boolean;
   accessory?: ReactNode;
+  badge?: number | "dot"; // issues in this section (docs/evaluation-issues)
+  hidden?: boolean;
 }) {
   const [open, setOpen] = useState(
     () => readPreference(`section.${id}`, defaultOpen) === true,
   );
+  if (hidden) return null;
   return (
     <section className={`disclosure ${open ? "is-open" : ""}`}>
       <div className="disclosure-heading">
@@ -37,6 +42,20 @@ export function Disclosure({
           }
         >
           <span>{title}</span>
+          {badge === "dot" ? (
+            <span
+              className="issue-badge dot"
+              aria-label="Below full marks"
+              role="img"
+            />
+          ) : badge ? (
+            <span
+              className="issue-badge"
+              aria-label={`${badge} ${badge === 1 ? "issue" : "issues"}`}
+            >
+              {badge}
+            </span>
+          ) : null}
           <Icon name="chevron" size={15} />
         </button>
         {accessory}
