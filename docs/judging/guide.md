@@ -8,15 +8,17 @@ Every run is scored 0–100 on two dimensions:
 - **Workflow:** did the agent use its tools well?
 - **Output:** can the dataset it produced be trusted?
 
-The overall score is the mean of the two. Two criteria are **measured by code**:
+The overall score is the mean of the two. Four output criteria are **measured** from the archive, not voted on:
 - whether each claimed value appears in the tool result it cites;
-- whether each claimed location is inside the requested area.
+- whether each claimed location is inside the requested area;
+- whether saved evidence supports each location and distance condition in the request;
+- whether each reported site visibly shows the requested asset in the sharpest open image of it (one vision model's archived verdict).
 
-Eight criteria are **judged** by a tribunal of three LLMs from three different model families. Each panel score is the mean of the judges' votes across three passes. Next to the score sits a **confidence** label (High, Medium or Low). It says how far the judges agreed and whether the trace is intact. It does **not** say the answer is true: that would need an answer key, which is our main open gap ([gaps.md](gaps.md)).
+Eight criteria are **judged** by a tribunal of three LLMs from three different model families. Each judged score is the mean of every judge's vote across the recorded passes (three per judging, up to nine). Next to the score sits a **confidence** label (High, Medium or Low). It says how far the judges agreed and whether the trace is intact. It does **not** say the answer is true: that would need an answer key, which is our main open gap ([gaps.md](gaps.md)).
 
 ## Plain explanation on each report
 
-The run page and static report start with **What this means**: a short account of the request, listed locations, score, evidence limits, and up to three things to check by hand. It is computed from the saved archive without an AI call. Counts describe the agent's listed locations, not a count of independently confirmed facilities. Image checks that returned "no" or an unclear answer get specific review actions.
+The run page and static report start with **What this means**: a short account of the request, listed locations, score, evidence limits, and up to three things to check by hand. It is computed from the saved archive without an AI call. Counts describe the agent's listed locations, not a count of independently confirmed facilities. LGND image checks that returned "no" or an unclear answer get specific review actions. When the [visual check](../visual-check/handoff.md) ran, it adds "x of y reported sites were visibly seen", and sites it didn't see become a doubt and a check by hand (open each site marked ✕ on the map).
 
 Scorecard questions use optional `plain:` labels from the current configured rubric. Old judgements keep their archived scoring definitions; display text falls back to the saved question when no current label exists. Adding a plain label does not change votes, scoring anchors, weights, or aggregation, although the file's hash changes.
 
@@ -36,12 +38,16 @@ Scorecard questions use optional `plain:` labels from the current configured rub
 | Honest uncertainty (`calibration`) | output | judged | Are limits and unverified items stated plainly? |
 | Claim provenance (`claim_provenance`) | output | measured | Share of declared claims whose value is in the cited tool result |
 | Area compliance (`area_compliance`) | output | measured | Share of claimed coordinates inside the requested boundary |
+| Condition compliance (`condition_compliance`) | output | measured | Share of location-by-condition checks supported by successful tool evidence ([below](#request-conditions)) |
+| Visual confirmation (`visual_confirmation`) | output | measured | Share of reported sites where the requested asset is visibly present, among sites the checker could confirm or rule out ([below](#visual-check)) |
 
-**To use ADB's rubric:** write it in the same YAML shape and point `judging.rubric` in `harness.yaml` at it. No code changes. Code names only the two measured criteria. The rubric's `calibration:` map says which judged criterion each planted defect should lower.
+The rubric is version 3: version 2 added `condition_compliance`, and version 3 added `visual_confirmation`. A judgement keeps the rubric snapshot it was made with, so older judgements keep their criteria and scores.
 
-### Value-checker update under review (2026-11-04)
+**To use ADB's rubric:** write it in the same YAML shape and point `judging.rubric` in `harness.yaml` at it. No code changes. Code names only the four measured criteria (`analysis/judging/rubric.py`); a rubric may leave any of them out. The rubric's `calibration:` map says which judged criterion each planted defect should lower.
 
-Checker version 2 requires a coordinate pair from the same source record or labelled table row. Verification labels such as "supported" no longer match "not supported", and failed tool calls cannot verify claims. Ordinary text and number checks still compare declared values; they do not prove the meaning of every claim or its real-world truth.
+### The value checker (version 3)
+
+The checker behind claim provenance requires a coordinate pair from the same source record or labelled table row. Verification labels such as "supported" no longer match "not supported", and failed tool calls cannot verify claims. Version 3 also reads per-place answer columns in LGND verdict tables ([value matching](../value-matching/handoff.md)). Ordinary text and number checks still compare declared values; they do not prove the meaning of every claim or its real-world truth.
 
 New judgements record `value_matcher_version`. Old judgements remain intact; viewing or replaying them uses current measured checks and shows an update note, so their regenerated scores may differ from earlier reports. Keep the checker version, judge seats, and rubric fixed when comparing runs.
 
@@ -60,15 +66,16 @@ A tribunal of three judges from three families:
 - **Who was dropped, and why** (from the 7 runs judged by the earlier five-judge panel):
   - **Grok 4.7**: it averaged 143 s per verdict against 11–50 s for the others, so it set the time to a score, and it was the only judge that errored.
   - **Mistral Large 3** and **Qwen3 235B** are reserves: they were the two most lenient judges (+0.14 and +0.25 points above their peers' median on average). Kimi took Mistral's seat at the user's call. It voted closest to its peers (mean bias −0.09), so the tribunal isn't outvoted by lenient seats.
-  - **Kimi K3** judges and is also an agent under test. On a Kimi run it recuses and Mistral sits.
+  - **Kimi K3** judges and is also an agent under test. On a Kimi run it recuses and Mistral sits. As a judge it runs at low reasoning effort (`judge_request_fields` in `harness.yaml`); its agent runs keep the default.
 - **Recusal:** a judge from the agent's own family steps down, and the first reserve from another family takes the seat. The page shows "seated for opus".
   - Sonnet 5.5 is our default agent, so on a Sonnet run Opus recuses and Mistral sits.
   - On a Kimi run, Kimi recuses and Mistral sits.
   - The setting is `recuse_same_family`.
 - **Stand-ins:** if a judge fails (after its one retry), the next reserve takes its seat. The reserve must share a family with neither the agent nor a seated judge. The page shows "stood in for kimi", and the failed attempt stays on the record.
-- **What a judge sees:** a dossier built by code from the archive. It holds the task, the requested area, the tools available, every step in order (reasoning, arguments, outputs labeled `T1`, `T2`…), run totals and the final answer.
+- **What a judge sees:** a dossier built by code from the archive. It holds the task, the request's extracted conditions, the requested area, the tools available, every step in order (reasoning, arguments, outputs labeled `T1`, `T2`…), run totals and the final answer.
   - Tool output is wrapped in `<tool_output>` tags and declared untrusted.
-  - Judges never see our measured results, so code and LLMs are two independent lines of evidence.
+  - Judges never see our measured results or the visual check's verdicts, so code and LLMs are two independent lines of evidence.
+- **Sampling:** each call asks for temperature 0. Bedrock rejects it for Opus, Sonnet, Kimi and Grok, so those judges run at the model's default; the rejection is remembered so the failing call isn't repeated, and each vote records the temperature it actually ran at.
 - **What a judge returns:** JSON with, for each criterion, a rationale, the step IDs it relied on, and a score.
   - A malformed reply is retried once; a second failure means the judge failed.
   - A pass counts only with all three votes, after any stand-in. If the reserves run out, the run is not scored.
@@ -77,21 +84,21 @@ A tribunal of three judges from three families:
 ## From votes to a score
 
 1. **Per judged criterion:** the mean of every valid vote in every pass. The score is mean ÷ 2 × 100. It was the median vote until 2026-11-04: one flipped vote moved a criterion a whole step, and identical evidence scored 83–94 ([judging stability](../judging-stability/handoff.md)). The median (the lower median for an even count) is still recorded, and human reviews compare with it.
-   - **Passes:** each judging runs three passes at the same time (`judging.passes`). Re-judging evidence the judges already saw (same dossier, prompt and panel) adds new passes to the recorded ones, keeping the newest nine. So the score settles instead of flipping. Once two passes are in, a pass still running 25 s after judging began is left out and counted (`dropped_slow_passes`). Why: [judging stability](../judging-stability/handoff.md).
-2. **Measured criteria:** the share × 100, or N/A when there's nothing to measure (no area, no coordinates).
-3. **Dimensions:** the mean of their criteria. **Overall:** the mean of the two dimensions.
+   - **Passes:** each judging runs three passes at the same time (`judging.passes`). Re-judging evidence the judges already saw (same dossier, prompt with guidance, and seated panel: `inputs_sha`) adds new passes to the recorded ones, keeping the newest nine. So the score settles instead of flipping. A change to any of those, or a reconsideration, starts afresh. Once two passes are in, a pass still running 25 s after judging began is left out and counted (`dropped_slow_passes`). Why: [judging stability](../judging-stability/handoff.md).
+2. **Measured criteria:** the share × 100, or N/A when there's nothing to measure: no area or no coordinates (area compliance), no distance condition or a legacy run (condition compliance), no site the checker could confirm or rule out, or no check run (visual confirmation).
+3. **Dimensions:** the mean of their non-N/A criteria; the output dimension is then capped by the weakest spatial condition ([below](#request-conditions)). With no usable pass, neither dimension is scored. **Overall:** the mean of the two dimensions.
 4. **Fatal gates** override everything: no final answer, or no successful tool call. The run scores **FAILED** (0 overall, 0 on every output criterion), and its workflow scores stay visible for diagnosis.
    - **Not scored** is different from FAILED. If no model call succeeded at all (expired credentials, throttling, a model the account can't use), the agent never got a chance, so the panel isn't asked. The run shows **not scored** with the cause, costs nothing to judge, replaces any earlier judgement, and stays out of agreement (`measure.infrastructure_failure`).
-5. **Failure modes** (`retry_loop`, `parametric_guess`, `scope_violation` and so on) are listed when most judges tag them.
+5. **Failure modes** (`retry_loop`, `parametric_guess`, `scope_violation` and so on) are listed when a majority of all valid votes, pooled across passes, tag them.
 
 ## How much to trust the score
 
 | Check | Where | Meaning |
 | --- | --- | --- |
-| **Confidence** (per run) | KPI strip, report | **High**: trace intact, no gate, every seat's vote valid (stand-ins count), judges within 1 point on ≥ 80% of criteria. **Low**: trace broken, a gate fired, two or more seats short, or < 50% within 1 point. **Medium**: otherwise, for example one seat short |
+| **Confidence** (per run) | KPI strip, report | **High**: trace intact, no gate, every seat's vote valid in every pass (stand-ins count), judges within 1 point on ≥ 80% of criteria. **Low**: trace broken, a gate fired, two or more seats short, or < 50% within 1 point. **Medium**: otherwise, for example one seat short, a dropped pass, or request conditions unverified or not checked |
 | **Within-one, MAD** (per run) | Judge agreement tile | How tightly the votes cluster |
 | **Krippendorff's α** (across runs) | `harness agreement --all`, `harness compare` | Chance-corrected agreement between judges, with a cluster-bootstrap 95% CI. For scale: domain experts reached α ≈ 0.56 on a similar task (GRA §4.1.4) |
-| **Repeat stability** | `harness judge <run> --passes 3` | Each criterion's mean ± std over three panel passes |
+| **Repeat stability** | Score hero; `harness judge <run> [--passes N]` | Passes and votes behind the score, its ± standard error and the lowest and highest single-pass score; each criterion's std of pass medians |
 | **Calibration** | `harness calibrate <run>` | Plants one defect at a time and checks the panel notices it (below) |
 
 ### Calibration: can the judges see a planted defect?
@@ -114,7 +121,7 @@ Each defect is reported as one of:
 Anyone using a deployment can answer a score, and the judges learn from the answers ([spec](../judge-feedback/spec.md), [design](../judge-feedback/design.md)).
 
 1. **Review** a judged run on its page (**Your review**), criterion by criterion. Either agree, or give the score you'd give, a reason, and optionally the steps that show it (`T3`, `M2`). Measured criteria are code, so they take a note, not a score.
-2. **Ask the judges to reconsider.** The judges that voted re-score the run, each seeing its own earlier reply and your review.
+2. **Ask the judges to reconsider.** The judges that voted re-score the run in one pass, each seeing its own first-pass reply and your review. A judge that fails is replaced by a spare reserve, as in judging. It can be switched off (`judging.reconsider`).
    - The review is a claim they check against the steps, not an order. A judge may keep its score, and says why.
    - The revised votes become the run's score, marked "Revised after human review". The original judgement stays one click away.
    - Your own score is shown beside the panel's, never mixed into it.
@@ -144,7 +151,7 @@ These line our results up with the LGND/Ode benchmark for ADB ([what that report
 
   It reports **site recall**, **cell precision**, **count ratio** (claimed sites ÷ reference assets) and **lift** (precision over the base rate). Recall, count ratio and lift are reported only for a *complete* reference. The set is snapshotted into the run's archive, so the numbers replay and never change when a set is rebuilt. The first set is the USGS USPVDB solar facilities in Pecos County, Texas.
 - **Per concept and transfer.** Suite prompts carry a concept, a place and a role (home or transfer). `harness compare` reports per concept, and the drop from a home place to a new one.
-- **Data and licences.** Every run lists the data, boundaries, models and reference it used, each with its licence, and says whether the result is **presentable** to third parties. Every run that uses LGND reads "check before sharing" until LGND confirms the terms of its service.
+- **Data and licences.** Every run lists the data, boundaries, models, visual-check image sources and checker model, and reference it used, each with its licence, and says whether the result is **presentable** to third parties. Every run that uses LGND reads "check before sharing" until LGND confirms the terms of its service.
 
 ## Commands
 
@@ -159,15 +166,25 @@ uv run harness compare <suite-id>            # suite table with scores, confiden
 uv run harness ui                            # the console: live runs, scores, map, plain-language trace
 ```
 
-`harness run` and the console judge every finished run automatically (`judging.auto: true`). Replay never calls a model: it re-aggregates the archived votes with the rubric snapshot stored in the judgement.
+`harness run` and the console judge every finished run automatically (`judging.auto: true`). Replay never calls a model: it re-aggregates the archived votes with the rubric snapshot stored in the judgement, and reads the archived request conditions (`conditions.json`) and visual verdicts (`visual.json`).
 
 ## Reading a score well
 
 - **Compare, don't rank in the absolute.** A stricter panel scores everything lower (GRA §6). Comparisons are fair when they use the same rubric and the same panel. Every judgement records `rubric.sha256` and its seats, so that's checkable.
 - **A 100 is not proof.** It means the panel found no material flaw in what the agent executed, and that the agent's claims match its tool outputs. It doesn't mean the agent found every facility. Read the agent's own caveats in its answer, and the honest-uncertainty criterion.
 
-## Request conditions (rubric v2)
+## Request conditions
 
-New runs archive extracted request conditions before judging. Code checks each declared location against the saved boundary and any evidenced distance reference. A missing reference is unverified. Finding only far references does not prove no nearer one exists. Distance is to the recorded reference point, not the area's edge. Identity and other constraints remain judge/human assessments.
+Added in rubric v2. New runs archive extracted request conditions before judging. Code checks each declared location against the saved boundary and any evidenced distance reference. A missing reference is unverified. Finding only far references does not prove no nearer one exists. Distance is to the recorded reference point, not the area's edge. Identity and other constraints remain judge/human assessments.
 
 The output dimension is capped at the coverage of the weakest spatial condition, so good scores elsewhere cannot hide missing required evidence. A distance request whose run lists no locations scores 0 on output; code can't tell an honest "none found" from no work, so the page asks for a check by hand. Unverified or contradicted spatial conditions lower confidence. Extraction errors, including a damaged saved file, leave the overall evaluation not scored until Re-judge replaces them. If no narrative model is configured, conditions show as not checked, no cap applies and confidence stays below High. A request with no checkable conditions is not an error. Old archives without conditions remain N/A and are never re-extracted by replay/re-judge. Compare runs only with the same rubric/checker versions.
+
+## Visual check
+
+Added in rubric v3 ([handoff](../visual-check/handoff.md)). While the panel judges, the harness looks at each reported site (coordinate claims, up to 12, matched to the agent's LGND chips) in the sharpest open image of it: Vantor Open Data, then OpenAerialMap, NAIP, then Sentinel-2. One vision model says `present`, `absent` or `unclear`, with one sentence. The checker is the first of `visual_check.models` (Opus, Kimi, Grok) not from the agent's family, the panel's recusal rule. Verdicts and images are archived in `runs/<id>/visual.json` and `runs/<id>/visual/`.
+
+- **Score:** `visual_confirmation` = present ÷ (present + absent). `unclear`, `no_image`, `error` and `not_checked` sites don't count. The scorecard value is "x/y", or "no locations listed", "no site could be confirmed or ruled out", "not checked" or "not applicable" (no check on record).
+- **Time:** the check has a 60 s deadline (`visual_check.deadline_s`); sites still running are recorded `not_checked`, and nothing is written after the deadline.
+- **Reuse:** a re-judge keeps earlier final verdicts and checks only `error` and `not_checked` sites again, so repeat judgings stay stable and cost nothing for checked sites.
+- **Cost:** the checker calls a judgement makes are added to `judging_cost_usd` (`visual_cost_usd`).
+- **Limits:** it is one vote, not a tribunal. At Sentinel-2's 10 m only large assets are visible, and the page says so. Vantor imagery is CC BY-NC 4.0, so a run that used it reads "check before sharing".

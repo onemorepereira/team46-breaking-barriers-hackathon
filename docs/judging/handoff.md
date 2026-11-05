@@ -1,5 +1,7 @@
 # Judge Panel and Foundry Console — Handoff
 
+> **Later changes (2026-11-05):** a criterion's score is now the mean of every vote over three concurrent passes, not the median ([judging stability](../judging-stability/handoff.md)); the rubric is version 3, with condition compliance and visual confirmation also measured by code ([visual check](../visual-check/handoff.md)). The [judging guide](guide.md) describes the system as it is now.
+
 **What shipped** (branch `design/eval-harness`, 2026-11-04):
 - **A scoring framework for agent-built geospatial datasets.** It has three parts:
   - a generalized rubric (`rubrics/geo-dataset-v1.yaml`) with 4 workflow criteria and 6 output criteria;

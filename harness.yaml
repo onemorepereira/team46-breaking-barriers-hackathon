@@ -20,8 +20,8 @@ models:
     family: moonshot
     max_tokens: 16000
     request_fields: {}
-    # As a judge, medium reasoning: 17-19 s a verdict instead of 35-110 s at its default, measured on the
-    # Jodhpur dossier 2026-11-04 (docs/judging-stability). Its own agent runs keep the default.
+    # As a judge, low reasoning effort for speed (measured on the Jodhpur dossier 2026-11-04,
+    # docs/judging-stability). Its own agent runs keep the default.
     judge_request_fields: {reasoning: {effort: low}}
   opus:
     id: us.anthropic.claude-opus-5-5

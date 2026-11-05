@@ -9,11 +9,11 @@ AI agents can now build geospatial datasets on request: "find the solar parks in
 ## What we built
 An evaluator that judges **the work, not just the answer**.
 1. **Record:** every step the agent takes (each search, each image check, each decision) is saved as evidence.
-2. **Verify:** every site the agent reports must point to the tool result it came from. A program checks that the value really is there, and that the site is inside the area that was asked for.
+2. **Verify:** every site the agent reports must point to the tool result it came from. A program checks that the value really is there, that the site is inside the area that was asked for, and that each condition in the request ("within 10 miles of a park") has evidence. A vision model then looks at each site in the sharpest open image of it and says whether the asset is visible.
 3. **Judge:** three AI judges from three different companies score what a program can't: did it use the right tools, are the results what was asked for, and is it honest about uncertainty? Each vote comes with a reason and points at the step it relied on.
 
 ## How to read a score
-- **Score, 0 to 100:** how well the work was done, combining the program's checks with the judges' votes (the middle vote of three counts).
+- **Score, 0 to 100:** how well the work was done, combining the program's checks with the judges' votes (each judge votes three times, and the score averages every vote).
 - **Confidence (High, Medium or Low):** how far the judges agree, and whether the record of the run is complete. It tells you how much weight to put on the score.
 - **FAILED:** the agent never delivered an answer, or none of its tools worked. No score can hide that.
 
@@ -26,7 +26,7 @@ An evaluator that judges **the work, not just the answer**.
 An expert can review any score, criterion by criterion. The judges then reconsider against the evidence. They don't simply obey: in our test, a judge rejected a deliberately wrong review and pointed to the steps that disproved it. Reviews also become short lessons for the judges. Each lesson is tested on runs it wasn't drawn from, approved by a person, and kept per deployment, so ADB's judges learn from ADB's experts.
 
 ## What it doesn't prove yet
-It checks the agent against **its own evidence**, not against the real world. Confirming that a site really is a data center needs a reference list (an "answer key"), and ADB's own scoring rules. Both plug in without rebuilding the system: ADB's rubric is a single file.
+It mostly checks the agent against **its own evidence**. The image check is one model's look at each site, and coarse 10 m imagery often can't tell. Knowing what the agent missed needs a reference list (an "answer key"): we have one, for solar farms in Pecos County, Texas, and need more, along with ADB's own scoring rules. Both plug in without rebuilding the system: ADB's rubric is a single file. Each run also lists its data licences: the sharpest imagery (Vantor) is non-commercial, so check before sharing.
 
 ## What it costs
-About $0.30–0.80 for the agent and $0.10–0.30 for the judges, per run.
+About $0.30–0.80 for the agent and about $0.20–0.30 for the judges and the image check, per run.

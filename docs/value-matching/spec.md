@@ -1,5 +1,7 @@
 # Fix value-matching false positives
 
+**Status:** Built (merged in PR #7, 2026-11-04; [handoff](handoff.md))
+
 Owner: Aditya. Branch: `slice/evidence-matching`, after `slice/plain-verdict`. 2026-11-04.
 
 ## Problem

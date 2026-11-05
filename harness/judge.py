@@ -295,7 +295,7 @@ def run_panel(cfg: Config, r: Rubric, d: dossier_mod.Dossier, panel_seats: list[
         if passes < 3 or report is None:
             return [f.result() for f in futures]
         # Two complete passes are a usable judgement; give the rest STRAGGLER_S more, then go without
-        # them (Kimi's slowest replies took 50-70 s where most took 10-25 s).
+        # them (see STRAGGLER_S).
         done: set[Any] = set()
         pending = set(futures)
         while pending and len(done) < 2:

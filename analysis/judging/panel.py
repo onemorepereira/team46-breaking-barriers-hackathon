@@ -1,4 +1,5 @@
-"""Panel aggregation (spec AC5-AC8): medians, gates, dimensions, failure modes, agreement, confidence."""
+"""Panel aggregation (spec AC5-AC8): per-criterion mean of votes (medians kept for reviews), gates,
+dimensions, failure modes, agreement, confidence."""
 
 from __future__ import annotations
 

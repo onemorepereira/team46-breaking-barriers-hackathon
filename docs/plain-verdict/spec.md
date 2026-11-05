@@ -1,6 +1,6 @@
 # Slice: Evals Explained in Plain Language
 
-**Status:** Implemented locally; real-run validation pending · **Owner:** Aditya · **Size:** about half a day · **Branch:** `slice/plain-verdict` from `main` · **Merges:** first (see [merge order](../factory.md#slices-open-for-the-team-2026-11-04))
+**Status:** Built (merged with prompt compliance in PR #7, 2026-11-04; the three-real-archive check, AC6, is not recorded; [handoff](handoff.md)) · **Owner:** Aditya · **Size:** about half a day · **Branch:** `slice/plain-verdict` from `main` · **Merges:** first (see [merge order](../factory.md#slices-open-for-the-team-2026-11-04))
 **Read first:** [how a run is scored](../judging/guide.md), the [factory rules for slices](../factory.md#how-to-take-a-slice).
 
 ## Problem

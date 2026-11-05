@@ -4,6 +4,8 @@
 **Status:** Built (decisions of 2026-11-04 below; [handoff](handoff.md))   **Last updated:** 2026-11-04
 **Owner:** Miguel. **Timing:** built before the presentation.
 
+> **Later change (2026-11-04):** a judged criterion's score is now the mean of every valid vote, over three concurrent passes on a normal judgement, not the median. Medians are still recorded, and reviews and panel–human agreement still compare against them. See [judging stability](../judging-stability/handoff.md).
+
 ## Problem
 Domain experts are the people who judge whether a dataset can be trusted (`docs/Clay-Foundry-Vision-Hackathon.md:29`). Today they can read a run's score but can't answer it. If the three judges miss something an expert can see, the run keeps a wrong score. Examples: a site that isn't the requested target, or a 40-step search that was the right call for a whole state. Every later run is then scored with the same blind spot. We also have no measure of how far the panel agrees with a human, only with itself (`docs/judging/gaps.md`, real gap 3).
 

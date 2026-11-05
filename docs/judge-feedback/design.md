@@ -1,6 +1,8 @@
 # Human Feedback for the Judges: Design
 
-**Spec:** [spec.md](spec.md)   **Status:** Agreed   **Last updated:** 2026-11-04
+**Spec:** [spec.md](spec.md)   **Status:** Current (built in PR #5; [handoff](handoff.md))   **Last updated:** 2026-11-04
+
+> **Later change (2026-11-04):** a judged criterion's score is now the mean of every valid vote, over three concurrent passes on a normal judgement, not the median. Medians are still recorded, and reviews and panel–human agreement still compare against them. See [judging stability](../judging-stability/handoff.md).
 
 ## Shape
 One new pure module, `analysis/judging/feedback.py`, holds the shapes, validation, the human-score rules and the agreement metrics. One new I/O module, `harness/feedback.py`, holds reviews, reconsideration, guidance storage, proposal and evaluation. Both build on what exists:
