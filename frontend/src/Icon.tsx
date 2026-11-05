@@ -23,10 +23,22 @@ export function Icon({
     | "info"
     | "arrow"
     | "target"
-    | "help";
+    | "help"
+    | "thumb-up"
+    | "thumb-down";
   size?: number;
 }) {
   const paths: Record<string, ReactNode> = {
+    "thumb-up": (
+      <>
+        <path d="M7 10H3v11h4zM7 19l3 2h7a2 2 0 0 0 2-1.6l2-9A2 2 0 0 0 19 8h-6l1-4c.5-2-2-3-3-1l-4 7z" />
+      </>
+    ),
+    "thumb-down": (
+      <>
+        <path d="M7 14H3V3h4zM7 5l3-2h7a2 2 0 0 1 2 1.6l2 9A2 2 0 0 1 19 16h-6l1 4c.5 2-2 3-3 1l-4-7z" />
+      </>
+    ),
     search: (
       <>
         <circle cx="11" cy="11" r="6.5" />

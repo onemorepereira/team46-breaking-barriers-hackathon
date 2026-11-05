@@ -88,3 +88,18 @@ A review was **not** saved into the live deployment from the browser; the endpoi
 Revert the PR.
 - Judgements written with several passes stay readable by the old code: the passes field is unchanged, and the old code reads pass 1 for display.
 - Setting `judging.passes: 1` and removing `judge_request_fields` restores the old judging alone.
+
+## Merged with PR #15 (2026-11-05)
+PR #15 reworked the workspace and landed first. Its UI was kept, and this change was ported into it:
+- **Kept from PR #15:**
+  - Its human feedback loop: thumbs on every score, plus the detailed multi-question review with reconsideration.
+  - Its imagery inspector beside the map.
+- **Not carried over:** this branch's per-question review form, review bar and map result panel, which duplicated those.
+- **Ported into PR #15's Evaluation:**
+  - the score's passes, votes per question, ± and single-pass range;
+  - every judge's votes per question across passes, with colour-safe colours under PR #15's colour setting;
+  - each judge's average across passes, and a note when it ran at the model's default sampling;
+  - the dropped-pass note;
+  - "What this score means" now describes the mean of votes across passes, not the median.
+- **Design fixes kept:** the unlabelled "i" header button is gone (About is in the footer), and type below 11 px is raised in PR #15's stylesheet.
+- **Unchanged:** the judging and scoring changes above.

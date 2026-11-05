@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { markdownLibs, renderMarkdown } from "./markdown";
+import { Text, Stat } from "./UI";
+import Evaluation from "./Evaluation";
+import Guidance from "./Guidance";
+import RunSummary, { DetailedSummary } from "./RunSummary";
+import { Accessibility, Dialog, Disclosure } from "./Controls";
+import {
+  readAccessibility,
+  buildPrompt,
+  hasTemplateBlanks,
+  writePreference,
+} from "./preferences";
 import { Icon } from "./Icon";
 import EvidenceMap from "./Map";
 import {
@@ -9,8 +19,7 @@ import {
   formatScore,
   money,
   localTime,
-  draftPayload,
-  type Draft,
+  reviewPayload,
   type View,
   type Row,
 } from "./api";
@@ -36,24 +45,6 @@ const examples = [
       "Find data centers within the city limits of Richardson, TX. Give each one's location exactly as the tool returned it.",
   },
 ];
-function Text({ value }: { value: unknown }) {
-  const text = typeof value === "string" ? value : "";
-  const [html, setHtml] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    markdownLibs()
-      .then((libs) => live && setHtml(renderMarkdown(libs, text)))
-      .catch(() => live && setHtml(null)); // plain text below if the renderer can't load
-    return () => {
-      live = false;
-    };
-  }, [text]);
-  return html === null ? (
-    <div className="markdown markdown-plain">{text}</div>
-  ) : (
-    <div className="markdown" dangerouslySetInnerHTML={{ __html: html }} />
-  );
-}
 function Empty({
   title,
   children,
@@ -66,23 +57,6 @@ function Empty({
       <Icon name="search" size={26} />
       <h3>{title}</h3>
       <p>{children}</p>
-    </div>
-  );
-}
-function Stat({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: React.ReactNode;
-  sub?: string;
-}) {
-  return (
-    <div className="stat">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {sub && <small>{sub}</small>}
     </div>
   );
 }
@@ -120,211 +94,59 @@ function DataTable({ rows }: { rows: any[] }) {
     </div>
   );
 }
-const VOTE_WORD = ["No", "Partly", "Yes"];
-function Votes({ votes }: { votes: Record<string, number[]> | undefined }) {
-  if (!votes) return null;
-  return (
-    <span className="votes" aria-label="Judge votes, every pass">
-      {Object.entries(votes).map(([judge, vs]) => (
-        <span key={judge} className="vote-group" title={`${judge}: ${vs.join(", ")}`}>
-          <span className="vote-judge">{judge}</span>
-          {vs.map((v, i) => (
-            <i key={i} className={`vote v${v}`} aria-hidden="true" />
-          ))}
-          <span className="sr-only">{vs.join(", ")}</span>
-        </span>
-      ))}
-    </span>
-  );
-}
-function CriterionCard({
-  c,
+function Reviewer({
   view,
-  draft,
-  onDraft,
-  reviewable,
-}: {
-  c: any;
-  view: View;
-  draft: Draft | undefined;
-  onDraft: (d: Draft | undefined) => void;
-  reviewable: boolean;
-}) {
-  const card = view.scorecard;
-  const anchors: Record<string, string> = card.anchors?.[c.id] || {};
-  const judged = c.kind === "judged";
-  const set = (patch: Partial<Draft>) =>
-    onDraft({
-      decision: "agree",
-      score: "",
-      reason: "",
-      refs: "",
-      ...draft,
-      ...patch,
-    });
-  return (
-    <details className={`criterion ${draft ? "has-draft" : ""}`}>
-      <summary>
-        <span className="criterion-q">
-          {c.plain || c.question}
-          <small>
-            {judged ? c.dimension : "Measured by code"}
-            {c.human != null && (
-              <b className="human-tag">
-                Reviewer: {formatScore((c.human / 2) * 100)}
-              </b>
-            )}
-            {draft && (
-              <b className="draft-tag">
-                {draft.decision === "agree" ? "You agree" : `You suggest ${draft.score || "?"}`}
-              </b>
-            )}
-          </small>
-        </span>
-        {judged && <Votes votes={card.votes_all?.[c.id]} />}
-        <strong className="criterion-score">
-          {formatScore(c.score)}
-          {c.score !== null && <small>/100</small>}
-        </strong>
-      </summary>
-      <div className="criterion-body">
-        <p className="criterion-full">{c.question}</p>
-        {c.value && <p className="criterion-full">Measured: {c.value}</p>}
-        {judged && Object.keys(anchors).length > 0 && (
-          <dl className="anchors">
-            {Object.entries(anchors).map(([s, t]) => (
-              <div key={s}>
-                <dt>
-                  {s} · {VOTE_WORD[Number(s)] || s}
-                </dt>
-                <dd>{String(t)}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-        {judged &&
-          card.judges?.map((j: any) => {
-            const jc = j.criteria?.find((x: any) => x.id === c.id);
-            return jc ? (
-              <div key={j.key} className="judge-reason">
-                <strong>
-                  {j.key} <span>voted {jc.score}</span>
-                </strong>
-                <p>{jc.rationale || "No rationale recorded."}</p>
-                {jc.refs?.length > 0 && <small>Cites {jc.refs.join(", ")}</small>}
-              </div>
-            ) : null;
-          })}
-        {judged && card.pass_count > 1 && (
-          <p className="fine-print">
-            Rationales are from the first of {card.pass_count} passes; the
-            votes above are from every pass.
-          </p>
-        )}
-        {judged && reviewable && (
-          <div className="your-call" role="group" aria-label="Your assessment">
-            <span className="your-call-label">Your assessment</span>
-            <div className="segmented">
-              <button
-                type="button"
-                className={draft?.decision === "agree" ? "on" : ""}
-                aria-pressed={draft?.decision === "agree"}
-                onClick={() =>
-                  draft?.decision === "agree" ? onDraft(undefined) : set({ decision: "agree" })
-                }
-              >
-                Agree with the panel
-              </button>
-              <button
-                type="button"
-                className={draft?.decision === "disagree" ? "on" : ""}
-                aria-pressed={draft?.decision === "disagree"}
-                onClick={() =>
-                  draft?.decision === "disagree"
-                    ? onDraft(undefined)
-                    : set({ decision: "disagree" })
-                }
-              >
-                Suggest a different score
-              </button>
-            </div>
-            {draft?.decision === "disagree" && (
-              <>
-                <div className="score-pick" role="radiogroup" aria-label="Your score">
-                  {(Object.keys(anchors).length ? Object.keys(anchors) : ["0", "1", "2"]).map(
-                    (s) => (
-                      <button
-                        type="button"
-                        key={s}
-                        role="radio"
-                        aria-checked={draft.score === s}
-                        className={draft.score === s ? "on" : ""}
-                        onClick={() => set({ score: s })}
-                      >
-                        <b>{s}</b> {VOTE_WORD[Number(s)] || ""}
-                      </button>
-                    ),
-                  )}
-                </div>
-                <label>
-                  Why
-                  <textarea
-                    value={draft.reason}
-                    maxLength={2000}
-                    onChange={(e) => set({ reason: e.target.value })}
-                    placeholder="What in the evidence supports your score?"
-                  />
-                </label>
-                <label>
-                  Steps you relied on <span className="optional">optional</span>
-                  <input
-                    value={draft.refs}
-                    onChange={(e) => set({ refs: e.target.value })}
-                    placeholder="T2, T4"
-                  />
-                </label>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-    </details>
-  );
-}
-function readName(): string {
-  try {
-    return localStorage.getItem("foundry.reviewer") || "";
-  } catch {
-    return "";
-  }
-}
-function ReviewBar({
-  view,
-  drafts,
   onSaved,
+  onReconsider,
+  busy,
 }: {
   view: View;
-  drafts: Record<string, Draft>;
   onSaved: () => void;
+  onReconsider: (id: string) => void;
+  busy: boolean;
 }) {
-  const [name, setName] = useState(readName),
-    [note, setNote] = useState(""),
+  const judged =
+    view.scorecard?.criteria?.filter(
+      (c: any) => c.kind === "judged" && c.score !== null,
+    ) || [];
+  const [name, setName] = useState(""),
+    [criterion, setCriterion] = useState(""),
+    [decision, setDecision] = useState("agree"),
+    [score, setScore] = useState("1"),
+    [notes, setNotes] = useState(""),
+    [refs, setRefs] = useState(""),
+    [saved, setSaved] = useState(""),
     [error, setError] = useState(""),
-    [sending, setSending] = useState(false);
-  const count = Object.keys(drafts).length;
-  if (!count) return null;
-  async function save() {
+    [sending, setSending] = useState(false),
+    [basket, setBasket] = useState<Record<string, any>>({}),
+    [measuredNote, setMeasuredNote] = useState("");
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
     setError("");
+    setSaved("");
     setSending(true);
     try {
-      const payload = draftPayload(name, drafts, note);
-      try {
-        localStorage.setItem("foundry.reviewer", name.trim());
-      } catch {
-        /* a per-viewer convenience only */
-      }
+      const payload = criterion
+        ? reviewPayload(name, criterion, decision, score, notes, refs)
+        : {
+            reviewer: name.trim(),
+            criteria: {},
+            note: notes,
+            measured_note: "",
+          };
+      if (!name.trim()) throw new Error("Enter your name.");
+      payload.criteria = { ...basket, ...payload.criteria };
+      payload.measured_note = measuredNote;
+      if (!Object.keys(payload.criteria).length)
+        throw new Error("Choose at least one rubric question.");
       await request(`/api/runs/${view.run.id}/reviews`, payload);
-      setNote("");
+      setSaved(
+        "Review saved to the run archive. The automated score has not been changed.",
+      );
+      setNotes("");
+      setBasket({});
+      setCriterion("");
+      setMeasuredNote("");
       onSaved();
     } catch (e) {
       setError((e as Error).message);
@@ -333,92 +155,213 @@ function ReviewBar({
     }
   }
   return (
-    <div className="review-bar" role="region" aria-label="Your review">
-      <strong>
-        Your review · {count} {count === 1 ? "question" : "questions"}
-      </strong>
-      <input
-        aria-label="Your name"
-        placeholder="Your name"
-        value={name}
-        maxLength={100}
-        onChange={(e) => setName(e.target.value)}
-      />
-      <input
-        aria-label="Overall note (optional)"
-        placeholder="Overall note (optional)"
-        value={note}
-        maxLength={2000}
-        onChange={(e) => setNote(e.target.value)}
-      />
-      <button className="primary" disabled={sending} onClick={() => void save()}>
-        {sending ? "Saving…" : "Save review"}
-      </button>
+    <section className="review-card">
+      <div className="section-kicker">Human review</div>
+      <h3>What would you check or change?</h3>
+      <p>
+        Your assessment is kept separately from the automated score. It can
+        inform a later judge reconsideration.
+      </p>
+      <form onSubmit={submit}>
+        {Object.keys(basket).length > 0 && (
+          <div className="review-basket">
+            <b>Criteria ready to save</b>
+            {Object.entries(basket).map(([id, item]: [string, any]) => (
+              <div key={id}>
+                <span>
+                  {judged.find((c: any) => c.id === id)?.plain || id}:{" "}
+                  {item.agree ? "Agree" : `Suggested rating ${item.score}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setBasket((old) =>
+                      Object.fromEntries(
+                        Object.entries(old).filter(([key]) => key !== id),
+                      ),
+                    )
+                  }
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <label>
+          Your name
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            required
+            maxLength={80}
+          />
+        </label>
+        <label>
+          What are you reviewing?
+          <select
+            value={criterion}
+            onChange={(e) => {
+              setCriterion(e.target.value);
+              setDecision("agree");
+            }}
+          >
+            <option value="">Choose a rubric question</option>
+            {judged.map((c: any) => (
+              <option key={c.id} value={c.id}>
+                {c.plain || c.question}
+              </option>
+            ))}
+          </select>
+        </label>
+        {criterion && (
+          <div className="review-pair">
+            <label>
+              Assessment
+              <select
+                value={decision}
+                onChange={(e) => setDecision(e.target.value)}
+              >
+                <option value="agree">Agree with panel</option>
+                <option value="disagree">Suggest a different score</option>
+              </select>
+            </label>
+            {decision === "disagree" && (
+              <label>
+                Suggested score
+                <select
+                  value={score}
+                  onChange={(e) => setScore(e.target.value)}
+                >
+                  {Object.keys(
+                    view.scorecard.anchors?.[criterion] || {
+                      0: "",
+                      1: "",
+                      2: "",
+                    },
+                  ).map((s) => (
+                    <option key={s}>{s}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
+        )}
+        {criterion && (
+          <p className="fine-print">
+            Current panel score:{" "}
+            {formatScore(judged.find((c: any) => c.id === criterion)?.score)}
+            /100.{" "}
+            {decision === "disagree" &&
+              `Your selected rubric anchor: ${view.scorecard.anchors?.[criterion]?.[score] || "No anchor recorded"}`}
+          </p>
+        )}
+        <label>
+          Notes
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            maxLength={2000}
+            placeholder="What supports your assessment? What remains uncertain?"
+          />
+        </label>
+        {decision === "disagree" && (
+          <label>
+            Evidence step IDs
+            <input
+              value={refs}
+              onChange={(e) => setRefs(e.target.value)}
+              placeholder="For example: T2, T4"
+            />
+          </label>
+        )}
+        <label>
+          Note on measured checks (kept out of judge prompts)
+          <textarea
+            value={measuredNote}
+            onChange={(e) => setMeasuredNote(e.target.value)}
+            maxLength={4000}
+          />
+        </label>
+        <button
+          className="secondary"
+          type="button"
+          disabled={busy || sending || !criterion}
+          onClick={() => {
+            try {
+              const part = reviewPayload(
+                name,
+                criterion,
+                decision,
+                score,
+                notes,
+                refs,
+              );
+              setBasket((old) => ({ ...old, ...part.criteria }));
+              setCriterion("");
+              setNotes("");
+              setRefs("");
+              setError("");
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
+        >
+          Add criterion to review
+        </button>
+        <button
+          className="primary"
+          disabled={
+            busy ||
+            sending ||
+            (!criterion && !Object.keys(basket).length) ||
+            !view.scorecard ||
+            view.kpis.score === null
+          }
+        >
+          {sending ? "Saving…" : "Save human review"}
+        </button>
+        {!view.scorecard && (
+          <small>Judge this run before submitting a review.</small>
+        )}
+      </form>
+      {saved && (
+        <p role="status" className="success-message">
+          {saved}
+        </p>
+      )}
       {error && (
         <p role="alert" className="error-message">
           {error}
         </p>
       )}
-    </div>
-  );
-}
-function SavedReviews({
-  view,
-  busy,
-  onReconsider,
-}: {
-  view: View;
-  busy: boolean;
-  onReconsider: (id: string) => void;
-}) {
-  const card = view.scorecard;
-  const reviews = card?.reviews || [];
-  if (!reviews.length) return null;
-  const name = (id: string) =>
-    card.criteria?.find((c: any) => c.id === id)?.plain || id;
-  return (
-    <section className="saved-reviews">
-      <h3 className="section-title">Human reviews</h3>
-      {reviews.map((r: any, i: number) => (
-        <article key={r.id || i} className="saved-review">
-          <header>
-            <strong>{r.reviewer}</strong>
-            <span>
-              {localTime(r.created_at)}
-              {r.current === false ? " · about an earlier judgement" : ""}
-            </span>
-          </header>
-          <ul>
-            {Object.entries(r.criteria || {}).map(([id, v]: [string, any]) => (
-              <li key={id}>
-                <b>{name(id)}</b>
-                {v.agree ? (
-                  <span className="agree">agrees with the panel</span>
-                ) : (
-                  <span>
-                    suggests <em>{v.score}</em>
-                    {v.reason ? ` — ${v.reason}` : ""}
-                    {v.refs?.length ? ` (${v.refs.join(", ")})` : ""}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-          {r.note && <p>{r.note}</p>}
-          {r.current && !r.reconsidered && card.reconsider_enabled && (
-            <button
-              className="secondary small"
-              disabled={busy}
-              onClick={() => onReconsider(r.id)}
-            >
-              Ask the judges to reconsider with this review
-            </button>
-          )}
-          {r.reconsidered && (
-            <small>Judges reconsidered {localTime(r.reconsidered)}</small>
-          )}
-        </article>
-      ))}
+      <div className="saved-reviews">
+        {view.scorecard?.reviews?.map((r: any, i: number) => (
+          <details key={r.id || i}>
+            <summary>
+              {r.reviewer} · {localTime(r.created_at)}
+              {r.current === false ? " · earlier judgement" : ""}
+            </summary>
+            <p>{r.note || "Criterion review saved."}</p>
+            {r.measured_note && <p>Measured-check note: {r.measured_note}</p>}
+            <pre>{JSON.stringify(r.criteria, null, 2)}</pre>
+            {r.current &&
+              !r.reconsidered &&
+              view.scorecard.reconsider_enabled && (
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => onReconsider(r.id)}
+                >
+                  Ask judges to reconsider
+                </button>
+              )}
+            {r.reconsidered && (
+              <small>Reconsidered {localTime(r.reconsidered)}</small>
+            )}
+          </details>
+        ))}
+      </div>
     </section>
   );
 }
@@ -437,9 +380,21 @@ export default function App() {
     [historyNext, setHistoryNext] = useState<string | null>(null),
     [loading, setLoading] = useState(false),
     [modal, setModal] = useState(false),
-    [focusedRef, setFocusedRef] = useState<string | null>(null),
-    [focusChip, setFocusChip] = useState<{ index: number; nonce: number } | null>(null),
-    [drafts, setDrafts] = useState<Record<string, Draft>>({});
+    [settingsOpen, setSettingsOpen] = useState(false),
+    [preferences, setPreferences] = useState(readAccessibility),
+    [page, setPage] = useState(() =>
+      new URLSearchParams(window.location.search).get("page") === "guidance"
+        ? "guidance"
+        : "workspace",
+    ),
+    [selectedChip, setSelectedChip] = useState<number | null>(null),
+    [focusBounds, setFocusBounds] = useState<number[] | null>(null),
+    [previous, setPrevious] = useState<any>(null),
+    [filterModel, setFilterModel] = useState(""),
+    [filterVerdict, setFilterVerdict] = useState(""),
+    [asset, setAsset] = useState(""),
+    [area, setArea] = useState(""),
+    [focusedRef, setFocusedRef] = useState<string | null>(null);
   const stream = useRef<{ close: () => void } | null>(null),
     active = useRef(""),
     busyRef = useRef(false),
@@ -447,7 +402,69 @@ export default function App() {
   const sites = candidatesOf(view),
     chips = view?.map.chips?.features || [];
   const running = busy || loading;
+  const promptBox = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.reading = String(preferences.reading);
+    root.dataset.colour = preferences.colour;
+    root.dataset.contrast = String(preferences.contrast);
+    root.dataset.largeText = String(preferences.largeText);
+    root.dataset.reducedMotion = String(preferences.reducedMotion);
+  }, [preferences]);
+  function navigate(next: string) {
+    setPage(next);
+    const url = new URL(window.location.href);
+    if (next === "guidance") url.searchParams.set("page", "guidance");
+    else url.searchParams.delete("page");
+    if (
+      url.pathname + url.search !==
+      window.location.pathname + window.location.search
+    )
+      window.history.pushState({}, "", url.pathname + url.search);
+  }
+  function showSummary() {
+    setPage("workspace");
+    setHistory(null);
+    setTab("summary");
+  }
+  function inspectStep(ref: string) {
+    setFocusedRef(ref);
+    setTab("trace");
+    setPage("workspace");
+  }
+  async function openPrevious(at: string) {
+    if (!view) return;
+    try {
+      setPrevious(
+        await request(
+          `/api/runs/${view.run.id}/judgements/${encodeURIComponent(at)}`,
+        ),
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  function useTemplate() {
+    const text = buildPrompt(asset, area);
+    setPrompt(text);
+    requestAnimationFrame(() => {
+      promptBox.current?.focus();
+      const start = text.indexOf("[");
+      if (start >= 0)
+        promptBox.current?.setSelectionRange(
+          start,
+          text.indexOf("]", start) + 1,
+        );
+    });
+  }
   async function load(id: string, updateUrl = true) {
+    if (
+      updateUrl ||
+      new URLSearchParams(window.location.search).get("page") !== "guidance"
+    )
+      setPage("workspace");
+    setSelectedChip(null);
+    setFocusBounds(null);
     const ticket = ++requestId.current;
     setError("");
     setLoading(true);
@@ -477,9 +494,6 @@ export default function App() {
       setPrompt(data.run.prompt);
       active.current = id;
       setSelected(null);
-      setFocusChip(null);
-    setDrafts({});
-      setDrafts({});
       setEvents([]);
       setPhase(data.kpis.verdict || "Run loaded");
       setHistory(null);
@@ -505,6 +519,13 @@ export default function App() {
     const id = new URLSearchParams(window.location.search).get("run");
     if (id) void load(id, false);
     const pop = () => {
+      if (
+        new URLSearchParams(window.location.search).get("page") === "guidance"
+      ) {
+        setPage("guidance");
+        return;
+      }
+      setPage("workspace");
       const id = new URLSearchParams(window.location.search).get("run");
       if (id) void load(id, false);
       else reset(false);
@@ -527,14 +548,15 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [busy]);
   function reset(updateUrl = true) {
+    setPage("workspace");
+    setSelectedChip(null);
+    setFocusBounds(null);
     requestId.current++;
     stream.current?.close();
     setView(null);
     active.current = "";
     setPrompt("");
     setSelected(null);
-    setFocusChip(null);
-    setDrafts({});
     setHistory(null);
     setEvents([]);
     setTab("findings");
@@ -548,8 +570,6 @@ export default function App() {
     active.current = id;
     setBusy(true);
     setSelected(null);
-    setFocusChip(null);
-    setDrafts({});
     setEvents([]);
     setPhase("Following a run in progress");
     if (updateUrl)
@@ -624,7 +644,11 @@ export default function App() {
               setTab("evaluation");
             } else
               request<View>(`/api/runs/${id}`)
-                .then(setView)
+                .then((fresh) =>
+                  setView((old) =>
+                    old?.run.id === fresh.run.id ? fresh : old,
+                  ),
+                )
                 .catch((e) => setError(e.message));
           }
         }
@@ -648,14 +672,17 @@ export default function App() {
   }
   async function start() {
     if (!prompt.trim() || busy) return;
+    if (hasTemplateBlanks(prompt)) {
+      setError("Fill in [asset type] and [area] before starting.");
+      promptBox.current?.focus();
+      return;
+    }
     const ticket = ++requestId.current; // a load still in flight must not overwrite this run
     stream.current?.close();
     setError("");
     setBusy(true);
     setView(null);
     setSelected(null);
-    setFocusChip(null);
-    setDrafts({});
     setEvents([]);
     setPhase("Starting research");
     try {
@@ -710,11 +737,15 @@ export default function App() {
       setBusy(false);
     }
   }
-  async function runs(more = false) {
+  async function runs(
+    more = false,
+    filters = { model: filterModel, verdict: filterVerdict },
+  ) {
+    navigate("workspace");
     setError("");
     try {
       const data = await request<{ runs: Row[]; next: string | null }>(
-        `/api/runs?limit=30${more && historyNext ? `&before=${encodeURIComponent(historyNext)}` : ""}`,
+        `/api/runs?limit=30${filters.model ? `&model=${encodeURIComponent(filters.model)}` : ""}${filters.verdict ? `&verdict=${encodeURIComponent(filters.verdict)}` : ""}${more && historyNext ? `&before=${encodeURIComponent(historyNext)}` : ""}`,
       );
       setHistory((old) => (more ? [...(old || []), ...data.runs] : data.runs));
       setHistoryNext(data.next);
@@ -755,8 +786,11 @@ export default function App() {
         </button>
         <nav className="main-nav" aria-label="Main navigation">
           <button
-            className={`nav-item ${history === null ? "active" : ""}`}
-            onClick={() => setHistory(null)}
+            className={`nav-item ${page === "workspace" && history === null ? "active" : ""}`}
+            onClick={() => {
+              setHistory(null);
+              navigate("workspace");
+            }}
           >
             Workspace
           </button>
@@ -767,17 +801,39 @@ export default function App() {
           >
             <Icon name="clock" size={16} /> Previous runs
           </button>
-          <a className="nav-item" href={endpoint("/guidance")}>
+          <button
+            className={`nav-item ${page === "guidance" ? "active" : ""}`}
+            onClick={() => navigate("guidance")}
+          >
             Judge guidance
-          </a>
+          </button>
         </nav>
         <div className="header-actions">
-          {busy && (
-            <div className="run-status running" role="status">
-              <span />
-              {phase}
-            </div>
-          )}
+          <div
+            className={`run-status ${busy ? "running" : view ? "completed" : "before"}`}
+            role="status"
+          >
+            <span />
+            {busy ? "Working" : view ? view.kpis.verdict : "Ready"}
+          </div>
+          <button
+            className="evaluation-button"
+            onClick={() => {
+              setTab("evaluation");
+              navigate("workspace");
+              setHistory(null);
+            }}
+            disabled={!view}
+          >
+            <Icon name="panel" size={16} /> Evaluation
+          </button>
+          <button
+            className="icon-button accessibility-trigger"
+            aria-label="Accessibility and reading settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <span aria-hidden="true">Aa</span>
+          </button>
         </div>
       </header>
       {error && (
@@ -789,7 +845,9 @@ export default function App() {
           </button>
         </div>
       )}
-      {history !== null ? (
+      {page === "guidance" ? (
+        <Guidance onRun={(id) => void load(id)} />
+      ) : history !== null ? (
         <main className="history-page">
           <div className="page-heading">
             <div>
@@ -802,6 +860,47 @@ export default function App() {
             <button className="primary" onClick={() => reset()}>
               New research <Icon name="plus" />
             </button>
+          </div>
+          <div className="run-filters">
+            <label>
+              Agent model
+              <select
+                value={filterModel}
+                onChange={(e) => {
+                  setFilterModel(e.target.value);
+                  void runs(false, {
+                    model: e.target.value,
+                    verdict: filterVerdict,
+                  });
+                }}
+              >
+                <option value="">All models</option>
+                {models.map((m) => (
+                  <option key={m}>{m}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Result
+              <select
+                value={filterVerdict}
+                onChange={(e) => {
+                  setFilterVerdict(e.target.value);
+                  void runs(false, {
+                    model: filterModel,
+                    verdict: e.target.value,
+                  });
+                }}
+              >
+                {["", "scored", "FAILED", "not scored", "not judged"].map(
+                  (v) => (
+                    <option key={v} value={v}>
+                      {v || "All results"}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
           </div>
           {!history.length ? (
             <Empty title="No archived runs yet">
@@ -849,8 +948,20 @@ export default function App() {
               <EvidenceMap
                 view={view}
                 selected={selected}
-                focusChip={focusChip}
+                selectedChip={selectedChip}
+                preferences={preferences}
+                focusBounds={focusBounds}
+                onSelectChip={(i) => {
+                  setSelectedChip(i);
+                  setSelected(null);
+                }}
+                onClose={() => {
+                  setSelected(null);
+                  setSelectedChip(null);
+                }}
+                onTrace={inspectStep}
                 onSelect={(i) => {
+                  setSelectedChip(null);
                   setSelected(i);
                   setTab("findings");
                 }}
@@ -879,6 +990,7 @@ export default function App() {
                     }}
                   >
                     <textarea
+                      ref={promptBox}
                       aria-label="Geographic research question"
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
@@ -888,7 +1000,7 @@ export default function App() {
                           void start();
                         }
                       }}
-                      placeholder="Find solar parks in Jodhpur, India, and show their locations…"
+                      placeholder="Find [asset type] in [area]. Return locations, cite evidence, and explain uncertainty."
                     />
                     <div className="composer-footer">
                       <label className="model-select">
@@ -908,12 +1020,47 @@ export default function App() {
                       <span className="keyboard-hint">⌘ / Ctrl ↵</span>
                       <button
                         className="run-button"
-                        disabled={!prompt.trim() || !models.length}
+                        disabled={
+                          !prompt.trim() ||
+                          !models.length ||
+                          hasTemplateBlanks(prompt)
+                        }
                       >
                         Run research <Icon name="arrow" size={16} />
                       </button>
                     </div>
                   </form>
+                  <div className="template-builder">
+                    <label>
+                      Asset type
+                      <input
+                        value={asset}
+                        onChange={(e) => setAsset(e.target.value)}
+                        placeholder="e.g. solar parks"
+                      />
+                    </label>
+                    <label>
+                      Area
+                      <input
+                        value={area}
+                        onChange={(e) => setArea(e.target.value)}
+                        placeholder="e.g. Jodhpur, India"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={useTemplate}
+                    >
+                      Use editable template
+                    </button>
+                  </div>
+                  {hasTemplateBlanks(prompt) && (
+                    <p className="template-hint">
+                      Replace the bracketed fields with your asset and area. The
+                      template is editable text.
+                    </p>
+                  )}
                   <div className="real-examples">
                     <span>START WITH A QUESTION</span>
                     <div>
@@ -978,49 +1125,45 @@ export default function App() {
                   Loading archived evidence…
                 </div>
               )}
+              {view && (
+                <div className="research-area">
+                  <span>
+                    <Icon name="target" size={14} /> Saved search area
+                  </span>
+                  {view.run.area || "No boundary recorded"}
+                </div>
+              )}
             </section>
-            {view && (
-              <section className="live-summary">
-                <div className="summary-label">
-                  <Icon name="check" size={18} />
-                  <span>What this result means</span>
-                </div>
-                <h2>
-                  {view.explanation?.headline ||
-                    "Review this run before using its findings."}
-                </h2>
-                <p>{view.explanation?.summary}</p>
-                <div className="summary-actions">
-                  {view.explanation?.check_by_hand?.map((t: string) => (
-                    <span key={t}>
-                      <Icon name="arrow" size={13} />
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              </section>
-            )}
+            {view && <RunSummary view={view} onExpand={showSummary} />}
           </div>
           {(view || busy) && (
             <aside className="side-panel real-panel">
               <div className="panel-header">
                 <div className="panel-tabs">
-                  {["findings", "evaluation", "trace"].map((t) => (
+                  {["findings", "evaluation", "trace", "summary"].map((t) => (
                     <button
                       key={t}
-                      onClick={() => setTab(t)}
+                      onClick={() => {
+                        setTab(t);
+                        setFocusedRef(null);
+                      }}
                       className={tab === t ? "active" : ""}
                     >
                       {t === "findings"
                         ? `Findings${view ? " · " + sites.length : ""}`
                         : t === "trace"
-                          ? "Activity"
-                          : "Evaluation"}
+                          ? "Actions"
+                          : t === "summary"
+                            ? "Summary"
+                            : "Evaluation"}
                     </button>
                   ))}
                 </div>
               </div>
-              <div className="panel-content">
+              <div
+                className="panel-content"
+                key={`${view?.run.id || "live"}-${tab}`}
+              >
                 {!view ? (
                   <>
                     <div className="section-kicker">Live research</div>
@@ -1081,14 +1224,7 @@ export default function App() {
                           <button
                             key={s.id}
                             className={`candidate-row ${selected === s.id ? "selected" : ""}`}
-                            onClick={() => {
-                              setSelected(s.id);
-                              // On a phone the map sits above the list: bring it into view.
-                              if (window.matchMedia("(max-width: 800px)").matches)
-                                document
-                                  .querySelector(".map-stage")
-                                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                            }}
+                            onClick={() => setSelected(s.id)}
                           >
                             <span className="candidate-index">
                               {String(i + 1).padStart(2, "0")}
@@ -1130,27 +1266,26 @@ export default function App() {
                         aria-label="Tool-returned imagery"
                       >
                         {chips
-                          .map((f: any, index: number) => ({ f, index }))
-                          .filter(({ f }: any) => f.properties.tile_url)
+                          .filter((f: any) => f.properties.tile_url)
                           .slice(0, 24)
-                          .map(({ f, index }: any, i: number) => (
-                            <figure key={index}>
+                          .map((f: any, i: number) => (
+                            <figure key={i}>
                               <button
-                                type="button"
-                                className="evidence-thumb"
-                                aria-label={`Show imagery ${f.properties.node || i + 1} on the map`}
-                                onClick={() =>
-                                  setFocusChip({ index, nonce: Date.now() })
-                                }
-                              >
-                              <img
-                                src={f.properties.tile_url}
-                                alt={`Tool-returned imagery ${f.properties.node || i + 1}`}
-                                loading="lazy"
-                                onError={(e) => {
-                                  e.currentTarget.hidden = true;
+                                className="chip-open"
+                                aria-label={`Open imagery result ${i + 1} on map`}
+                                onClick={() => {
+                                  setSelected(null);
+                                  setSelectedChip(chips.indexOf(f));
                                 }}
-                              />
+                              >
+                                <img
+                                  src={f.properties.tile_url}
+                                  alt={`Tool-returned imagery ${f.properties.node || i + 1}`}
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    e.currentTarget.hidden = true;
+                                  }}
+                                />
                               </button>
                               <figcaption>
                                 {f.properties.ref} ·{" "}
@@ -1163,380 +1298,51 @@ export default function App() {
                           ))}
                       </div>
                     )}
-                    <section className="answer-section">
-                      <h3>Final answer</h3>
+                    <Disclosure id="full-answer" title="Full agent answer">
                       <Text value={view.final_answer} />
-                    </section>
-                    <details className="source-details">
-                      <summary>
-                        Check all {view.claims.length} declared source values
-                      </summary>
+                    </Disclosure>
+                    <Disclosure
+                      id="source-values"
+                      title={`Check all ${view.claims.length} declared source values`}
+                    >
                       <DataTable rows={view.claims} />
-                    </details>
-                    {view.scorecard && (
-                      <button
-                        className="review-cta"
-                        onClick={() => setTab("evaluation")}
-                      >
-                        <span>
-                          <strong>Do you agree with the judges?</strong>
-                          Review each rubric question in Evaluation. Your
-                          review is kept beside the score and can teach the
-                          judges.
-                        </span>
-                        <Icon name="arrow" size={16} />
-                      </button>
-                    )}
+                    </Disclosure>
+                    <button
+                      className="secondary"
+                      onClick={() => setTab("evaluation")}
+                    >
+                      Review evaluation scores →
+                    </button>
                   </>
                 ) : tab === "evaluation" ? (
                   <>
-                    <div className="evaluation-heading">
-                      <div>
-                        <div className="section-kicker">Quality and trust</div>
-                        <h2>Evaluation</h2>
-                      </div>
-                      <button
-                        className="secondary small"
-                        disabled={busy}
-                        onClick={() => void rejudge()}
-                        title="Asks the panel again. Unchanged evidence adds votes to the ones already recorded."
-                      >
-                        Judge again
-                      </button>
-                    </div>
-                    <div className="score-hero">
-                      <strong>
-                        {formatScore(view.kpis.score)}
-                        {view.kpis.score !== null && <small>/100</small>}
-                      </strong>
-                      <div>
-                        <span>
-                          {view.kpis.verdict === "scored"
-                            ? `${view.kpis.confidence || "Unknown"} agreement`
-                            : view.kpis.verdict}
-                        </span>
-                        {view.scorecard && (
-                          <p>
-                            {view.scorecard.pass_count}{" "}
-                            {view.scorecard.pass_count === 1 ? "pass" : "passes"}{" "}
-                            ·{" "}
-                            {
-                              Object.values(
-                                (Object.values(view.scorecard.votes_all || {})[0] ||
-                                  {}) as Record<string, number[]>,
-                              ).flat().length
-                            }{" "}
-                            votes per question
-                            {view.scorecard.overall_se > 0 &&
-                              ` · ±${formatScore(view.scorecard.overall_se)}`}
-                          </p>
-                        )}
-                        {view.scorecard?.overall_range &&
-                          view.scorecard.pass_count > 1 && (
-                            <p>
-                              Single passes scored{" "}
-                              {formatScore(view.scorecard.overall_range[0])}–
-                              {formatScore(view.scorecard.overall_range[1])}
-                            </p>
-                          )}
-                      </div>
-                    </div>
-                    <p className="fine-print">
-                      Agreement is how closely the judges agree on the evidence,
-                      not a probability that the answer is correct. Judging
-                      unchanged evidence again adds votes, so the score settles
-                      rather than flips.
-                    </p>
-                    <div className="mini-stats">
-                      <Stat
-                        label="Workflow"
-                        value={formatScore(view.kpis.workflow)}
-                      />
-                      <Stat
-                        label="Output"
-                        value={formatScore(view.kpis.output)}
-                      />
-                      <Stat
-                        label="Trace"
-                        value={
-                          view.kpis.trace_integrity ? "Intact" : "Needs review"
-                        }
-                      />
-                    </div>
-                    {view.licences?.presentable === false && (
-                      <p className="notice">
-                        Some source licences need review before sharing these
-                        results. See Sources and licences below.
-                      </p>
-                    )}
-                    {view.source_check_note && (
-                      <p className="notice">{view.source_check_note}</p>
-                    )}
-                    {view.kpis.not_scored_cause && (
-                      <p className="notice">{view.kpis.not_scored_cause}</p>
-                    )}
-                    <div className="scorecard-head">
-                      <h3 className="section-title">Rubric scorecard</h3>
-                      <span className="vote-key" aria-hidden="true">
-                        <i className="vote v2" /> yes <i className="vote v1" />{" "}
-                        partly <i className="vote v0" /> no
-                      </span>
-                    </div>
-                    {view.scorecard && view.kpis.score !== null && (
-                      <p className="fine-print">
-                        Open a question to read the judges’ reasons and give
-                        your own assessment.
-                      </p>
-                    )}
-                    {view.scorecard?.criteria?.map((c: any) => (
-                      <CriterionCard
-                        key={c.id}
-                        c={c}
-                        view={view}
-                        draft={drafts[c.id]}
-                        reviewable={!!view.scorecard && view.kpis.score !== null}
-                        onDraft={(d) =>
-                          setDrafts((old) => {
-                            const next = { ...old };
-                            if (d) next[c.id] = d;
-                            else delete next[c.id];
-                            return next;
-                          })
-                        }
-                      />
-                    ))}
-                    <ReviewBar
-                      view={view}
-                      drafts={drafts}
-                      onSaved={() => {
-                        setDrafts({});
-                        void request<View>(`/api/runs/${view.run.id}`)
-                          .then(setView)
-                          .catch((e) => setError(e.message));
-                      }}
-                    />
-                    <SavedReviews
+                    <Evaluation
                       view={view}
                       busy={busy}
-                      onReconsider={(id) => void reconsider(id)}
-                    />
-                    <h3 className="section-title">
-                      Every condition in your request
-                    </h3>
-                    {view.conditions ? (
-                      <>
-                        <p>
-                          {view.conditions.supported}/{view.conditions.total}{" "}
-                          code-checked cells supported. Target identity and
-                          other conditions may still need judge or human review.
-                        </p>
-                        {view.conditions.error && (
-                          <p className="error-message">
-                            {view.conditions.error}
-                          </p>
-                        )}
-                        {view.conditions.rows?.map((row: any, i: number) => (
-                          <div className="condition-row" key={i}>
-                            <strong>{row.claim}</strong>
-                            {row.cells.map((cell: any) => {
-                              const condition = view.conditions.conditions.find(
-                                (c: any) => c.id === cell.condition_id,
-                              );
-                              return (
-                                <div key={cell.condition_id}>
-                                  <span className={`status-tag ${cell.status}`}>
-                                    {cell.status}
-                                  </span>
-                                  <b>{condition?.text || cell.condition_id}</b>
-                                  <p>{cell.reason}</p>
-                                  <small>{cell.refs?.join(" · ")}</small>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </>
-                    ) : (
-                      <p className="notice">
-                        No request-condition matrix is stored for this run. It
-                        is not treated as fully compliant.
-                      </p>
-                    )}
-                    <h3 className="section-title">Independent judge panel</h3>
-                    {view.scorecard?.judges?.map((j: any) => {
-                      const all = Object.values(
-                        view.scorecard.votes_all || {},
-                      ).flatMap((v: any) => v[j.key] || []) as number[];
-                      const mean = all.length
-                        ? (all.reduce((a, b) => a + b, 0) / all.length / 2) * 100
-                        : null;
-                      return (
-                        <div key={j.key} className="judge-line">
-                          <div>
-                            <strong>{j.key}</strong>
-                            <small>
-                              {j.family}
-                              {j.recused_for ? ` · sitting for ${j.recused_for}` : ""}
-                              {j.stood_in_for ? ` · replacing ${j.stood_in_for}` : ""}
-                              {j.temperature === null ? " · model’s default sampling" : ""}
-                            </small>
-                          </div>
-                          <span>
-                            {j.status === "ok" && mean !== null
-                              ? `${formatScore(mean)}/100`
-                              : "Unavailable"}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    {view.scorecard?.passes_dropped > 0 && (
-                      <p className="fine-print">
-                        {view.scorecard.passes_dropped} slow{" "}
-                        {view.scorecard.passes_dropped === 1 ? "pass was" : "passes were"}{" "}
-                        left out so the score didn’t wait on it.
-                      </p>
-                    )}
-                    <h3 className="section-title">Cost and review effort</h3>
-                    <div className="mini-stats">
-                      <Stat
-                        label="Agent estimate"
-                        value={money(view.kpis.agent_cost_usd)}
-                      />
-                      <Stat
-                        label="Judge estimate"
-                        value={money(view.kpis.judging_cost_usd)}
-                      />
-                      <Stat
-                        label="Elapsed"
-                        value={
-                          view.kpis.runtime_s != null
-                            ? `${Math.round(view.kpis.runtime_s)}s`
-                            : "—"
-                        }
-                      />
-                    </div>
-                    <p className="fine-print">
-                      Token-based estimates, not a full AWS bill. Imagery
-                      procurement and analyst time are not included unless
-                      explicitly recorded.
-                    </p>
-                    <section className="reference-card">
-                      <h3 className="section-title">
-                        Independent reference check
-                      </h3>
-                      {view.reference && !view.reference.error ? (
-                        <>
-                          <p>
-                            {view.reference.concept} · {view.reference.place}
-                          </p>
-                          <div className="mini-stats">
-                            <Stat
-                              label="Known assets found"
-                              value={
-                                typeof view.reference.site_recall === "number"
-                                  ? `${Math.round(view.reference.site_recall * 100)}%`
-                                  : "Not defined"
-                              }
-                            />
-                            <Stat
-                              label="Cell precision"
-                              value={
-                                typeof view.reference.cell_precision ===
-                                "number"
-                                  ? `${Math.round(view.reference.cell_precision * 100)}%`
-                                  : "Not defined"
-                              }
-                            />
-                            <Stat
-                              label="Reference assets"
-                              value={view.reference.assets ?? "—"}
-                            />
-                          </div>
-                          <p className="fine-print">
-                            Reference completeness:{" "}
-                            {view.reference.completeness}. Matching uses{" "}
-                            {view.reference.cell_m} m cells and the archived
-                            any-touch rule; this is separate from the model
-                            judges’ score.
-                          </p>
-                          {view.reference.notes?.map((note: string) => (
-                            <p key={note} className="fine-print">
-                              {note}
-                            </p>
-                          ))}
-                          <details className="source-details">
-                            <summary>Reference source and full metrics</summary>
-                            <pre>
-                              {JSON.stringify(
-                                Object.fromEntries(
-                                  Object.entries(view.reference).filter(
-                                    ([k]) =>
-                                      !["features", "found", "missed"].includes(
-                                        k,
-                                      ),
-                                  ),
+                      onRejudge={() => void rejudge()}
+                      onExport={exportJson}
+                      onPrevious={(at) => void openPrevious(at)}
+                      reviewer={
+                        <Reviewer
+                          key={view.run.id}
+                          view={view}
+                          busy={busy}
+                          onReconsider={(id) => void reconsider(id)}
+                          onSaved={() =>
+                            void request<View>(`/api/runs/${view.run.id}`)
+                              .then((fresh) =>
+                                setView((old) =>
+                                  old?.run.id === fresh.run.id ? fresh : old,
                                 ),
-                                null,
-                                2,
-                              )}
-                            </pre>
-                          </details>
-                        </>
-                      ) : (
-                        <p className="notice">
-                          {view.reference?.error ||
-                            "No independent reference set is tied to this run. Recall, precision and transfer performance are not established."}
-                        </p>
-                      )}
-                    </section>
-                    <details className="source-details">
-                      <summary>
-                        Sources, licences and presentation limits
-                      </summary>
-                      <p>
-                        Presentation status:{" "}
-                        <b>
-                          {view.licences?.presentable === true
-                            ? "No recorded blockers"
-                            : view.licences?.presentable === false
-                              ? "Needs licence review"
-                              : "Not recorded"}
-                        </b>
-                      </p>
-                      <div className="licence-list">
-                        {view.licences?.items?.map((item: any, i: number) => (
-                          <div key={i}>
-                            <strong>{item.name}</strong>
-                            <span
-                              className={`status-tag ${item.presentable === true ? "supported" : "unverified"}`}
-                            >
-                              {item.presentable === true
-                                ? "Recorded as presentable"
-                                : "Check terms"}
-                            </span>
-                            <p>{item.licence || "Licence not recorded"}</p>
-                          </div>
-                        ))}
-                      </div>
-                      <details>
-                        <summary>Full licence record</summary>
-                        <pre>{JSON.stringify(view.licences, null, 2)}</pre>
-                      </details>
-                    </details>
-                    <div className="export-actions">
-                      <a
-                        className="secondary"
-                        href={endpoint(`/reports/${view.run.id}`)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open static report <Icon name="external" size={14} />
-                      </a>
-                      <button className="secondary" onClick={exportJson}>
-                        Export evidence JSON
-                      </button>
-                    </div>
+                              )
+                              .catch((e) => setError(e.message))
+                          }
+                        />
+                      }
+                    />
                   </>
+                ) : tab === "summary" ? (
+                  <DetailedSummary view={view} />
                 ) : (
                   <>
                     <div className="section-kicker">Reproducible activity</div>
@@ -1545,17 +1351,28 @@ export default function App() {
                       Open any step to inspect the saved tool arguments, results
                       or model reply.
                     </p>
-                    <Trace entries={timeline} focusedRef={focusedRef} />
+                    <Trace
+                      entries={timeline}
+                      focusedRef={focusedRef}
+                      onZoom={(bounds) => {
+                        setSelected(null);
+                        setSelectedChip(null);
+                        setFocusBounds([...bounds]);
+                      }}
+                    />
                     <details className="source-details">
                       <summary>Run metadata</summary>
                       <pre>{JSON.stringify(view.run, null, 2)}</pre>
                     </details>
-                    {view.narrative && (
-                      <>
-                        <h3 className="section-title">Run summary</h3>
-                        <Text value={view.narrative} />
-                      </>
-                    )}
+                    <Disclosure
+                      id="datasets-used"
+                      title="Datasets and sources accessed"
+                    >
+                      <pre>{JSON.stringify(view.datasets || [], null, 2)}</pre>
+                    </Disclosure>
+                    <button className="secondary" onClick={showSummary}>
+                      Read the run summary →
+                    </button>
                   </>
                 )}
               </div>
@@ -1575,43 +1392,36 @@ export default function App() {
         <a href={endpoint("/")}>Classic console</a>
       </footer>
       {modal && (
-        <div className="modal-backdrop" onClick={() => setModal(false)}>
-          <section
-            className="about-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="About this workspace"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className="close-panel"
-              aria-label="Close about"
-              onClick={() => setModal(false)}
-              autoFocus
-            >
-              <Icon name="x" />
-            </button>
-            <span className="section-kicker">Built for the analyst</span>
-            <h2>Research you can inspect.</h2>
-            <p>
-              Foundry connects a tool-using agent, its evidence, independent
-              model judges and your review in one workspace.
-            </p>
-            <p>
-              Start a request, inspect the returned imagery and claims, then use
-              Evaluation to see what was supported and what needs checking.
-              Reference accuracy is reported only when a suitable reference set
-              is attached.
-            </p>
-            <p>
-              Your AWS and LGND credentials remain on the backend. Run history
-              and reviews are saved in the configured deployment archive.
-            </p>
-            <button className="primary" onClick={() => setModal(false)}>
-              Back to workspace
-            </button>
-          </section>
-        </div>
+        <Dialog title="About this workspace" onClose={() => setModal(false)}>
+          <p>
+            Foundry records what an agent did, its tool evidence, rubric ratings
+            and your review. The /100 number evaluates workflow and output; it
+            is not confidence or verified accuracy.
+          </p>
+          <p>
+            AWS and LGND credentials stay on the backend. Run records live in
+            the configured archive. Display settings are saved only in this
+            browser.
+          </p>
+        </Dialog>
+      )}
+      {settingsOpen && (
+        <Accessibility
+          value={preferences}
+          onChange={setPreferences}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {previous && (
+        <Dialog title="Earlier judgement" onClose={() => setPrevious(null)}>
+          <p>
+            Judged {localTime(previous.judged_at)} · Run {previous.run_id}
+          </p>
+          <p>
+            Rubric evaluation score: {formatScore(previous.panel?.overall)}/100
+          </p>
+          <pre>{JSON.stringify(previous, null, 2)}</pre>
+        </Dialog>
       )}
     </div>
   );
@@ -1619,7 +1429,9 @@ export default function App() {
 function Trace({
   entries,
   focusedRef,
+  onZoom,
 }: {
+  onZoom?: (bounds: number[]) => void;
   entries: any[];
   focusedRef?: string | null;
 }) {
@@ -1650,6 +1462,11 @@ function Trace({
             </span>
             <Icon name="chevron" size={14} />
           </summary>
+          {e.bounds?.length === 4 && onZoom && (
+            <button className="secondary" onClick={() => onZoom(e.bounds)}>
+              Show this step on map
+            </button>
+          )}
           {e.detail && <p>{e.detail}</p>}
           <pre>{JSON.stringify(e.raw || e, null, 2)}</pre>
         </details>
