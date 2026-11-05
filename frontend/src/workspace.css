@@ -2819,3 +2819,15 @@ html[data-colour="colour-safe"] .vote.v0 {
   color: #7c8e8f !important;
   margin: -4px 0 10px !important;
 }
+
+/* MapLibre re-expands its compact attribution whenever the attribution list refreshes (load, basemap
+   switch), so it kept opening over the legend. Keep it folded to its (i) unless hovered or focused
+   (a tap focuses it on touch screens); the credit is always one gesture away. */
+.evidence-map .maplibregl-ctrl-attrib.maplibregl-compact:not(:hover):not(:focus-within) {
+  padding: 2px 24px 2px 0 !important;
+}
+.evidence-map
+  .maplibregl-ctrl-attrib.maplibregl-compact:not(:hover):not(:focus-within)
+  .maplibregl-ctrl-attrib-inner {
+  display: none !important;
+}
