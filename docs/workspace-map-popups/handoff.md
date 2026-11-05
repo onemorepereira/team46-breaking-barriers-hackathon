@@ -1,5 +1,7 @@
 # Handoff: workspace map popups and fast run opening
 
+> **Later change (2026-11-05):** the map popups were replaced by an imagery inspector beside the map (PR #15), now a full-height slide-out panel (PR #26). The faster run opening stands. See [judging stability](../judging-stability/handoff.md#merged-with-pr-15-2026-11-05).
+
 ## What changed
 - **Imagery on the map** (`frontend/src/Map.tsx`): every imagery result the tools returned shows as a dot while zoomed out (its ~150 m footprint is invisible at county zoom) and as its footprint up close, coloured by inside/outside the requested area. Clicking a dot or footprint opens a popup with the tile, the chip ID, index, observation date, similarity, coordinates, inside/outside, the step it came from (`from T1`) and the imagery source — the details the classic console's panel shows.
 - **Locations**: choosing a reported location (marker or list row) zooms in to at least z14, so stacked markers separate, and opens the same popup with the imagery the claim names (`chip naip/obs:…`), else the nearest result within 300 m (`chipFor` in `api.ts`).

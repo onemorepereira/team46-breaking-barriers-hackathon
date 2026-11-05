@@ -1,6 +1,6 @@
 # ADB Alignment: Design
 
-**Spec:** [spec.md](spec.md)   **Status:** Agreed   **Last updated:** 2026-11-04
+**Spec:** [spec.md](spec.md)   **Status:** Current (built in PR #9; [handoff](handoff.md))   **Last updated:** 2026-11-04
 
 ## Shape
 | Piece | Where | What it does | Kind |

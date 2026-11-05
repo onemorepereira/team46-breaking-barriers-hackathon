@@ -1,5 +1,7 @@
 # Judge Panel and Foundry Console — Spec
 
+> **Later changes (2026-11-05):** a criterion's score is now the mean of every vote over three concurrent passes, not the median ([judging stability](../judging-stability/handoff.md)); the rubric is version 3, with condition compliance and visual confirmation also measured by code ([visual check](../visual-check/handoff.md)). The [judging guide](guide.md) describes the system as it is now.
+
 **Track:** Standard   **Product stage:** Introduction
 **Status:** Built   **Last updated:** 2026-11-04
 

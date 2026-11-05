@@ -1,5 +1,7 @@
 # Value checker v2 — local handoff
 
+> **Later change:** this was merged in PR #7 (2026-11-04) as value matcher version 3, the version the judging guide describes.
+
 Aditya / Codex, 2026-11-04. Branch `slice/evidence-matching` follows `slice/plain-verdict`.
 
 ## What changed

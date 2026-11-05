@@ -6,11 +6,13 @@ How to set up, run, extend and debug the Team Foundry eval harness. For the proj
 
 | Need | For | Notes |
 | --- | --- | --- |
-| [`uv`](https://docs.astral.sh/uv/) | everything | It installs Python 3.12 and every dependency (`uv sync`). CI pins uv 0.13.6 |
+| [`uv`](https://docs.astral.sh/uv/) | everything | It installs Python 3.12 and every dependency (`uv sync`), including rasterio, Pillow and numpy for reading observed scenes and open imagery. CI pins uv 0.13.6 |
 | Nothing else | the test suite, `replay`, `check`, `compare` on local archives, the console over recorded runs | The suite is fully offline |
 | AWS credentials for the sandbox account (`us-west-2`) | agent runs, judging, S3 archives | Bedrock model access: Sonnet 5.5, Kimi K3 and the judge models in `harness.yaml` |
 | An LGND Geo login | LGND imagery tools | One time: `uv run harness lgnd-login` saves the login to Secrets Manager. Teams are whitelisted for the event |
-| Node.js and podman (or Docker) | deploying the AgentCore stack | `cd infra && CDK_DOCKER=podman npx aws-cdk deploy` |
+| Node.js and podman (or Docker) | deploying the AgentCore stack | `cd infra && CDK_DOCKER=podman npx aws-cdk deploy`. CDK builds the agent image from the repo's `Dockerfile` (linux/arm64, `python:3.12-slim` plus `libexpat1`, which the rasterio wheel needs) |
+| Node.js 22 and pnpm 11 | rebuilding the `/workspace/` frontend only | The built assets are committed in `harness/web/static/workspace/`; see the [workspace guide](workspace/README.md) |
+| Playwright | the browser probes in `tests/browser/` only | `uv run --no-project --with playwright python tests/browser/<probe>.py …`, against a running console |
 
 ## 2. First run
 
@@ -27,7 +29,7 @@ Then, with AWS credentials in your shell:
 uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend local
 ```
 
-This runs the agent as a local subprocess, archives every span to `archive/runs/<run-id>/`, judges the run (`judging.auto`) and writes `out/<run-id>/report.html`. It also archives the run's result tiles (`tiles.archive`). The console does the same from its prompt box, live.
+This runs the agent as a local subprocess, archives every span to `archive/runs/<run-id>/`, judges the run (`judging.auto`; the visual check, `visual_check`, runs alongside the judge panel) and writes `out/<run-id>/report.html`. It also archives the run's result tiles (`tiles.archive`). The console does the same from its prompt box, live.
 
 **Credentials.** The harness uses the standard AWS credential chain (boto3): environment variables, a profile, or SSO. The hackathon sandbox hands out **temporary session credentials that expire after a few hours**. When they do, Bedrock calls fail with `ExpiredTokenException`. Keep them in a file **outside the repo**, `source` it in the shell that runs the harness or the console, and restart the console after refreshing them. A run whose model calls all fail is recorded as **not scored**, not FAILED.
 
@@ -39,9 +41,11 @@ harness (CLI or console) ── plans a run ──▶ agent (local subprocess, o
    │                                          ├─ tools/: RODA MCP (stdio) · LGND Geo MCP (HTTP + OAuth)
    │                                          └─ hooks ─▶ OpenTelemetry harness.* spans ─▶ archive (file:// or s3://)
    └─ reads the archive only ──▶ analysis/ (check, provenance, signals, timeline, judging/measure+dossier)
+                              ├─ harness/visual.py (sharp.py, scenes.py) ─▶ open imagery + vision model ─▶ runs/<id>/visual.json
                               ├─ harness/judge.py ─▶ judge tribunal on Bedrock ─▶ runs/<id>/judgement.json
                               ├─ report (out/<id>/report.html) · runs-table row (out/<id>/row.json)
-                              └─ console (harness/web): FastAPI + Tabler + MapLibre, SSE live stream, tile cache
+                              └─ console (harness/web): FastAPI + Tabler + MapLibre, SSE live stream, tile cache;
+                                 the React workspace (frontend/, built into harness/web/static/workspace) at /workspace/
 ```
 
 The layers (`core` → `tools` → `agent`; `analysis`; `harness`) and their import rules are in the [README code layout](../README.md#code-layout), enforced by `tests/test_layers.py`. The scoring method is in the [judging guide](judging/guide.md).
@@ -57,11 +61,16 @@ The layers (`core` → `tools` → `agent`; `analysis`; `harness`) and their imp
 | `tool_results/T<n>.a<attempt>.txt` | agent | the full, raw result of each tool call |
 | `result.json` | agent, at end | status, final answer, tool refs |
 | `summary.json` | harness (`narrative_model`) | the plain-English narrative |
+| `conditions.json` | harness (`narrative_model`), before judging | the distance conditions read from the prompt, for `condition_compliance` |
+| `visual.json`, `visual/<site_id>.jpg` | the visual check, during judging | each reported site's verdict and reason, the check's cost, and the image each site was checked against ([visual check](visual-check/handoff.md)) |
+| `reference/reference.json`, `features.geojson`, `tie.json` | `harness run --reference`, `harness reference tie` | the snapshot of the reference set the run is scored against |
 | `judgement.json` | `harness judge` / auto-judge | every judge's votes, rationales, refs, costs, and the aggregate; or `not_scored` |
 | `calibration.json` | `harness calibrate` | planted-defect results |
 | `calibration-feedback.json` | `harness calibrate --feedback` | wrong-, pushy-, injected- and right-review results |
 | `judgements/<judged_at>.json` | `harness judge`, reconsideration | every earlier judgement of the run, kept whole when it's replaced |
-| `tiles/<index>/<key>.jpg` | report time | the imagery under each result ([tile cache](tile-cache/design.md)) |
+| `tiles/<index>/<key>.jpg` | report time | the imagery under each result, the observed scene when there is one ([tile cache](tile-cache/design.md), [observed scenes](observed-scenes/handoff.md)) |
+
+Outside `runs/`, the same archive holds `suites/<suite-id>/suite.json` (a suite's run IDs) and `feedback/` (reviews, quick reactions, and the judging guidance with its versions, log and evaluations).
 
 **Local output** (`out_dir`, default `out/`, not committed):
 
@@ -70,15 +79,16 @@ The layers (`core` → `tools` → `agent`; `analysis`; `harness`) and their imp
 | `index.json` | run ID → archive URI, suite ID → archive URI |
 | `<run-id>/report.html` | the static report |
 | `<run-id>/row.json` | the console's runs-table row (`harness/rows.py`) |
-| `<run-id>/live.jsonl`, `rejudge.jsonl` | the console's live span stream |
-| `<suite-id>/compare.html`, `compare.csv` | `harness compare` |
+| `<run-id>/live.jsonl`, `rejudge.jsonl`, `reconsider.jsonl` | the console's live event streams (a run, a re-judge, a reconsideration) |
+| `guidance/evaluate-<n>.jsonl` | the live stream of a guidance evaluation |
+| `<suite-id>/compare.html`, `compare.csv`, `concepts.csv` | `harness compare` |
 | `tile-cache/` | cached basemap and result tiles |
 | `geo-cache/` | resolved area boundaries (OpenStreetMap, US Census) |
 | `ui/` | prompts typed into the console |
 
 ## 5. Configuration reference (`harness.yaml`)
 
-Committed, and it holds no secrets. Unset keys take the defaults in `harness/config.py`. Run `--config <path>` to use another file; a `<name>.local.yaml` next to it is merged on top in the same way.
+Committed, and it holds no secrets. Unset keys take the defaults in `harness/config.py`; the `tiles` and `visual_check` blocks take theirs from `harness/tiles.py` and `harness/visual.py`. Run `--config <path>` to use another file; a `<name>.local.yaml` next to it is merged on top in the same way.
 
 **Your own sandbox:** put account-specific values (`archive_uri`, `lgnd_secret_id`, `runtime_arn`, from your stack's CDK outputs) in `harness.local.yaml` next to `harness.yaml`. It's git-ignored, and it's merged on top key by key, nested blocks included. It can override any value but not remove a key: to drop a judge, for example, set the whole `judging.panel` list. The committed file never needs your changes. See [your own AWS sandbox](factory.md#your-own-aws-sandbox).
 
@@ -92,12 +102,12 @@ Committed, and it holds no secrets. Unset keys take the defaults in `harness/con
 | `lgnd_secret_id` | none | Secrets Manager ARN holding the LGND Geo login (CDK output `LgndSecretArn`) |
 | `runtime_arn` | none | AgentCore runtime (CDK output `RuntimeArn`) |
 | `out_dir` | `out` | Local output (see §4) |
-| `models.<key>` | none | One entry per model: `id` (Bedrock model or inference-profile ID), `family` (drives judge recusal), `agent` (`false` for judge-only models), `max_tokens`, `request_fields` (passed to Converse, e.g. Claude thinking) |
+| `models.<key>` | none | One entry per model: `id` (Bedrock model or inference-profile ID), `family` (drives judge recusal), `agent` (`false` for judge-only models), `max_tokens`, `request_fields` (passed to Converse on agent runs, e.g. Claude thinking), `judge_request_fields` (passed to Converse when the model judges; none if unset) |
 | `judging.rubric` | none | Rubric YAML, e.g. `rubrics/geo-dataset-v1.yaml` |
 | `judging.panel` | none (required to judge) | Seated judges, by model key: an odd number, one per family |
 | `judging.reserves` | `[]` | In order: sit for a judge that recuses, or stand in for one that fails |
 | `judging.recuse_same_family` | `true` | A judge sharing the agent's family steps down |
-| `judging.passes` | `1` | Panel passes per run; `--passes` overrides |
+| `judging.passes` | `1` | Panel passes per run, run at the same time; `--passes` overrides. A judged criterion's score is the mean of every valid vote across passes |
 | `judging.auto` | off | Judge every finished run (`harness run`, the console) |
 | `judging.guidance` | `true` | Apply this deployment's approved guidance to every judge's prompt ([judge feedback](judge-feedback/spec.md)) |
 | `judging.reconsider` | `true` | Let reviewers ask the judges to reconsider a run with their review |
@@ -158,7 +168,7 @@ Per-run limits (40 steps, 400k input and 200k output tokens, 600 s wall clock, 6
 2. Add a suite file in `suites/` listing prompts × models.
 3. To offer it in the console, add a card to `harness/web/static/examples.json`, and check that its area resolves (`harness.area.area_for_prompt`).
 
-**Swap the rubric.** Write it in the shape of `rubrics/geo-dataset-v1.yaml`: criteria with anchors for 0, 1 and 2, dimensions, failure modes, gates, and a `calibration:` map. Point `judging.rubric` at it. No code changes; only the two measured criteria are named in code. Then run `harness calibrate` on a known-good run.
+**Swap the rubric.** Write it in the shape of `rubrics/geo-dataset-v1.yaml` (id `geo-dataset`, version 3): criteria with a dimension, a kind (`judged` with anchors for 0, 1 and 2, or `measured`), failure modes, `fatal` gates, and a `calibration:` map. Point `judging.rubric` at it. No code changes, unless you add a measured criterion: only the four measured criteria (`claim_provenance`, `area_compliance`, `condition_compliance`, `visual_confirmation`) are named in code (`analysis/judging/rubric.py:MEASURED`). Then run `harness calibrate` on a known-good run.
 
 **Change the judges.** Edit `judging.panel` and `judging.reserves` in `harness.yaml`. Keep the panel odd and one judge per `family`. Add the model under `models` with `agent: false`, and give it a sourced price. See the [judging guide](judging/guide.md) for recusal and stand-ins.
 
@@ -179,9 +189,10 @@ Per-run limits (40 steps, 400k input and 200k output tokens, 600 s wall clock, 6
 - **Run:** type a prompt or click an example card, pick the agent model, then **Run & judge**. Steps stream in plain English, then each judge's verdict.
 - **The map:** results are outlined cyan inside the requested area and orange outside. Click a result, or a tile in the strip under the map, to open its details in the panel docked inside the map (Esc or × closes it). The mouse wheel scrolls the page; zoom the map with Ctrl or ⌘ plus the wheel, a pinch, or its + and − buttons.
 - **Step links** (`T3`, "from T5"): these scroll the "What the agent did" list to that step without moving the page. If the list is off screen, a small "Show" prompt offers the jump.
-- **Judge again:** on any finished run, re-scores it from its archived trace. It doesn't re-run the agent.
+- **Re-judge:** on any finished run, re-scores it from its archived trace. It doesn't re-run the agent. It reuses the visual check's final verdicts, and checks again only sites that errored or ran out of time.
+- **Workspace:** `/workspace/` is the React evidence workspace on the same origin ([workspace guide](workspace/README.md)). Its map shows the visual check: markers carry ✓ (seen), ✕ (not seen) or ? (can't tell), and selecting a site opens the image it was checked against, with a switch to the agent's own chip.
 - **Runs:** every archived run, newest first, 50 at a time.
-- **API:** the reference at `/api/docs`. It needs internet access (it loads Scalar from jsDelivr); `/openapi.json` always works offline.
+- **API:** the reference at `/api/docs`. It needs internet access (it loads Scalar from jsDelivr); `/openapi.json` always works offline. It covers runs (`/api/runs…`, including `/api/runs/{run_id}/visual/{site_id}.jpg`), judging, reviews and reactions, guidance (`/api/guidance…`), `/api/models`, and the tiles (`/tiles/base/{source}/{z}/{x}/{y}.jpg`, and `/tiles/chip/{idx}/{bbox}.jpg` with `?run=` and `?observed=YYYY-MM-DD` for the observed scene).
 
 ## 9. Testing
 
@@ -189,10 +200,11 @@ Per-run limits (40 steps, 400k input and 200k output tokens, 600 s wall clock, 6
 - **Building runs:** `tests/fixtures/builder.py` (`RunBuilder`, `standard_run`) writes a realistic archived run, so analysis, judging, report and console tests work from real files.
 - **Faking judges:** `tests/test_judging.py:FakeBedrock`.
 - **Infrastructure:** `uv run --group infra pytest tests/test_infra.py` synthesizes the CDK stack and checks the IAM, bucket, log-retention, image-scanning and container rules ([AWS hardening](aws-hardening/spec.md)). It's skipped without the `infra` group; CI runs it.
-- **Faking tile providers:** `tests/test_tiles.py`.
+- **Faking tile providers:** `tests/test_tiles.py`; observed scenes `tests/test_scenes.py`; open-imagery catalogues `tests/test_sharp.py`; the visual check `tests/test_visual.py`.
 - **Real end-to-end subprocess runs:** `HARNESS_TEST_SCRIPT` drives the agent with `tools/scripted.py`.
+- **Browser probes** (not collected by pytest): `tests/browser/console_probe.py [RUN_ID]` and `tests/browser/visual_check_probe.py RUN_ID`, against a running `harness ui`, via `uv run --no-project --with playwright python …`. Each prints one JSON object and exits 1 if a check fails.
 - **Live checks** (real Bedrock, LGND, S3) aren't in CI. Each feature's `handoff.md` records the live runs that proved it.
-- **CI** runs ruff (lint and format), mypy, pytest, the infrastructure checks and gitleaks; see [CONTRIBUTING](../CONTRIBUTING.md#before-you-push).
+- **CI** runs ruff (lint and format), mypy, pytest, the infrastructure checks, the frontend tests and build (and checks the committed build is current), and gitleaks; see [CONTRIBUTING](../CONTRIBUTING.md#before-you-push).
 
 ## 10. Troubleshooting
 

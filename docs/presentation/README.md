@@ -5,9 +5,10 @@ Team Foundry (Team 46): Aditya Pasarti · Farhan Shahriar · Uday Kandi · Migue
 | File | What it is |
 | --- | --- |
 | [`deck.html`](deck.html) | The deck: 11 slides, one self-contained file (no internet needed) |
+| [`deck-5min.html`](deck-5min.html) | A 5-minute version: 6 slides, with the live demo after the architecture slide (PR #16) |
 | [`deck.pdf`](deck.pdf) | The same deck as a PDF, for the judges and as a backup |
 | [`demo.md`](demo.md) | The 2-minute live demo (judging an existing run), its pre-flight checklist and fallbacks |
-| [`claims.md`](claims.md) | Every number in the deck, with its source in the repo |
+| [`claims.md`](claims.md) | Every number in the deck, with its source in the repo, and which ones are now out of date |
 | [`one-pager.md`](one-pager.md) | A plain-language explainer for ADB and Clay |
 | [`qa.md`](qa.md) | Likely questions, with short sourced answers |
 | [`spec.md`](spec.md) | What this slice set out to deliver |

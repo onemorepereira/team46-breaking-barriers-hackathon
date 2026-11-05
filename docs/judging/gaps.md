@@ -1,6 +1,6 @@
 # Track 1 against the briefs: what we cover, and what's missing
 
-**As of:** 2026-11-04, branch `design/eval-harness`. References like (T114) or (V108) are line numbers in the [Technical](../Clay-Foundry-Technical-Hackathon.md) and [Vision](../Clay-Foundry-Vision-Hackathon.md) briefs. **[team]** marks our own assessment.
+**As of:** 2026-11-05, `main`. References like (T114) or (V108) are line numbers in the [Technical](../Clay-Foundry-Technical-Hackathon.md) and [Vision](../Clay-Foundry-Vision-Hackathon.md) briefs. **[team]** marks our own assessment.
 
 ## MVP success criteria and Definition of Done
 
@@ -8,12 +8,12 @@
 | --- | --- | --- |
 | An LLM harness performs the task by calling geospatial tools via MCP over public data (V108, V162) | **Done** | Strands on AgentCore, using RODA and LGND Geo MCP (`agent/`, `tools/`) |
 | Traces captured and summarized into a human-readable view (V109, T114–T115) | **Done** | `harness.*` OpenTelemetry spans archived to S3. Plain-language timeline in the console (`analysis/timeline.py`). Narrative generated from the trace (`harness/narrative.py`) |
-| Scored on two dimensions: workflow signals from the traces, and output quality against a rubric (V110, T116–T118, V163) | **Done** | Rubric `rubrics/geo-dataset-v1.yaml`: 4 workflow criteria and 6 output criteria, scored by measured checks plus a three-judge tribunal ([guide](guide.md)) |
+| Scored on two dimensions: workflow signals from the traces, and output quality against a rubric (V110, T116–T118, V163) | **Done** | Rubric `rubrics/geo-dataset-v1.yaml` (version 3): 4 workflow criteria and 8 output criteria. 8 are judged by a three-judge tribunal; 4 are measured: claim provenance, area compliance, request conditions and a visual check of reported sites ([guide](guide.md)) |
 | A per-run evaluation report (V112, T119) | **Done** | `out/<run>/report.html` (static), plus the console run page |
 | Tracing tool and model swappable, behind an abstraction (V113, V164, T10) | **Done** | OpenTelemetry exporter-swap CI test (AC4). Models are config keys (`harness.yaml`). Judges are config keys too |
-| Recorded traces replay through scoring (V114, V165, T121) | **Done** | `harness replay` re-grades and re-aggregates archived judgements without calling a model. The console renders archived runs offline (vendored assets) |
+| Recorded traces replay through scoring (V114, V165, T121) | **Done** | `harness replay` re-grades and re-aggregates archived judgements without calling a model, reading the archived request conditions and visual verdicts. The console renders archived runs offline (vendored assets) |
 | Code in an open-source repo (V166), Apache-2.0 (V33) | **Done** | Public GitHub repo, with `LICENSE` added on 2026-11-04 |
-| Trust and provenance first-class: every scored run keeps its traces, inputs and the rubric it was judged against (V34) | **Done** | `run.json` snapshots the prompt, prices and search area. `judgement.json` snapshots the rubric (with its sha256), seats, every vote and every rationale |
+| Trust and provenance first-class: every scored run keeps its traces, inputs and the rubric it was judged against (V34) | **Done** | `run.json` snapshots the prompt, prices and search area. `judgement.json` snapshots the rubric (with its sha256), seats, every vote and every rationale. `conditions.json` and `visual.json` (with each checked site image) keep the inputs of the two model-assisted measured criteria |
 
 ## Features in scope
 
@@ -26,7 +26,7 @@
 | Evaluation report | Must | Done |
 | Swappable tracing tool + model | Must | Done |
 | Recorded-trace replay | Must | Done |
-| Minimal UI to launch a run and read the report | Should | **Done, beyond minimal**: the Team Foundry console on FastAPI (T99) |
+| Minimal UI to launch a run and read the report | Should | **Done, beyond minimal**: the Team Foundry console on FastAPI (T99), and the React [workspace](../workspace/README.md) served from the same backend |
 | Second task, multi-agent traces | Exploratory | Not done |
 
 ## Technology table
@@ -34,14 +34,14 @@
 | Brief row | Status |
 | --- | --- |
 | Python 3.12+ (T71) | Done |
-| TypeScript / JavaScript thin UI (T72) | Done in plain JavaScript (no build step). The Tabler, MapLibre, marked and DOMPurify libraries are vendored |
+| TypeScript / JavaScript thin UI (T72) | Done twice: the classic console in plain JavaScript (no build step; Tabler, MapLibre, marked and DOMPurify vendored), and the workspace in React and TypeScript (`frontend/`, built with Vite; the built assets are committed so Python deployments need no Node) |
 | Agent framework kept swappable (T86) | Done: Strands; the harness only sees OpenTelemetry spans |
 | MCP SDK + geospatial MCP servers (T87) | Done: RODA and LGND Geo. **Gap:** none from Clay's geoMCP shortlist (V189–V190), which we never received |
 | Tracing tool, OpenTelemetry default (T88) | Done |
 | boto3 (T90) | Done |
 | FastAPI, the thin API behind the UI (T99) | **Done** (it was the stdlib `http.server` until 2026-11-04) |
 | Geospatial stack: rasterio / GDAL / xarray / pystac (T89) | **Partly used.** The agent reaches imagery through LGND Geo's MCP tools. The harness reads COG windows with rasterio for result tiles ([observed scenes](../observed-scenes/handoff.md)) and the [visual check](../visual-check/handoff.md), and queries STAC catalogues over plain HTTP (no pystac). Geometry stays stdlib (`core/geometry.py`) |
-| scikit-learn / numpy for scoring metrics (T97) | **Not used.** Our metrics (medians, MAD, Krippendorff's α, bootstrap) are small and stdlib-only, and α is checked against Krippendorff's published example. numpy would only matter at corpus scale |
+| scikit-learn / numpy for scoring metrics (T97) | **Not used for scoring.** Our metrics (means, medians, MAD, Krippendorff's α, bootstrap) are small and stdlib-only, and α is checked against Krippendorff's published example. numpy is a dependency only for reading imagery (with rasterio), and would only matter for metrics at corpus scale |
 | SQL as a lightweight trace/metadata store (T77, T167) | Not used: a JSONL archive in S3, plus `out/index.json`. That's adequate at hackathon scale |
 
 ## Real gaps (what we'd do next)
@@ -52,6 +52,8 @@
    - add a measured **recall/precision vs answer key** criterion.
 
    Our Dallas data-center answer key (spike S6, from OSM) was blocked because both Overpass mirrors were down.
+
+   The [visual check](../visual-check/handoff.md) (2026-11-05) now looks at each reported site in open imagery, a first check against the world. It is one vision model's vote, not an answer key, and it can't find sites the agent missed.
 3. **Human expert calibration of the panel.** We measure judge-to-judge agreement and sensitivity to planted defects. We have not yet measured agreement with domain experts, which the paper did (α ≈ 0.57). **The machinery now exists** ([judge feedback](../judge-feedback/spec.md)): reviews in the console, `harness agreement --human`, and guidance evaluated against reviewers. What's missing is the reviews themselves, from ADB or Clay experts, which the team can't supply.
 4. **Input dataset in the loop.** Track 1 lists "input dataset + harness(es) under test" (T31). Our agent discovers data through tools, and no fixed input dataset is handed to it. A dataset-conditioned prompt suite would match the brief more literally.
 5. **Several harnesses under test (V70: "an agent (or set of agentic harnesses)").** We swap models inside one harness. Evaluating a second, different harness, for example a non-Strands agent emitting OpenTelemetry, would exercise the claim that the eval is harness-agnostic.
@@ -60,5 +62,5 @@
    - dynamic MCP discovery across Clay's catalog (T187–T188);
    - a second task (T186).
 
-   Sensitivity analysis (T190) is **partly** done: suites vary model and prompt, `harness compare` shows them side by side with corpus α, and `--passes` measures judge variance.
+   Sensitivity analysis (T190) is **partly** done: suites vary model and prompt, `harness compare` shows them side by side with corpus α, and every judging runs three passes, so each score shows its standard error and single-pass range.
 7. **Clay's existing evaluation harness (T23).** The trace and report formats haven't been aligned with Clay's own. That's an open question for Clay.

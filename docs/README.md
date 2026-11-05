@@ -9,7 +9,7 @@ Start with the [project README](../README.md) for the mission, what we built and
 | [Connected evidence workspace](workspace/README.md) | Supplied React UI connected to the live backend: launch, build, evidence, human review and deployment |
 | [Developer guide](developer-guide.md) | Setting up, running, configuring (every `harness.yaml` key), the CLI, extending (prompts, rubrics, judges, tools), testing, troubleshooting |
 | [Contributing](../CONTRIBUTING.md) | Branch and commit rules, the checks CI runs, the rules the tests enforce, the doc conventions |
-| [How a run is scored](judging/guide.md) | The rubric, the judge tribunal, recusal and stand-ins, gates, confidence, agreement, calibration |
+| [How a run is scored](judging/guide.md) | The rubric, the measured criteria, the judge tribunal, recusal and stand-ins, gates, confidence, agreement, calibration |
 | Console API reference: `/api/docs` on a running console (`uv run harness ui`) | Every endpoint, request and response field, error, and live-event type. Source: `harness/web/api_docs.py` |
 
 ## Core documents: the event's briefs
@@ -40,19 +40,26 @@ Each folder holds a feature's spec (problem and acceptance criteria), its design
 | ADB alignment | [LGND/Ode report, for us](adb-alignment/lgnd-ode-brief.md) · [spec](adb-alignment/spec.md) · [design](adb-alignment/design.md) · [handoff](adb-alignment/handoff.md) | Reference checks, licences per run, per-concept and transfer results |
 | AWS hardening | [spec](aws-hardening/spec.md) · [handoff](aws-hardening/handoff.md) | The stack against AWS's documented practice: IAM, the archive bucket, logs, the container |
 | Judge feedback | [spec](judge-feedback/spec.md) · [design](judge-feedback/design.md) · [launch](judge-feedback/launch.md) · [handoff](judge-feedback/handoff.md) | Humans review a judgement; judges reconsider; reviews become evaluated guidance |
+| Evaluations in plain language, prompt compliance, value matching (PR #7) | [plain-language spec](plain-verdict/spec.md) · [handoff](plain-verdict/handoff.md) · [prompt-compliance spec](prompt-compliance/spec.md) · [handoff](prompt-compliance/handoff.md) · [value-matching spec](value-matching/spec.md) · [handoff](value-matching/handoff.md) | A plain summary on every run, a check of each result against every condition in the prompt (`condition_compliance`), and stricter matching of cited values |
+| Workspace map popups | [handoff](workspace-map-popups/handoff.md) | Imagery popups and clickable tiles on the workspace map; archived runs open in about 2 s |
+| Judging stability | [handoff](judging-stability/handoff.md) | Three passes judged at once, the score as the mean of every vote, re-judging that adds votes, and per-question review in the workspace |
+| Observed scenes | [handoff](observed-scenes/handoff.md) | Result tiles show the scene LGND matched (Sentinel-2 or NAIP, that day), not a basemap mosaic |
+| Visual check | [spec](visual-check/spec.md) · [design](visual-check/design.md) · [launch](visual-check/launch.md) · [handoff](visual-check/handoff.md) | Each reported site looked at in the sharpest open image (Vantor, OpenAerialMap, NAIP, Sentinel-2) by a vision model, scored as `visual_confirmation` (rubric v3) |
+| Evaluation issues | [spec](evaluation-issues/spec.md) · [handoff](evaluation-issues/handoff.md) | Issue counts on the workspace's Evaluation sections, and a filter to show only those with issues |
+| Map fit | [spec](map-fit/spec.md) · [handoff](map-fit/handoff.md) | Runs open and finish framed on the searched area's main part and the evidence, not on far-flung islands |
 | Presentation | [README](presentation/README.md) · [deck](presentation/deck.html) · [demo script](presentation/demo.md) · [claims](presentation/claims.md) · [Q&A](presentation/qa.md) · [one-pager](presentation/one-pager.md) · [spec](presentation/spec.md) · [handoff](presentation/handoff.md) | The interactive HTML deck, the judging-only live demo, and their sources |
 
-**Open slices** (specs for the team; status in [the factory](factory.md#slices-open-for-the-team-2026-11-04)): [plain-language evals](plain-verdict/spec.md) ([local handoff](plain-verdict/handoff.md)) · [prompt compliance](prompt-compliance/spec.md) ([handoff](prompt-compliance/handoff.md)) · [visual design](visual-design/spec.md)
-
-Local scoring fix under review: [value-matching spec](value-matching/spec.md) · [handoff](value-matching/handoff.md).
+**Slices** (status in [the factory](factory.md#slices-open-for-the-team-2026-11-04)): all shipped except [visual design](visual-design/spec.md), which was not taken; the [workspace](workspace/README.md) became the presented interface.
 
 ## Data and configuration in the repo
 
 | Path | What it is |
 | --- | --- |
 | [`harness.yaml`](../harness.yaml) | All settings, with each price sourced in a comment; reference in the [developer guide](developer-guide.md#5-configuration-reference-harnessyaml) |
-| [`rubrics/geo-dataset-v1.yaml`](../rubrics/geo-dataset-v1.yaml) | The default scoring rubric |
+| [`rubrics/geo-dataset-v1.yaml`](../rubrics/geo-dataset-v1.yaml) | The default scoring rubric (version 3: 8 judged, 4 measured criteria) |
 | [`prompts/`](../prompts) | Every text sent to a model: `agent/`, `harness/`, `judge/`, `tasks/` |
-| [`suites/`](../suites) | Prompt × model suites for `harness run --suite` |
+| [`suites/`](../suites) | Prompt × model suites for `harness run --suite`: `dallas-dc-v1` and the ADB T1 suite `adb-t1-v1` |
+| [`references/`](../references/README.md) | Reference sets a run can be scored against (`harness reference`), e.g. USPVDB solar in Pecos County, TX |
+| [`frontend/`](../frontend) | The workspace's React source; its build is committed in `harness/web/static/workspace/` |
 | [`harness/web/static/examples.json`](../harness/web/static/examples.json) | The console's example cards |
 | [`LICENSE`](../LICENSE) | Apache-2.0 |

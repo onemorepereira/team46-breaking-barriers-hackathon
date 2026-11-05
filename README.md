@@ -2,7 +2,7 @@
 
 **Connected evidence workspace:** open `/workspace/` on the running backend. See the [UI integration guide](docs/workspace/README.md) for launch, frontend build and validation.
 
-Nov 3, 2026 · @Miguel · updated Nov 4 with what we built
+Nov 3, 2026 · @Miguel · updated Nov 5 with what we built
 
 **Team Foundry (Team 46):** Aditya Pasarti · Farhan Shahriar · Uday Kandi · Miguel Pereira **[team]**. Presentation: [`docs/presentation/`](docs/presentation/README.md)
 
@@ -22,10 +22,12 @@ Track 1 evaluates an agent doing an ADB-style "how to use AI / build datasets" t
 
 ## What we built
 
-A working Track 1 evaluation harness, on `main` **[team]**. An agent finds sites from a prompt, for example data centers in Richardson, TX, or farmland in Khammouane, Laos. Every model and tool decision is recorded. Each run is then checked, graded, **scored by a three-judge tribunal**, summarized and reported from the archive alone, and shown in the **Team Foundry console** **[team]**.
+A working Track 1 evaluation harness, on `main` **[team]**. An agent finds sites from a prompt, for example data centers in Richardson, TX, or farmland in Khammouane, Laos. Every model and tool decision is recorded. Each run is then checked, graded, **scored by a three-judge tribunal**, its reported sites looked at in open imagery, summarized and reported from the archive alone, and shown in the **Team Foundry console** and the **connected evidence workspace** **[team]**.
 
 - Harness: [spec](docs/eval-harness/spec.md), [design](docs/eval-harness/design.md), [spike results](docs/eval-harness/spikes.md), [handoff and verification](docs/eval-harness/handoff.md).
-- Map imagery: [tile cache and archived result tiles](docs/tile-cache/spec.md) ([design](docs/tile-cache/design.md), [handoff](docs/tile-cache/handoff.md)).
+- Map imagery: [tile cache and archived result tiles](docs/tile-cache/spec.md) ([design](docs/tile-cache/design.md), [handoff](docs/tile-cache/handoff.md)); [result tiles show the observed scene](docs/observed-scenes/handoff.md).
+- Visual check of reported sites: [spec](docs/visual-check/spec.md), [design](docs/visual-check/design.md), [handoff](docs/visual-check/handoff.md).
+- ADB alignment: [reference sets, licences per run and a T1 suite](docs/adb-alignment/spec.md) ([handoff](docs/adb-alignment/handoff.md)).
 - Scoring and console: [**how a run is scored**](docs/judging/guide.md), [spec](docs/judging/spec.md), [design](docs/judging/design.md), [paper notes (GRA)](docs/judging/paper-notes.md), [gaps against the briefs](docs/judging/gaps.md), [handoff](docs/judging/handoff.md).
 
 ### How it works
@@ -33,11 +35,12 @@ A working Track 1 evaluation harness, on `main` **[team]**. An agent finds sites
 ```
 harness CLI ──▶ AgentCore Runtime ──▶ Strands agent ──▶ Bedrock model (Claude Sonnet 5.5 or Kimi K3)
    │                                       ├─▶ RODA MCP server (public dataset catalog)
-   │                                       └─▶ LGND Geo MCP server (NAIP imagery search and checks)
+   │                                       └─▶ LGND Geo MCP server (NAIP and Sentinel-2 imagery search and checks)
    │                                  every span ──▶ S3 archive (JSONL)  +  CloudWatch (AgentCore Observability)
    ├─ reads the archive ──▶ check · claim provenance · area compliance · signals · summary · report · replay · compare
    ├─ judge panel ──▶ evidence dossier ──▶ 3 judges, 3 model families (Bedrock) ──▶ mean vote · agreement · confidence
-   └─ Team Foundry console (FastAPI) ──▶ live steps in plain English · satellite map and tiles · KPIs · scorecard
+   ├─ visual check ──▶ sharpest open image of each reported site ──▶ vision model: present / absent / unclear
+   └─ FastAPI backend ──▶ Team Foundry console (/) and evidence workspace (/workspace/) · live steps · map · scorecard
 ```
 
 **[team]**
@@ -47,18 +50,18 @@ harness CLI ──▶ AgentCore Runtime ──▶ Strands agent ──▶ Bedroc
 - **Claims are traceable.** Each tool result is stamped with a label like `[ref T3]`. The agent must cite that label for every claim, with one value copied verbatim from one tool result **[team]**. The harness grades each claim as **matched**, **mismatch** or **unsourced** against the full archived result **[team]**.
 - **Reports work offline.** The report, replay and comparison read only the archive, so a recorded run can be re-graded without calling the model again[^T121][^V114] **[team]**.
 - **OpenTelemetry is the only telemetry API.** The deployed backend is AgentCore Observability (CloudWatch); a CI test proves the exporter can be swapped by config alone[^T177][^V164] **[team]**.
-- **A panel scores every run.** A generalized rubric ([`rubrics/geo-dataset-v1.yaml`](rubrics/geo-dataset-v1.yaml)) scores the workflow and the output, matching the brief's two dimensions[^T116][^V110]:
-  - two criteria are measured by code: claim provenance and area compliance;
-  - eight are judged by a tribunal of Claude Opus 5.5, DeepSeek V3.2 and Kimi K3, and each criterion's score is the mean of every vote across three passes. Reserves (Mistral Large 3, Qwen3 235B, then Sonnet 5.5) sit for a recused judge or stand in for one that fails.
+- **A panel scores every run.** A generalized rubric ([`rubrics/geo-dataset-v1.yaml`](rubrics/geo-dataset-v1.yaml), version 3) scores the workflow and the output, matching the brief's two dimensions[^T116][^V110] **[team]**:
+  - four criteria are measured by code: claim provenance, area compliance, condition compliance and visual confirmation;
+  - eight are judged by a tribunal of Claude Opus 5.5, DeepSeek V3.2 and Kimi K3, in three passes run at the same time. Each criterion's score is the mean of every vote (the median is also recorded), and re-judging unchanged evidence adds its votes, up to nine passes. Reserves (Mistral Large 3, Qwen3 235B, then Sonnet 5.5) sit for a recused judge or stand in for one that fails.
 
   A judge from the agent's own model family recuses itself. Every judgement carries its confidence (judge agreement plus trace integrity). `harness calibrate` proves the panel lowers the right criterion when we plant a defect **[team]**. See [how a run is scored](docs/judging/guide.md).
-- **The console shows the run.** `harness ui` is a FastAPI app[^T99] built on the Tabler dashboard kit and MapLibre. It shows:
-  - every step in plain English, with the raw span one click away;
-  - the requested boundary and every result on Sentinel-2, USGS or NAIP imagery, with tiles;
-  - score, cost, tool calls, tokens, claims verified and judge agreement up front.
+- **Reported sites are looked at.** At judging time, each reported site (up to 12) is checked in the sharpest open image that covers it: Vantor Open Data, then OpenAerialMap, NAIP, then Sentinel-2. A vision model outside the agent's family says whether the requested asset is present, absent or unclear, and the share seen scores as `visual_confirmation` **[team]**. The sandbox allows public data only[^T12], and all four sources are open **[team]**; Vantor's licence is CC BY-NC 4.0, so runs checked with it are flagged to check before sharing **[team]**. See the [visual check](docs/visual-check/spec.md).
+- **The console shows the run.** `harness ui` is a FastAPI app[^T99] **[team]**. It serves two front ends from one origin **[team]**:
+  - the classic console at `/`, built on the Tabler dashboard kit and MapLibre: every step in plain English with the raw span one click away, the requested boundary and every result on a Sentinel-2, USGS or NAIP basemap, and score, cost, tool calls, tokens, claims verified and judge agreement up front;
+  - the [connected evidence workspace](docs/workspace/README.md) at `/workspace/`, a React app whose built bundle is committed. Its map frames the searched area's main part and the evidence, not far-flung islands; result tiles show the scene LGND matched (sensor, date), each image carries a source pill, and a legend explains the visual-check badges. Its Evaluation panel shows issue counts on each section and a filter for only the sections with issues, plus thumbs and per-question human review.
 
-  It carries the Team Foundry name and logo **[team]**.
-- **Infrastructure is code.** A CDK stack creates the S3 archive, the arm64 agent image, a least-privilege role, the AgentCore runtime, the LGND login secret and an optional budget alert **[team]**. CI runs ruff (lint and format), mypy, the full pytest suite (offline) and a gitleaks secret scan **[team]**.
+  Both carry the Team Foundry name and logo **[team]**.
+- **Infrastructure is code.** A CDK stack creates the S3 archive (versioned, with an access-log bucket), the arm64 agent image, a least-privilege role, the AgentCore runtime, the LGND login secret and an optional budget alert **[team]**. CI runs ruff (lint and format), mypy, the full pytest suite (offline), the infrastructure tests, the frontend's tests and build (and checks the committed bundle is current) and a gitleaks secret scan **[team]**.
 
 ### Code layout
 
@@ -71,8 +74,10 @@ Each layer may import only itself and the ones listed, and `tests/test_layers.py
 | `rubrics/` | scoring rubrics as YAML; `geo-dataset-v1.yaml` is the default | n/a (data) |
 | `tools/` | one package per MCP server (`roda/`, `lgnd/`): descriptors, result parsers, plain-English describers, client, auth; `registry.py`; test fakes | `core` |
 | `agent/` | the Strands agent, hooks, telemetry, archive processor, entry points | `core`, `tools` |
-| `analysis/` | pure grading of archived runs: checks, provenance, signals, timeline, report; `judging/` (rubric, measured criteria, dossier, panel aggregation, Krippendorff's α) | `core`, `tools` descriptors, result parsers and describers |
-| `harness/` | CLI, config, invoking runs, area resolution, narrative, imagery; `judge.py` (the panel), `calibrate.py`; `web/` (the FastAPI console) | `core`, `analysis`, `tools` (never `agent`) |
+| `analysis/` | pure grading of archived runs: checks, provenance, signals, timeline, reference sets, licences, report; `judging/` (rubric, measured criteria, conditions, visual verdicts, dossier, panel aggregation, Krippendorff's α, feedback) | `core`, `tools` descriptors, result parsers and describers |
+| `harness/` | CLI, config, invoking runs, area resolution, narrative, imagery, observed scenes (`scenes.py`), sharpest open image (`sharp.py`); `judge.py` (the panel), `visual.py` (the visual check), `calibrate.py`; `web/` (the FastAPI backend, the console, and the built workspace) | `core`, `analysis`, `tools` (never `agent`) |
+
+The workspace's source is in `frontend/` (React, built with pnpm into `harness/web/static/workspace/`); the layer test doesn't cover it **[team]**.
 
 ### Quickstart
 
@@ -84,13 +89,15 @@ uv run pytest                                                 # the full suite, 
 uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend local      # agent on your machine
 uv run harness run --prompt prompts/tasks/dallas-dc.md --model sonnet --backend agentcore  # agent on AgentCore
 uv run harness run --suite suites/dallas-dc-v1.yaml           # both prompts on Sonnet 5.5 and Kimi K3
+uv run harness run --suite suites/adb-t1-v1.yaml              # ADB T1: 7 asset-class prompts on Sonnet 5.5
 uv run harness compare <suite-id>                             # side-by-side table (HTML + CSV)
 uv run harness replay <run-id>                                # rebuild a report from the archive only
 uv run harness check <run-id>                                 # are all decisions recorded?
-uv run harness ui                                             # Team Foundry console at http://127.0.0.1:8787 (API reference: /api/docs)
+uv run harness ui                                             # console at http://127.0.0.1:8787, workspace at /workspace/, API reference at /api/docs
 uv run harness judge <run-id> [--passes 3]                    # score a run with the judge tribunal
 uv run harness calibrate <run-id>                             # plant known defects; check the panel sees them
 uv run harness agreement --all                                # Krippendorff's alpha across judged runs
+uv run harness reference list                                 # reference sets a run can be scored against
 uv run harness lgnd-login                                     # one-time browser login to LGND Geo
 cd infra && CDK_DOCKER=podman npx aws-cdk deploy              # deploy or update the stack
 ```
@@ -121,7 +128,7 @@ From the Verify stage on Nov 4; the evidence is in the [handoff](docs/eval-harne
   - across those runs, Krippendorff's α was 0.50 (95% CI 0.12–0.67), close to the 0.56 the GRA paper reports among human experts **[team]**;
   - on live runs, all three planted defects (unscoped searches, a fabricated site, a missing answer) lowered the criterion they target **[team]**.
 
-  Judging cost $0.12–0.46 per run with the first five-judge panel. The current three-judge tribunal costs $0.10–0.31 per run (`docs/judging/handoff.md`) **[team]**.
+  Judging cost $0.12–0.46 per run with the first five-judge panel (`docs/judging/handoff.md`). A three-judge tribunal pass costs about $0.10–0.19, and the current three-pass judging about $0.22 on a Sonnet run (`docs/judging-stability/handoff.md`) **[team]**.
 - **Live runs found grader bugs, and replay re-graded old runs after the fixes**: JSON-escaped line breaks, Unicode escapes, cached prompt tokens counted as input, and tool errors counted twice **[team]**.
 
 ## Goals
@@ -129,7 +136,7 @@ From the Verify stage on Nov 4; the evidence is in the [handoff](docs/eval-harne
 1. **One loop, end to end.** An agent calls geospatial tools over MCP, and every run ends in a report[^T34][^V162].
 2. **Trace everything, including the model's decisions.** Trace capture is our top priority **[team]**. Every run keeps its traces and inputs[^V34], and never gets judged on its final output alone[^T176]. See [Traceability](#traceability).
 3. **Summarize the run.** A readable account, generated from the trace, of what the agent did and where it struggled[^T115].
-4. **Score two things.** The workflow, from the traces[^T117], and the output, against a rubric[^T31][^T118]. ADB's rubric hasn't arrived[^V191], so a generalized rubric stands in and ADB's drops in as a file **[team]**. Two criteria are measured by code; eight are judged by a three-model, cross-family tribunal. Its mean vote, agreement and confidence come with every score **[team]**.
+4. **Score two things.** The workflow, from the traces[^T117], and the output, against a rubric[^T31][^T118]. ADB's rubric hasn't arrived[^V191], so a generalized rubric stands in and ADB's drops in as a file **[team]**. Four criteria are measured by code, one of them a visual check of each reported site; eight are judged by a three-model, cross-family tribunal. Its mean vote, agreement and confidence come with every score **[team]**.
 5. **Keep observation pluggable.** The model and the tracing tool both stay swappable[^T10][^V113]. OpenTelemetry is the linchpin that proves it: a CI test sends the same agent spans to two different exporters, changing only config **[team]**. See [OpenTelemetry](#opentelemetry-the-pluggability-contract).
 6. **Never fail the demo.** Recorded traces replay through the scorer and still produce a full report[^T121][^V114].
 7. **Ship it open.** Apache-2.0[^V33], in an open-source repo Clay can access after the event[^V166]. Infrastructure as code with CDK, public before judging **[team]**.
@@ -142,11 +149,11 @@ From the Verify stage on Nov 4; the evidence is in the [handoff](docs/eval-harne
 | Harness | Amazon Bedrock AgentCore + Strands Agents **[team]** | An agent framework, not prescribed, kept swappable[^T86]; agent on Bedrock behind an abstraction[^T105] |
 | Models | Claude Sonnet 5.5 and Kimi K3 on Bedrock; Haiku dropped **[team]** | Agent on Bedrock behind an abstraction[^T105] |
 | Tools | RODA MCP server + LGND Geo MCP server, which signs in through OAuth in the browser (`harness lgnd-login`) **[team]** | Start with RODA[^T34]; LGND Geo is a commercial server teams are whitelisted for[^T144] |
-| Prompts | Find data centers near Dallas, TX, as an open and a strict variant; claims cite one verbatim value from one tool result **[team]** | Teams bring synthetic prompts[^T31] |
+| Prompts | Find data centers near Dallas, TX, as an open and a strict variant, plus an ADB T1 suite of seven asset-class prompts in Japan, the Philippines, Nepal, India and Texas; claims cite one verbatim value from one tool result **[team]** | Teams bring synthetic prompts[^T31] |
 | Trace capture | Top priority; OpenTelemetry; covers model decisions **[team]** | Record every step: tool calls, arguments, sequence, failures/retries, latency, cost[^T114] |
 | Summary | Generated from the trace **[team]** | Readable summary of what the agent did[^T115] |
-| Workflow and output scoring | Generalized rubric, with 2 measured and 8 judged criteria; 3 judges from 3 model families, median vote, same-family recusal, reserves that stand in for a failed judge, agreement and confidence, and calibration by planted defects **[team]** | Workflow: tool-call correctness and sequencing, error recovery, steps/cost[^T117]; output: quality vs. a rubric[^T118] |
-| UI | Team Foundry console on FastAPI with Tabler, MapLibre and vendored assets **[team]** | FastAPI, the thin API behind the UI[^T99]; minimal UI to launch a run and read the report[^V130] |
+| Workflow and output scoring | Generalized rubric, with 4 measured (one a visual check of reported sites) and 8 judged criteria; 3 judges from 3 model families, mean of every vote over three passes, same-family recusal, reserves that stand in for a failed judge, agreement and confidence, and calibration by planted defects **[team]** | Workflow: tool-call correctness and sequencing, error recovery, steps/cost[^T117]; output: quality vs. a rubric[^T118] |
+| UI | Team Foundry console on FastAPI with Tabler, MapLibre and vendored assets, plus the React evidence workspace at `/workspace/` **[team]** | FastAPI, the thin API behind the UI[^T99]; minimal UI to launch a run and read the report[^V130] |
 | Report & replay | Built: a static HTML report per run, offline replay, and a suite comparison table **[team]** | Per-run report[^T119]; replay recorded traces through scoring[^T121] |
 
 ## Traceability
@@ -178,7 +185,7 @@ OpenTelemetry is a must **[team]**. The brief names an OpenTelemetry-based trace
 
 - Track 2 (caption generation) before Track 1 works end to end[^T34][^V180] **[team]**.
 - Training the Clay model (out of scope)[^V136].
-- A data warehouse; a JSONL archive is enough[^T167][^V140]. The console is a local FastAPI app with no build step and no authentication; it binds to 127.0.0.1 **[team]**.
+- A data warehouse; a JSONL archive is enough[^T167][^V140]. The console is a local FastAPI app with no authentication; it binds to 127.0.0.1. Running it needs no build step: the workspace's React bundle is built and committed **[team]**.
 - Running Clay's whole eval backlog; one representative eval proves the loop[^V137].
 
 ## Milestones
@@ -240,7 +247,7 @@ Every acronym and product name used above, in alphabetical order.
 | CDK | AWS Cloud Development Kit: infrastructure written as code (Python or TypeScript) **[ext]** |
 | Claim provenance | Our check that every dataset, fact or number the agent reports links back to a tool result **[team]** |
 | Dossier | The code-built evidence the judges read: task, area, tools, each step and its output, totals and the final answer **[team]** |
-| Judge panel | Three LLMs from three model families (the tribunal) that score a run against the rubric; the median vote counts **[team]** |
+| Judge panel | Three LLMs from three model families (the tribunal) that score a run against the rubric; each criterion scores the mean of every vote **[team]** |
 | Krippendorff's α | A chance-corrected measure of agreement between raters; 1 means perfect agreement, 0 means chance **[ext]** |
 | Clay | An applied-AI initiative hosted at Renaissance Philanthropy, and our nonprofit for the event **[event]**; also its open Earth-observation foundation model[^T23] |
 | Exporter | The OpenTelemetry component that sends traces to a backend; swapping it changes where traces go **[ext]** |
@@ -250,19 +257,24 @@ Every acronym and product name used above, in alphabetical order.
 | Langfuse, Phoenix | Open-source tools for viewing and analyzing AI agent traces **[ext]**; candidate backends **[team]** |
 | LGND | A company that builds on Clay and publishes Clay embedding datasets[^T139]; it also offers the commercial LGND Geo MCP server for searching Earth data[^T144] |
 | MCP | Model Context Protocol, an open standard for connecting AI agents to tools and data[^V50] |
-| NAIP | US aerial imagery at 0.3–1 m resolution, on AWS[^T136]; LGND Geo searches it **[team]** |
+| NAIP | US aerial imagery at 0.3–1 m resolution, on AWS[^T136]; LGND Geo searches it, and the visual check uses it **[team]** |
+| OpenAerialMap | An open collection of openly licensed aerial and drone imagery **[ext]**; the visual check's second source **[team]** |
 | OpenTelemetry | An open standard for recording traces, with GenAI conventions for AI model calls **[ext]**; the brief's reasonable default[^T88] |
 | RODA | Registry of Open Data on AWS; its MCP server lets the agent search and sample public datasets[^T139] |
 | S3 | Amazon Simple Storage Service **[ext]**, where we archive traces and reports **[team]** |
+| Sentinel-2 | The European Copernicus programme's 10 m multispectral satellites, with free and open data **[ext]**; LGND Geo searches it, and it is the visual check's global fallback **[team]** |
 | Sonnet 5.5 | Anthropic's Claude Sonnet 5.5 on Bedrock (`us.anthropic.claude-sonnet-5-5`), our default model **[team]** |
 | Span | One timed step in an OpenTelemetry trace, such as a model call or a tool call, with attributes and events **[ext]** |
 | Team Foundry | Our team name (Team 46) and the name of the console **[team]** |
 | Strands | Strands Agents, an open-source AWS SDK for building agents that emits OpenTelemetry traces **[ext]** |
 | Trace | The step-by-step record of a run: each tool call, its inputs and outputs, errors, time and cost[^T114][^V51] |
+| Vantor | Vantor open data, public imagery on AWS (`s3://vantor-opendata`)[^T137]; the visual check's first source **[team]** |
+| Visual check | Our check that looks at each reported site in the sharpest open image and asks a vision model whether the requested asset is there **[team]** |
 
 [^T8]: Technical L8: "observe, summarize, and score agentic geospatial workflows".
 [^T9]: Technical L9: "the ADB agentic eval is the recommended starting point".
 [^T10]: Technical L10: model on Bedrock behind an abstraction; the team recommends a tracing tool but keeps it swappable.
+[^T12]: Technical L12: "Data: public or synthetic only. NAIP imagery, Vantor open data, LGND embeddings".
 [^T23]: Technical L23: Clay's open Earth foundation model, an existing evaluation harness.
 [^T27]: Technical L27–32: "The Tasks" table lists the ADB agentic eval and caption generation.
 [^T31]: Technical L31: ADB task inputs are an input dataset, harness(es) under test and synthetic prompts (teams bring); scored against a rubric; "output is the traces".
@@ -280,6 +292,7 @@ Every acronym and product name used above, in alphabetical order.
 [^T119]: Technical L119: a per-run evaluation report combining the summary and the scores.
 [^T121]: Technical L121: persist traces so recorded runs can be replayed through scoring.
 [^T136]: Technical L136: NAIP on AWS, "High-res (0.3–1 m) 4-band US aerial imagery".
+[^T137]: Technical L137: "Vantor open data", `s3://vantor-opendata`.
 [^T139]: Technical L138–139: LGND embeddings at source.coop/clay/lgnd-embeddings; RODA MCP server for Registry of Open Data discovery/sampling.
 [^T144]: Technical L144: LGND Geo MCP server, a commercial product; teams are whitelisted for the hackathon.
 [^T167]: Technical L167: no full warehouse; lightweight trace/metadata store.

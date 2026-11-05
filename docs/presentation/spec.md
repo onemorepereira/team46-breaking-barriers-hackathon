@@ -1,6 +1,6 @@
 # Slice: Presentation and Demo Materials
 
-**Status:** In progress · **Owner:** Miguel · **Size:** about a day · **Branch:** `slice/presentation` from `main` · **Deck freeze:** 2 hours before the presentation slot
+**Status:** Built (PR #3; slides added in PRs #6, #10 and #11; a 5-minute deck in PR #16; rehearsal, AC6, not logged; [handoff](handoff.md)) · **Owner:** Miguel · **Size:** about a day · **Branch:** `slice/presentation` from `main` · **Deck freeze:** 2 hours before the presentation slot
 **Read first:** the [README](../../README.md) (mission, what we built, verified results, and "How we win", which lists the four judging criteria), [the factory](../factory.md) (every effort and its status), the [factory rules for slices](../factory.md#how-to-take-a-slice).
 
 ## Problem

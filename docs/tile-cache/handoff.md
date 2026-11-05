@@ -1,5 +1,7 @@
 # Tile Cache and Archived Result Tiles: Handoff
 
+> **Later change (2026-11-05):** a result tile is now the scene LGND matched, read for its observation date, with the basemap mosaic only as a fallback. See [observed scenes](../observed-scenes/handoff.md).
+
 **What shipped** (branch `design/eval-harness`, 2026-11-04):
 - **Result tiles are archived.** The imagery under each search result is saved in the run's archive (`runs/<id>/tiles/`) when its report is written. In the console that happens in the background after `done`.
 - **The console serves the tiles.** It serves result tiles and the Sentinel-2, USGS and NAIP basemaps from a disk cache (`out/tile-cache/`), going to the archive and then the provider on a miss. OpenStreetMap still loads directly, per OSM's tile policy.

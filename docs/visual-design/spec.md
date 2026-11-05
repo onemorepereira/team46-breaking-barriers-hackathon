@@ -1,6 +1,6 @@
 # Slice: Visual Design Pass on the Console
 
-**Status:** Open · **Owner:** unassigned (someone with a good eye) · **Size:** about a day · **Branch:** `slice/visual-design` from `main` · **Merges:** last, after plain language and prompt compliance; rebase and restyle their new cards before your PR
+**Status:** Not taken (2026-11-05): the Foundry [workspace UI](../workspace/README.md) (PRs #12–#13) became the presented interface instead · **Owner:** unassigned · **Size:** about a day · **Branch:** `slice/visual-design` from `main` · **Merges:** last, after plain language and prompt compliance; rebase and restyle their new cards before your PR
 **Read first:** [console polish record](../console-polish/handoff.md) (the dark theme, the result panel and what was measured), the [factory rules for slices](../factory.md#how-to-take-a-slice).
 
 ## Problem

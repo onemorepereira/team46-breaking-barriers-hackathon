@@ -2,6 +2,8 @@
 
 **Status:** Current · spec: [spec.md](spec.md)
 
+> **Later change (2026-11-05):** a result tile is now the scene LGND matched, read for its observation date, with the basemap mosaic only as a fallback. See [observed scenes](../observed-scenes/handoff.md).
+
 ## Today
 - **Basemaps:** `harness/web/static/app.js` (`BASEMAPS`) gives MapLibre four raster sources with upstream URL templates: EOX WMTS `…/s2cloudless-2023_3857/default/g/{z}/{y}/{x}.jpg` (maxzoom 15), USGS `…/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}` (16), NAIP ImageServer `exportImage?bbox={bbox-epsg-3857}…` (19), and OSM `{z}/{x}/{y}.png` (19).
 - **Result tiles:** `harness/imagery.py:tile_url(index, bbox)` builds a NAIP `exportImage` URL (index `naip`) or an EOX WMS `GetMap` URL (anything else) for a result's bbox, at 384 px. It's called by `harness/web/view.py:map_layers` (archived runs) and `harness/web/live.py` (live chips). `app.js` puts it in `<img src>` (map popup and tile strip).

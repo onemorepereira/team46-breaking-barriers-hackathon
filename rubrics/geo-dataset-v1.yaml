@@ -1,7 +1,7 @@
 # Generalized rubric for agentic geospatial dataset-build runs (docs/judging/design.md: Rubric).
 # Task-agnostic: it asks what ADB needs to trust the dataset a run produced. Replace with ADB's rubric when it
-# arrives; code names only the measured criteria (claim_provenance, area_compliance). Calibration targets are
-# declared below, so a replacement rubric maps its own criteria.
+# arrives; code names only the measured criteria (claim_provenance, area_compliance, condition_compliance,
+# visual_confirmation). Calibration targets are declared below, so a replacement rubric maps its own criteria.
 id: geo-dataset
 version: 3
 title: Agentic geospatial dataset build — workflow and output
