@@ -44,7 +44,7 @@ Update this page when an effort is specified, starts, changes status or ships (s
 | R1 | **ADB answer keys** | Reference sets for ADB's test places, so recall is measurable beyond Pecos: PLATEAU warehouses for Nagoya and Gifu built and tied to the T1 suite; DPWH (Manila) and PCRAFI (Port Vila) recorded as blocked candidates | §7.2.1, Table 1, Table 14, §7.4 | M (3–4 d) | — | Specified. DPWH and PCRAFI blocked on ADB legal (default: stay blocked); PLATEAU unblocked | — | [spec](adb-answer-keys/spec.md) |
 | R2 | **Hand-labelled test blocks** | A labelling mode in the workspace that turns 1 km blocks traced on licence-clean imagery into a "complete within blocks" reference set | §3.2, §7.4, Table 7 | L (6–8 d) | — | Specified | — | [spec](test-block-labelling/spec.md) |
 | R3 | **Seeded tasks** | Tasks carry seed example locations; runs record them and whether the agent used them; a seed-budget curve (score against number of seeds) | §1, Table 7, Table 9, Appendix B | M (3 d) | Complete reference for the curve (Pecos today) | Specified | — | [spec](seeded-tasks/spec.md) |
-| R4 | **Ranking metrics** | recall@k, AUROC, AP and review effort (cells inspected to find 50/80/90% of assets) from the agent's ranked candidates | §5.7 Table 11, Table 7 | S–M (2 d) | — | In progress (PR open; built and verified) | Miguel | [spec](ranking-metrics/spec.md) · [design](ranking-metrics/design.md) · [handoff](ranking-metrics/handoff.md) |
+| R4 | **Ranking metrics** | recall@k, AUROC, AP and review effort (cells inspected to find 50/80/90% of assets) from the agent's ranked candidates | §5.7 Table 11, Table 7 | S–M (2 d) | — | **Shipped** (PR #40; see [Shipped](#shipped)) | Miguel | [spec](ranking-metrics/spec.md) · [handoff](ranking-metrics/handoff.md) |
 
 **Next**: the open agentic question and ADB's operating requirements
 
@@ -68,6 +68,42 @@ Update this page when an effort is specified, starts, changes status or ships (s
 | R15 | **ADB rubric and expert calibration** | ADB's rubric dropped in as YAML; the panel calibrated against ADB experts on 20 runs, rated blind; reviews seed guidance | §5.8, (V191) | 3 d + about 10 expert-hours | R9 | Specified. Blocked on Clay for ADB's rubric (V191) and on ADB for expert time; a stand-in run with team reviewers doesn't wait | — | [spec](adb-rubric-calibration/spec.md) |
 
 All fifteen are Standard track (each needs a design before build). Report references are its section and table numbers **[ext]**.
+
+### Site-risk screening (specified 2026-11-05)
+
+**The question:** ADB, or any developer, asks "should we build housing, a power plant, a solar or wind farm, or a school in this area, postal code, municipality or region, or is the risk of natural and man-made disasters too high?" **[team]** That takes the project past evaluating datasets: an agent answers from open hazard and exposure data, and the evaluator checks the answer the way it checks a dataset today. The numbers have to trace to tools, the levels have to follow published thresholds, and the verdict is scored against answer keys.
+
+**Where it comes from:** the user's own survey of open hazard sources, checked licence by licence on 2026-11-05 and extended with sources for developing Asia-Pacific. The result is the [hazard source catalog](site-risk-sources/catalog.md) **[ext]**.
+
+**What the catalog found:**
+- **Clean open sources** cover flood (WRI Aqueduct), cyclone wind (STORM, which is CC0), historical earthquakes (USGS), landslides (NASA) and exposure (GHSL, WorldPop, Google Open Buildings).
+- **Seismic hazard:** there is no commercially clean global seismic *hazard* map. GEM's is CC BY-NC-SA.
+- **Conflict:** ACLED needs a paid public-sector licence for ADB. UCDP (CC BY 4.0) replaces it.
+- **Licences that read two ways:** JRC's river flood maps and World Bank CCKP are each stated both as CC BY and as ODbL.
+
+**How the phases are ordered:**
+- **First loop:** answer and evaluate one site question end to end, present-day hazards, with US and Asia-Pacific answer keys.
+- **Depth:** losses, man-made hazards and the future climate.
+
+**First loop**
+
+| # | Effort | Purpose | Size | Depends on | Status | Owner | Spec |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| H1 | **Hazard source registry** | Each hazard source's licence, family, commercial verdict and attribution in `tools/hazard/sources.yaml`, kept in step with the catalog; non-commercial or unclear sources block an ADB run | S (2 d) | — (R9 enforces it under `profile: adb`) | Specified. JRC flood licence asked of JRC (default: share-alike) | — | [spec](site-risk-sources/spec.md) · [catalog](site-risk-sources/catalog.md) |
+| H2 | **Hazard tools** | A `tools/hazard/` MCP server: hazard values at a point or over an area (flood depth, cyclone wind, earthquake and landslide history, population and buildings) from staged, versioned open layers | L (6–8 d) | H1 | Specified. Global seismic hazard has no clean source (default: historical seismicity only) | — | [spec](hazard-tools/spec.md) |
+| H3 | **Site-screening task** | Task files naming a place and an asset type; asset profiles of which hazards matter; a fixed answer block with levels, evidence, verdict, confidence and limits; six example cards | M (3 d) | H2 | Specified. Level thresholds need Clay/ADB (default: source guidance, else **[team]**) | — | [spec](site-screening-task/spec.md) |
+| H4 | **Evaluating site-risk answers** | A `site-risk` rubric with measured provenance, level consistency and coverage; agreement with FEMA's National Risk Index (US); past-event flags; unsupported "proceed" verdicts weighted most | M–L (5 d) | H3; H8 for the answer keys | Specified | — | [spec](site-risk-scoring/spec.md) |
+| H8 | **Validation places** | 20+ US places keyed to FEMA's index and NOAA storm events, and 15+ places in ADB member countries with past events since 2010; a suite for compare | M (4 d) | H1 | Specified | — | [spec](site-risk-validation/spec.md) |
+
+**Depth**
+
+| # | Effort | Purpose | Size | Depends on | Status | Owner | Spec |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| H5 | **Expected annual loss** | Cyclone expected annual loss and return-period losses from CLIMADA, run as a separate service to keep GPL-3.0 off our code; cross-checked against GIRI | L (5–7 d) | H2, H3 | Specified | — | [spec](expected-annual-loss/spec.md) |
+| H6 | **Man-made exposure** | Dams upstream (Global Dam Watch, HydroSHEDS basins), power plants, industry and pipelines (OSM, live), conflict events (UCDP), with distances | M (4 d) | H2 | Specified. Whether conflict belongs in ADB answers is Clay/ADB's call (default: counts only) | — | [spec](man-made-exposure/spec.md) |
+| H7 | **Climate projections** | Hazards at 2030/2050/2080 by scenario (Aqueduct, STORM, NEX-GDDP-CMIP6), plus extreme heat and sea-level rise (IPCC AR6); present and future levels side by side | M (4 d) | H2, H3 | Specified | — | [spec](climate-projections/spec.md) |
+
+All eight are Standard track. H8 is numbered last but belongs in the first loop: H4's answer keys come from it.
 
 
 ### Other planned work
@@ -107,6 +143,7 @@ All merged to `main`. Dates are GitHub merge dates (UTC). "ACs" is acceptance cr
 | **Visual check** | Each reported site is looked at in the sharpest open image (Vantor, OpenAerialMap, NAIP, Sentinel-2) by a vision model, and scored as `visual_confirmation` (rubric v3) | Standard | 11/11 | PR #33, 2026-11-05 | Miguel | [spec](visual-check/spec.md) · [design](visual-check/design.md) · [launch](visual-check/launch.md) · [handoff](visual-check/handoff.md) |
 | **Evaluation issue filter** | Red issue counts on Evaluation sections and a filter to show only sections with issues | Quick | 5/5 | PR #34, 2026-11-05 | Miguel | [spec](evaluation-issues/spec.md) · [handoff](evaluation-issues/handoff.md) |
 | **Map fit** | Runs open and finish framed on the searched area's main part and the evidence, not on far-flung islands | Quick | 3/3 | PR #35, 2026-11-05 | Miguel | [spec](map-fit/spec.md) · [handoff](map-fit/handoff.md) |
+| **Ranking metrics** (R4) | recall@k, AUROC, AP and review effort to 50/80/90% of assets, from each run's ranked candidates (answer sites, then each LGND search call's results); in the API, console, report, workspace and compare | Standard | 8/8 | PR #40, 2026-11-05 | Miguel | [spec](ranking-metrics/spec.md) · [design](ranking-metrics/design.md) · [handoff](ranking-metrics/handoff.md) |
 
 ## Not taken
 
