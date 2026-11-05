@@ -4,7 +4,7 @@ Thanks for helping. This page covers the rules a change must follow to be merged
 
 ## Branches and commits
 
-- **Work on a branch, never on `main`.** Branch from `main` with a prefix that says what the change is: `feat/`, `fix/`, `docs/`, `chore/` or `improve/` (older branches used `feature/` and `doc/`), or `slice/<name>` for a team slice (see [how to take a slice](docs/factory.md#how-to-take-a-slice)). Open a PR back to `main`, reviewed by someone who didn't write it. (Before 2026-11-04, all work went to `design/eval-harness`.)
+- **Work on a branch, never on `main`.** Branch from `main` with a prefix that says what the change is: `feat/`, `fix/`, `docs/`, `chore/` or `improve/` (older branches used `feature/` and `doc/`), or `slice/<name>` for a team slice (see [how to take a slice](docs/factory.md#how-to-take-an-effort)). Open a PR back to `main`, reviewed by someone who didn't write it. (Before 2026-11-04, all work went to `design/eval-harness`.)
 - **Commit messages:** a short imperative subject line (≤ 72 characters, e.g. `Tile cache: archive result tiles with each run`), a blank line, then a body that says *why*, what changed and how it was checked. If an AI assistant co-wrote the change, end with its `Co-Authored-By:` line.
 - **Keep one change per commit when you can.** A fix found while doing something else gets its own commit, or at least its own paragraph in the body.
 

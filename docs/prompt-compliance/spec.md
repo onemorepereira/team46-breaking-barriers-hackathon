@@ -1,7 +1,7 @@
 # Slice: Do the Results Honor Every Condition in the Prompt?
 
 **Status:** Built (merged in PR #7, 2026-11-04; live ZIP run `d0bfb674` checked, planted-defect calibration under rubric v2 not recorded; [handoff](handoff.md)) · **Owner:** Aditya · **Size:** about a day (split point in Plan below) · **Branch:** `slice/prompt-compliance` from `main` · **Merges:** second, after plain language (rebase on its rubric changes)
-**Read first:** [how a run is scored](../judging/guide.md), [developer guide](../developer-guide.md), the [factory rules for slices](../factory.md#how-to-take-a-slice).
+**Read first:** [how a run is scored](../judging/guide.md), [developer guide](../developer-guide.md), the [factory rules for slices](../factory.md#how-to-take-an-effort).
 
 ## Problem
 Take the prompt "data centers **within 10 miles of a protected natural area**, **within ZIP 75082**". It sets three conditions:
