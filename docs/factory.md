@@ -73,6 +73,7 @@ Each teammate works in **their own sandbox account**. The committed `harness.yam
 | Observed scenes | Result tiles show the scene LGND matched (sensor, date, place), not a basemap mosaic | PR open | Miguel | [handoff](observed-scenes/handoff.md) |
 | Visual check | Each reported site is looked at in the sharpest open image (Vantor, OpenAerialMap, NAIP, Sentinel-2) by a vision model, and scored as `visual_confirmation` | PR open | Miguel | [spec](visual-check/spec.md) · [design](visual-check/design.md) · [launch](visual-check/launch.md) · [handoff](visual-check/handoff.md) |
 | Evaluation issue filter | Red issue counts on Evaluation sections and a filter to show only sections with issues | PR open | Miguel | [spec](evaluation-issues/spec.md) · [handoff](evaluation-issues/handoff.md) |
+| Map fit | Runs open and finish framed on the searched area's main part and the evidence, not on far-flung islands | PR open | Miguel | [spec](map-fit/spec.md) · [handoff](map-fit/handoff.md) |
 
 ## Changes without a spec
 
