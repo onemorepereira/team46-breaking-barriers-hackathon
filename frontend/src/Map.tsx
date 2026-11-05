@@ -651,6 +651,9 @@ export default function EvidenceMap({
               Similarity is a retrieval rank, not confidence. Imagery alone
               doesn’t establish what the asset is or its status.
             </p>
+            {chip?.properties?.tile_source && (
+              <p className="tile-credit">{chip.properties.tile_source}</p>
+            )}
             <div className="tile-thumbs">
               {(view?.map.chips?.features || []).map((f: any, i: number) =>
                 f.properties?.tile_url ? (

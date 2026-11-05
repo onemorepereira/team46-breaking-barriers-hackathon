@@ -20,7 +20,7 @@ from core import geometry
 from core.store import open_store
 from harness import area as geo
 from harness import config as config_mod
-from harness import imagery, invoke
+from harness import imagery, invoke, scenes
 from harness.manifest import Index
 from harness.tiles import settings as tiles_settings
 from tools.lgnd import descriptors as lgnd
@@ -59,11 +59,13 @@ class RunState:
         geom = self.area.geometry if self.area else None
         for c in chips:
             c["tile_url"] = (
-                imagery.console_chip_url(c.get("index"), c["bbox"], self.run_id)
+                imagery.console_chip_url(c.get("index"), c["bbox"], self.run_id, c.get("observed"))
                 if self.serve_tiles
                 else imagery.tile_url(c.get("index"), c["bbox"])
             )
-            c["tile_source"] = imagery.ATTRIBUTION.get(c.get("index") or "", imagery.ATTRIBUTION["s2"])
+            c["tile_source"] = (self.serve_tiles and scenes.label(c.get("index"), c.get("observed"))) or (
+                imagery.ATTRIBUTION.get(c.get("index") or "", imagery.ATTRIBUTION["s2"])
+            )
             if geom:
                 try:
                     c["inside"] = geometry.contains(geom, float(c["lon"]), float(c["lat"]))

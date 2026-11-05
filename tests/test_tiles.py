@@ -102,9 +102,9 @@ def test_archive_run_tiles_copies_each_result_tile_once(tmp_path):
 
     # Replay without the providers: a fresh machine (empty disk cache) serves every tile from the archive.
     fresh, dead = cache(tmp_path / "second-machine", reply=OSError("offline"))
-    for index, bbox in tiles.run_chips(run):
-        key = tiles.archive_key(run.run_id, index, bbox)
-        assert fresh.chip(index, bbox, archive=(run.store, key)).origin == "archive"
+    for index, bbox, observed in tiles.run_chips(run):
+        key = tiles.archive_key(run.run_id, index, bbox, observed)
+        assert fresh.chip(index, bbox, archive=(run.store, key), observed=observed).origin == "archive"
     assert dead.calls == []
 
 
@@ -157,7 +157,7 @@ def test_archive_bounds_cap_deadline_and_stale_not_archived(tmp_path, monkeypatc
     assert counts["fetched"] == 0 and counts.get("skipped", 0) + counts["failed"] == n
 
     c, up = cache(tmp_path / "stale")  # only an expired copy, and the provider down: not archived
-    for index, bbox in tiles.run_chips(run):
+    for index, bbox, _observed in tiles.run_chips(run):  # stale mosaic copies: the scene's fallback
         p = c.chip_path(index, bbox)
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_bytes(JPEG)

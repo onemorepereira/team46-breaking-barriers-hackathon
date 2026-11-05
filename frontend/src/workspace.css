@@ -2814,3 +2814,8 @@ html[data-colour="colour-safe"] .vote.v0 {
 .tile-inspector .tile-thumbs img {
   background: #e3ebe7;
 }
+.tile-credit {
+  font-size: 11px !important;
+  color: #7c8e8f !important;
+  margin: -4px 0 10px !important;
+}

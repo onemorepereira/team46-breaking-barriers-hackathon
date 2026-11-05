@@ -16,3 +16,8 @@ markdown-it-py
 pydantic
 # Auth for the LGND MCP client (RefreshingBearer, an httpx.Auth); mcp already depends on it. Not observability.
 httpx
+# Reads a result's observed scene (a Cloud-Optimized GeoTIFF window) and encodes it as JPEG for display
+# (harness/scenes.py, docs/observed-scenes). numpy comes with rasterio. Not observability.
+rasterio
+pillow
+numpy

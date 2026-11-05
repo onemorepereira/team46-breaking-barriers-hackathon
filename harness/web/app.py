@@ -545,6 +545,10 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         idx: str,
         bbox: str,
         run: str | None = Query(None, description="The run that found it: its archived copy is used first."),
+        observed: str | None = Query(
+            None,
+            description="The result's observation date (YYYY-MM-DD): serve that day's scene, not a mosaic.",
+        ),
     ) -> Response:
         """The imagery under one result's footprint, 384 px. `idx` is the LGND index (`naip` or `s2`), and
         `bbox` is `west,south,east,north` in degrees, at most 2° a side. It's served from the disk cache, else
@@ -552,15 +556,19 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         box = imagery.parse_bbox(bbox)
         if idx not in imagery.CHIP_INDEXES or box is None:
             raise HTTPException(404, "unknown index or invalid bbox")
+        if observed is not None and not tiles.scenes_date(observed):
+            raise HTTPException(404, "observed must be YYYY-MM-DD")
         archive = None
         state = live.RUNS.get(run) if run else None
         # Skip the archive only for a run still being made (nothing archived yet); a re-judge keeps it.
         if run and re.fullmatch(imagery.RUN_ID_RE, run) and (state is None or state.done or state.archived):
             store = archives.store_for(run)
             if store is not None:
-                archive = (store, tiles.archive_key(run, idx, box))
+                archive = (store, tiles.archive_key(run, idx, box, observed))
         try:
-            return tile_response(tile_cache.chip(idx, box, archive, on_archive_error=archives.failed))
+            return tile_response(
+                tile_cache.chip(idx, box, archive, on_archive_error=archives.failed, observed=observed)
+            )
         except tiles.TileUnavailable as e:
             raise HTTPException(502, f"tile unavailable: {e}") from e
 

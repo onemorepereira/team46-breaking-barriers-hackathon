@@ -17,6 +17,7 @@ IMPORT_TO_DIST = {
     "bedrock_agentcore": "bedrock-agentcore",
     "markdown_it": "markdown-it-py",
     "opentelemetry": "opentelemetry-sdk",  # namespace package (api, sdk, exporters)
+    "PIL": "pillow",
 }
 
 

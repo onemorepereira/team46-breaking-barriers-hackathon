@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 import time
 import urllib.request
@@ -61,6 +62,20 @@ def image_type(data: bytes) -> str | None:
     return None
 
 
+def scenes_date(text: str) -> bool:
+    return bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", text))
+
+
+def fetch_any(url: str) -> bytes:
+    """A provider URL over HTTPS, or an observed scene (`scene://index/bbox/date`, harness/scenes.py)."""
+    if url.startswith("scene://"):
+        from harness import scenes
+
+        index, box, observed = url[len("scene://") :].split("/")
+        return scenes.scene_jpeg(index, [float(v) for v in box.split(",")], observed)
+    return fetch_upstream(url)
+
+
 def fetch_upstream(url: str) -> bytes:
     """GET with a TIMEOUT_S timeout and an identifying User-Agent; raises unless the body is an image."""
     if not url.startswith("https://"):
@@ -81,7 +96,7 @@ class Cache:
         self.root = Path(cfg["out_dir"]) / "tile-cache"
         self.max_bytes = int(float(s["cache_max_mb"]) * 1024 * 1024)
         self.max_age_s = float(s["max_age_days"]) * 86400
-        self.fetch = fetch or fetch_upstream
+        self.fetch = fetch or fetch_any
         self.now = now
         self._locks: dict[Path, threading.Lock] = {}
         self._guard = threading.Lock()
@@ -91,16 +106,32 @@ class Cache:
     def base_path(self, source: str, z: int, x: int, y: int) -> Path:
         return self.root / "base" / source / str(z) / str(x) / f"{y}.jpg"
 
-    def chip_path(self, index: str, bbox: list[float]) -> Path:
-        return self.root / "chip" / index / f"{imagery.chip_key(index, bbox)}.jpg"
+    def chip_path(self, index: str, bbox: list[float], observed: str | None = None) -> Path:
+        return self.root / "chip" / index / f"{imagery.chip_key(index, bbox, observed)}.jpg"
 
     # --- lookups ---------------------------------------------------------------
     def base(self, source: str, z: int, x: int, y: int) -> Tile:
         return self._get(self.base_path(source, z, x, y), imagery.base_url(source, z, x, y), None, None)
 
     def chip(self, index: str, bbox: list[float], archive: tuple[Store, str] | None = None,
-             on_archive_error: Callable[[], None] | None = None) -> Tile:  # fmt: skip
-        """archive: (store, key) of the run's archived copy, consulted before the provider."""
+             on_archive_error: Callable[[], None] | None = None,
+             observed: str | None = None) -> Tile:  # fmt: skip
+        """archive: (store, key) of the run's archived copy, consulted before the provider. With `observed`,
+        the scene of that date (harness/scenes.py); if it can't be found or read, the mosaic, cached under its
+        own key so the scene is tried again next time."""
+        if observed:
+            try:
+                return self._get(
+                    self.chip_path(index, bbox, observed),
+                    imagery.scene_url(index, bbox, observed),
+                    archive,
+                    on_archive_error,
+                )
+            except TileUnavailable as e:
+                log.info(
+                    "observed scene unavailable (%s %s %s): %s; using the mosaic", index, observed, bbox, e
+                )
+                archive = None  # the archive key named the scene
         return self._get(
             self.chip_path(index, bbox), imagery.tile_url(index, bbox), archive, on_archive_error
         )
@@ -241,15 +272,16 @@ class Archives:
         self.open_until = self.now() + self.BREAKER_S
 
 
-def archive_key(run_id: str, index: str, bbox: list[float]) -> str:
-    return f"runs/{run_id}/tiles/{index}/{imagery.chip_key(index, bbox)}.jpg"
+def archive_key(run_id: str, index: str, bbox: list[float], observed: str | None = None) -> str:
+    return f"runs/{run_id}/tiles/{index}/{imagery.chip_key(index, bbox, observed)}.jpg"
 
 
-def run_chips(run: Any) -> list[tuple[str, list[float]]]:
-    """The result tiles a run shows: (index, bbox) per located chip, de-duplicated, first MAX_RUN_TILES."""
+def run_chips(run: Any) -> list[tuple[str, list[float], str | None]]:
+    """The result tiles a run shows: (index, bbox, observed) per located chip, de-duplicated, first
+    MAX_RUN_TILES."""
     from analysis.judging import measure
 
-    seen: dict[str, tuple[str, list[float]]] = {}
+    seen: dict[str, tuple[str, list[float], str | None]] = {}
     for x in measure.measure(run).located:
         if x.source != "chip" or not x.bbox:
             continue
@@ -259,7 +291,8 @@ def run_chips(run: Any) -> list[tuple[str, list[float]]]:
         )  # the endpoint's own rounding
         if bbox is None:
             continue  # outside what the endpoint serves
-        seen.setdefault(imagery.chip_key(index, bbox), (index, bbox))
+        observed = x.observed if x.observed and scenes_date(x.observed) else None
+        seen.setdefault(imagery.chip_key(index, bbox, observed), (index, bbox, observed))
         if len(seen) >= MAX_RUN_TILES:
             break
     return list(seen.values())
@@ -275,21 +308,21 @@ def archive_run_tiles(cfg: Any, run: Any, cache: Cache | None = None) -> dict[st
     cache = cache or Cache(cfg)
     store: Store = run.store
     present: set[str] = set()
-    for index in {i for i, _ in chips}:
+    for index in {i for i, _, _ in chips}:
         try:
             present |= set(store.list(f"runs/{run.run_id}/tiles/{index}"))
         except Exception:  # noqa: BLE001 - treat as nothing archived yet
             pass
     todo = []
-    for index, bbox in chips:
-        key = archive_key(run.run_id, index, bbox)
+    for index, bbox, observed in chips:
+        key = archive_key(run.run_id, index, bbox, observed)
         if key in present:
             counts["present"] += 1
         else:
-            todo.append((index, bbox, key))
+            todo.append((index, bbox, key, observed))
 
-    def one(index: str, bbox: list[float], key: str) -> None:
-        tile = cache.chip(index, bbox)
+    def one(index: str, bbox: list[float], key: str, observed: str | None) -> None:
+        tile = cache.chip(index, bbox, observed=observed)
         if tile.origin == "stale":
             raise TileUnavailable("only a stale copy is available; not archived")
         store.write_bytes(key, tile.data)
