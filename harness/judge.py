@@ -6,12 +6,14 @@ Bedrock and parses replies. The result is archived as runs/<id>/judgement.json, 
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import re
+import threading
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from typing import Any
@@ -30,6 +32,15 @@ from harness.config import Config
 log = logging.getLogger("harness.judge")
 JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
 MAX_TOKENS = 8000
+# Re-judging unchanged inputs adds passes to the ones already recorded, up to this many (newest kept): the
+# score then converges on the panel's average instead of flipping with each sample (docs/judging-stability).
+MAX_PASSES = 9
+# With three or more passes: once two are complete, passes still running this long after judging began are
+# left out (Kimi's slowest replies took 40-70 s where most took 5-20 s; docs/judging-stability).
+STRAGGLER_S = 25
+# Models that rejected `temperature` (Opus, Sonnet, Kimi K3, Grok on Bedrock): skip the failing first call.
+_NO_TEMPERATURE: set[str] = set()
+_NO_TEMPERATURE_LOCK = threading.Lock()
 Event = Callable[[dict[str, Any]], None]
 
 
@@ -177,14 +188,27 @@ def _bedrock(cfg: Config) -> Any:
 
 
 def _converse(
-    client: Any, model_id: str, system: str, messages: list[dict[str, Any]]
-) -> tuple[str, dict[str, int]]:
-    base = {"modelId": model_id, "system": [{"text": system}], "messages": messages}
-    try:
-        resp = client.converse(**base, inferenceConfig={"maxTokens": MAX_TOKENS, "temperature": 0})
-    except Exception as e:  # noqa: BLE001 - some models reject temperature; retry without it
-        if "temperature" not in str(e).lower():
-            raise
+    client: Any,
+    model_id: str,
+    system: str,
+    messages: list[dict[str, Any]],
+    extra: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, int], int | None]:
+    """One Converse call. Returns the text, usage, and the temperature actually used (None: model default)."""
+    base: dict[str, Any] = {"modelId": model_id, "system": [{"text": system}], "messages": messages}
+    if extra:
+        base["additionalModelRequestFields"] = extra
+    temperature: int | None = None
+    if model_id not in _NO_TEMPERATURE:
+        try:
+            resp = client.converse(**base, inferenceConfig={"maxTokens": MAX_TOKENS, "temperature": 0})
+            temperature = 0
+        except Exception as e:  # noqa: BLE001 - some models reject temperature; retry without it
+            if "temperature" not in str(e).lower():
+                raise
+            with _NO_TEMPERATURE_LOCK:
+                _NO_TEMPERATURE.add(model_id)
+    if temperature is None:
         resp = client.converse(**base, inferenceConfig={"maxTokens": MAX_TOKENS})
     blocks = resp["output"]["message"]["content"]
     text = "".join(b.get("text", "") for b in blocks if isinstance(b, dict))
@@ -194,7 +218,7 @@ def _converse(
         + int(u.get("cacheReadInputTokens", 0) or 0)
         + int(u.get("cacheWriteInputTokens", 0) or 0)
     )
-    return text, {"input_tokens": tokens_in, "output_tokens": int(u.get("outputTokens", 0))}
+    return text, {"input_tokens": tokens_in, "output_tokens": int(u.get("outputTokens", 0))}, temperature
 
 
 def _cost(cfg: Config, key: str, usage: dict[str, int]) -> float | None:
@@ -218,8 +242,10 @@ def judge_once(cfg: Config, client: Any, seat: Seat, system: str, dossier_text: 
     messages: list[dict[str, Any]] = [{"role": "user", "content": [{"text": dossier_text}]}]
     out: dict[str, Any] = {**asdict(seat), "status": "error"}
     try:
+        extra = ((cfg["models"] or {}).get(seat.key) or {}).get("judge_request_fields") or None
         for attempt in (0, 1):
-            text, u = _converse(client, seat.model_id, system, messages)
+            text, u, temperature = _converse(client, seat.model_id, system, messages, extra)
+            out["temperature"] = temperature  # 0, or None: the model's own default sampling
             usage = {k: usage[k] + u[k] for k in usage}
             try:
                 out.update(parse(text, r, known_refs), status="ok", attempts=attempt + 1)
@@ -243,33 +269,75 @@ def judge_once(cfg: Config, client: Any, seat: Seat, system: str, dossier_text: 
 def run_panel(cfg: Config, r: Rubric, d: dossier_mod.Dossier, panel_seats: list[Seat], passes: int = 1,
               client: Any = None, on_event: Event | None = None,
               spares: list[Seat] | None = None,
-              guidance: dict[str, Any] | None = None) -> list[dict[str, Any]]:  # fmt: skip
-    """Each pass: the seated judges in parallel, then a spare for each judge that failed (in order)."""
+              guidance: dict[str, Any] | None = None,
+              report: dict[str, Any] | None = None) -> list[dict[str, Any]]:  # fmt: skip
+    """All passes at once, each with the seated judges in parallel, then a spare for each judge that failed
+    (in order). Passes are independent samples, so running them together costs no extra wall time.
+    With `report` (judge_run), three or more passes, and two complete, a pass still running STRAGGLER_S
+    after the start is left out and counted in report["dropped_slow_passes"]; without it, every pass is
+    awaited."""
     client = client or _bedrock(cfg)
     system, text = system_prompt(r, guidance), dossier_mod.render(d)
-    results: list[dict[str, Any]] = []
-    for n in range(passes):
-        with ThreadPoolExecutor(max_workers=len(panel_seats)) as pool:
-            futures = [
-                pool.submit(judge_once, cfg, client, s, system, text, r, d.known_refs) for s in panel_seats
-            ]
-            judges = []
-            for f in futures:
-                j = f.result()
-                judges.append(j)
-                if on_event:
-                    on_event({"type": "judge", "pass": n + 1, **_judge_summary(r, j)})
-        bench = list(spares or [])
-        for failed in [j for j in judges if j["status"] != "ok"]:
-            if not bench:
-                break
-            seat = replace(bench.pop(0), stood_in_for=failed["key"])
-            j = judge_once(cfg, client, seat, system, text, r, d.known_refs)
+    closed = threading.Event()
+
+    def emit(ev: dict[str, Any]) -> None:  # a straggling pass may finish after the result; drop its events
+        if on_event and not closed.is_set():
+            on_event(ev)
+
+    started = time.monotonic()
+    outer = ThreadPoolExecutor(max_workers=max(1, passes))
+    futures = [
+        outer.submit(_one_pass, cfg, client, r, d, panel_seats, n, system, text, emit, spares)
+        for n in range(passes)
+    ]
+    try:
+        if passes < 3 or report is None:
+            return [f.result() for f in futures]
+        # Two complete passes are a usable judgement; give the rest STRAGGLER_S more, then go without
+        # them (Kimi's slowest replies took 50-70 s where most took 10-25 s).
+        done: set[Any] = set()
+        pending = set(futures)
+        while pending and len(done) < 2:
+            finished, pending = wait(pending, return_when=FIRST_COMPLETED)
+            done |= finished
+        if pending:
+            finished, pending = wait(pending, timeout=max(0.0, STRAGGLER_S - (time.monotonic() - started)))
+            done |= finished
+        results = [f.result() for f in futures if f in done]
+        if pending:
+            log.info("judging: %d pass(es) still running after %ss; scored without them", len(pending),
+                     STRAGGLER_S)  # fmt: skip
+            emit({"type": "passes_dropped", "count": len(pending), "after_s": STRAGGLER_S})
+        report["dropped_slow_passes"] = len(pending)
+        return results
+    finally:
+        closed.set()
+        outer.shutdown(wait=False, cancel_futures=True)
+
+
+def _one_pass(cfg: Config, client: Any, r: Rubric, d: dossier_mod.Dossier, panel_seats: list[Seat], n: int,
+              system: str, text: str, on_event: Event | None,
+              spares: list[Seat] | None) -> dict[str, Any]:  # fmt: skip
+    with ThreadPoolExecutor(max_workers=len(panel_seats)) as pool:
+        futures = [
+            pool.submit(judge_once, cfg, client, s, system, text, r, d.known_refs) for s in panel_seats
+        ]
+        judges = []
+        for f in futures:
+            j = f.result()
             judges.append(j)
             if on_event:
                 on_event({"type": "judge", "pass": n + 1, **_judge_summary(r, j)})
-        results.append({"pass": n + 1, "judges": judges})
-    return results
+    bench = list(spares or [])
+    for failed in [j for j in judges if j["status"] != "ok"]:
+        if not bench:
+            break
+        seat = replace(bench.pop(0), stood_in_for=failed["key"])
+        j = judge_once(cfg, client, seat, system, text, r, d.known_refs)
+        judges.append(j)
+        if on_event:
+            on_event({"type": "judge", "pass": n + 1, **_judge_summary(r, j)})
+    return {"pass": n + 1, "judges": judges}
 
 
 def _judge_summary(r: Rubric, j: dict[str, Any]) -> dict[str, Any]:
@@ -310,13 +378,40 @@ def judge_run(cfg: Config, run: Run, store: Store, passes: int | None = None, cl
         on_event({"type": "judging", "seats": [asdict(s) for s in panel_seats], "passes": passes,
                   "guidance": guidance and guidance["version"]})  # fmt: skip
     spares = spare_seats(cfg, run.manifest.get("model_key"), panel_seats, run.manifest.get("model_id"))
-    pass_results = run_panel(cfg, r, d, panel_seats, passes, client, on_event, spares, guidance)
-    judgement = assemble(r, run, pass_results, panel_seats, guidance)
+    fingerprint = inputs_sha(r, d, panel_seats, guidance)
+    earlier = earlier_passes(store, run.run_id, fingerprint)
+    report: dict[str, Any] = {}
+    pass_results = run_panel(cfg, r, d, panel_seats, passes, client, on_event, spares, guidance, report)
+    combined = [{**p, "pass": i + 1} for i, p in enumerate((earlier + pass_results)[-MAX_PASSES:])]
+    judgement = assemble(r, run, combined, panel_seats, guidance)
+    judgement["inputs_sha"] = fingerprint
+    judgement["passes_added"] = len(pass_results)
+    judgement["dropped_slow_passes"] = report.get("dropped_slow_passes", 0)
     if guidance_error:
         judgement["guidance_error"] = guidance_error
     keep_previous(store, run.run_id)
     store.write_text(f"runs/{run.run_id}/judgement.json", json.dumps(judgement, indent=1))
     return judgement
+
+
+def inputs_sha(r: Rubric, d: dossier_mod.Dossier, panel_seats: list[Seat],
+               guidance: dict[str, Any] | None) -> str:  # fmt: skip
+    """What the judges were shown and who they were: same hash, same question asked of the same panel."""
+    seated = [[s.key, s.model_id] for s in panel_seats]
+    blob = json.dumps([system_prompt(r, guidance), dossier_mod.render(d), seated], sort_keys=True)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+def earlier_passes(store: Store, run_id: str, fingerprint: str) -> list[dict[str, Any]]:
+    """The current judgement's passes when it judged exactly these inputs; otherwise none (start afresh)."""
+    text = store.read_text(f"runs/{run_id}/judgement.json")
+    try:
+        jd = json.loads(text) if text else {}
+    except json.JSONDecodeError:
+        return []
+    if jd.get("inputs_sha") != fingerprint or jd.get("revision"):
+        return []
+    return list(jd.get("passes") or [])
 
 
 def keep_previous(store: Store, run_id: str) -> None:

@@ -20,6 +20,9 @@ models:
     family: moonshot
     max_tokens: 16000
     request_fields: {}
+    # As a judge, medium reasoning: 17-19 s a verdict instead of 35-110 s at its default, measured on the
+    # Jodhpur dossier 2026-11-04 (docs/judging-stability). Its own agent runs keep the default.
+    judge_request_fields: {reasoning: {effort: low}}
   opus:
     id: us.anthropic.claude-opus-5-5
     family: anthropic
@@ -52,7 +55,9 @@ judging:
   panel: [opus, deepseek, kimi]
   reserves: [mistral, qwen, sonnet]
   recuse_same_family: true
-  passes: 1
+  # Three independent passes, run at the same time (no extra wall time): one sample per judge flipped
+  # per-criterion medians between back-to-back judgements of identical evidence (docs/judging-stability).
+  passes: 3
   auto: true                     # judge every finished run (harness run, the console)
   guidance: true                 # apply this deployment's approved guidance (docs/judge-feedback)
   reconsider: true               # let reviewers ask the judges to reconsider a run

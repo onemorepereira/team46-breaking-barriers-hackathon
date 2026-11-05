@@ -385,7 +385,7 @@ def chair_call(cfg: Config, system: str, message: str, client: Any = None) -> tu
     """One call to the chair model (judging.panel[0]); returns (text, {model, cost_usd})."""
     key = judge.judging_cfg(cfg)["panel"][0]
     model_id = cfg["models"][key]["id"]
-    text, usage = judge._converse(
+    text, usage, _ = judge._converse(
         client or judge._bedrock(cfg), model_id, system, [{"role": "user", "content": [{"text": message}]}]
     )
     return text, {"model": key, "cost_usd": judge._cost(cfg, key, usage) or 0.0}

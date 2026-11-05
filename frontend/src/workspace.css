@@ -29,7 +29,7 @@
   align-items: center;
   padding: 0 24px;
   color: #637078;
-  font-size: 10px;
+  font-size: 11.5px;
   border-top: 1px solid var(--line);
 }
 .workspace-footer span:first-child {
@@ -95,7 +95,7 @@
   display: flex;
   gap: 14px;
   align-items: center;
-  font-size: 10px;
+  font-size: 11.5px;
   z-index: 2;
 }
 .map-key i,
@@ -113,7 +113,7 @@
 }
 .map-key-caption {
   color: #c4d0d2;
-  font-size: 9px;
+  font-size: 11px;
 }
 .map-warning {
   position: absolute;
@@ -123,7 +123,7 @@
   background: #fff6dfeb;
   border-radius: 6px;
   padding: 9px 12px;
-  font-size: 10px;
+  font-size: 11.5px;
   color: #6c542a;
   z-index: 2;
 }
@@ -148,7 +148,7 @@
   z-index: 5;
 }
 .maplibregl-ctrl-attrib {
-  font-size: 9px !important;
+  font-size: 11px !important;
 }
 .maplibregl-ctrl-bottom-right {
   bottom: 0 !important;
@@ -184,7 +184,7 @@
   color: #617078;
 }
 .live-workspace .eyebrow {
-  font-size: 10px;
+  font-size: 11.5px;
   color: #008ba0;
   letter-spacing: 1.3px;
   text-transform: uppercase;
@@ -215,7 +215,7 @@
   margin-top: 25px;
 }
 .real-examples > span {
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 1.3px;
   color: #7b878d;
 }
@@ -243,7 +243,7 @@
 }
 .real-examples button > small {
   width: 100%;
-  font-size: 10px;
+  font-size: 11.5px;
   margin-left: 22px;
   color: #7a878b;
 }
@@ -256,7 +256,7 @@
 }
 .welcome-foot {
   margin-top: 20px;
-  font-size: 10px;
+  font-size: 11.5px;
   color: #7b888d;
 }
 .live-workspace .compact-prompt {
@@ -337,7 +337,7 @@
   align-items: center;
   gap: 7px;
   color: #008a98;
-  font-size: 10px;
+  font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 1px;
 }
@@ -357,7 +357,7 @@
   gap: 6px;
 }
 .summary-actions span {
-  font-size: 10px;
+  font-size: 11.5px;
   color: #405764;
   display: flex;
   align-items: flex-start;
@@ -396,7 +396,7 @@
   color: #67757d;
 }
 .section-kicker {
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: 1.4px;
   color: #00899a;
   text-transform: uppercase;
@@ -421,7 +421,7 @@
 .stat > span {
   display: block;
   color: #7b878b;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.5;
 }
 .stat > strong {
@@ -433,7 +433,7 @@
   color: #233d49;
 }
 .stat small {
-  font-size: 9px;
+  font-size: 11px;
 }
 .real-panel .candidate-row {
   width: 100%;
@@ -452,7 +452,7 @@
   font-weight: 500;
 }
 .candidate-info small {
-  font-size: 9px;
+  font-size: 11px;
   color: #7b8b90;
   display: block;
   margin-top: 4px;
@@ -507,14 +507,14 @@
   object-fit: cover;
 }
 .evidence-strip figcaption {
-  font-size: 9px;
+  font-size: 11px;
   padding: 7px;
   color: #506974;
 }
 .evidence-strip small {
   display: block;
   color: #849096;
-  font-size: 8px;
+  font-size: 11px;
   margin-top: 3px;
 }
 .answer-section {
@@ -575,7 +575,7 @@
 .markdown table {
   display: block;
   overflow: auto;
-  font-size: 10px;
+  font-size: 11.5px;
 }
 .markdown th,
 .markdown td {
@@ -606,12 +606,12 @@
 .table-scroll table {
   border-collapse: collapse;
   width: 100%;
-  font-size: 10px;
+  font-size: 11.5px;
 }
 .table-scroll th {
   text-align: left;
   color: #7a898e;
-  font-size: 9px;
+  font-size: 11px;
   padding: 8px;
 }
 .table-scroll td {
@@ -625,17 +625,17 @@
   display: block;
 }
 .table-scroll td strong {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 500;
   margin-bottom: 5px;
 }
 .table-scroll td small {
-  font-size: 9px;
+  font-size: 11px;
   margin-top: 6px;
 }
 .status-tag {
   display: inline-flex !important;
-  font-size: 9px;
+  font-size: 11px;
   border-radius: 4px;
   padding: 3px 7px;
   background: #edf0ea;
@@ -690,7 +690,7 @@
   color: #40656b;
 }
 .score-hero p {
-  font-size: 10px;
+  font-size: 11.5px;
   margin: 4px 0;
 }
 .section-title {
@@ -717,7 +717,7 @@
 }
 .criterion small {
   display: block;
-  font-size: 9px;
+  font-size: 11px;
   color: #87948f;
 }
 .criterion summary > strong {
@@ -728,7 +728,7 @@
 }
 .criterion summary strong small {
   display: inline;
-  font-size: 9px;
+  font-size: 11px;
   margin-left: 3px;
 }
 .score-bar {
@@ -743,7 +743,7 @@
   background: #01bdda;
 }
 .anchor {
-  font-size: 10px !important;
+  font-size: 11.5px !important;
 }
 .judge-reason {
   background: #f0f3ed;
@@ -752,13 +752,13 @@
   margin: 8px 0;
 }
 .judge-reason strong {
-  font-size: 10px;
+  font-size: 11.5px;
 }
 .judge-reason p {
   font-size: 11px;
 }
 .judge-reason small {
-  font-size: 9px;
+  font-size: 11px;
 }
 .condition-row {
   border: 1px solid #e1e6dd;
@@ -776,17 +776,17 @@
   padding: 10px 0;
 }
 .condition-row b {
-  font-size: 10px;
+  font-size: 11.5px;
   font-weight: 500;
   display: block;
   margin: 7px 0;
 }
 .condition-row p {
-  font-size: 10px !important;
+  font-size: 11.5px !important;
   margin: 4px 0;
 }
 .condition-row small {
-  font-size: 9px;
+  font-size: 11px;
   color: #00a3b4;
 }
 .judge-line {
@@ -799,7 +799,7 @@
 }
 .judge-line small {
   display: block;
-  font-size: 9px;
+  font-size: 11px;
   color: #82938e;
   margin-top: 4px;
 }
@@ -843,7 +843,7 @@
 .secondary.small {
   padding: 6px 10px;
   min-height: 30px;
-  font-size: 10px;
+  font-size: 11.5px;
 }
 .export-actions {
   display: flex;
@@ -860,7 +860,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 10px;
+  font-size: 11.5px;
   color: #556d74;
   margin: 13px 0;
 }
@@ -890,7 +890,7 @@
 }
 .review-card small {
   display: block;
-  font-size: 9px;
+  font-size: 11px;
   color: #84958f;
   margin-top: 5px;
 }
@@ -908,7 +908,7 @@
 .saved-reviews details {
   padding: 12px 0;
   border-bottom: 1px solid #e0e7de;
-  font-size: 10px;
+  font-size: 11.5px;
 }
 .saved-reviews details summary {
   cursor: pointer;
@@ -950,7 +950,7 @@
 }
 .trace-step summary small {
   display: block;
-  font-size: 9px;
+  font-size: 11px;
   color: #84958e;
   margin-top: 4px;
 }
@@ -965,7 +965,7 @@
   border-color: #edd2bb;
 }
 .trace-step p {
-  font-size: 10px !important;
+  font-size: 11.5px !important;
 }
 .error-banner {
   background: #fff0dc;
@@ -1037,7 +1037,7 @@
   font-family: Manrope, sans-serif;
 }
 .run-card-top small {
-  font-size: 10px;
+  font-size: 11.5px;
   color: #9aa89f;
 }
 .run-card h3 {
@@ -1060,7 +1060,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 9px;
+  font-size: 11px;
   color: #7a9087;
 }
 .run-card footer svg {
@@ -1253,10 +1253,10 @@
   .real-examples button > small {
     width: auto;
     margin-left: auto;
-    font-size: 9px;
+    font-size: 11px;
   }
   .welcome-foot {
-    font-size: 9px;
+    font-size: 11px;
   }
   .workspace-footer {
     height: auto;
@@ -1285,14 +1285,14 @@
   }
   .map-key {
     gap: 10px;
-    font-size: 9px;
+    font-size: 11px;
   }
   .map-style {
     bottom: 67px;
   }
   .map-warning {
     max-width: 220px;
-    font-size: 9px;
+    font-size: 11px;
   }
   .compact-prompt .edit-button {
     font-size: 0;
@@ -1329,7 +1329,7 @@
   margin-bottom: 7px;
 }
 .licence-list p {
-  font-size: 10px !important;
+  font-size: 11.5px !important;
 }
 /* MapLibre's asynchronously loaded stylesheet sets position:relative. Keep the
    canvas anchored to the evidence panel, even after that stylesheet arrives. */
@@ -1527,7 +1527,7 @@
   display: flex;
   align-items: flex-start;
   gap: 6px;
-  font-size: 10px;
+  font-size: 11.5px;
 }
 .map-tools select,
 .map-tools > button,
@@ -1556,7 +1556,7 @@
   display: flex;
   gap: 7px;
   margin-top: 12px;
-  font-size: 10px;
+  font-size: 11.5px;
 }
 .tile-inspector {
   position: absolute;
@@ -1600,7 +1600,7 @@
   display: grid;
   grid-template-columns: 75px 1fr;
   gap: 9px;
-  font-size: 10px;
+  font-size: 11.5px;
   margin: 16px 0;
   overflow-wrap: anywhere;
 }
@@ -1655,7 +1655,7 @@
   margin: 15px 0;
 }
 .template-builder label {
-  font-size: 10px;
+  font-size: 11.5px;
   color: #526c73;
 }
 .template-builder input {
@@ -1692,7 +1692,7 @@
   gap: 12px;
 }
 .summary-top > span:last-child {
-  font-size: 10px;
+  font-size: 11.5px;
   color: #657a6e;
 }
 .summary-glance {
@@ -1707,7 +1707,7 @@
 }
 .summary-glance b {
   display: block;
-  font-size: 10px;
+  font-size: 11.5px;
   letter-spacing: 0.4px;
   color: #3f6a6b;
   margin-bottom: 4px;
@@ -1843,7 +1843,7 @@
   resize: vertical;
 }
 .lesson-editor small {
-  font-size: 10px;
+  font-size: 11.5px;
   color: #637a70;
 }
 .guidance-page .disclosure-title {
@@ -1883,7 +1883,7 @@
   font-size: 11px;
 }
 .tab-note {
-  font-size: 10px;
+  font-size: 11.5px;
   color: #7b8b80;
 }
 @media (max-width: 1150px) {
@@ -1938,7 +1938,7 @@
     margin-right: 15px;
   }
   .tile-inspector dl {
-    font-size: 9px;
+    font-size: 11px;
   }
   .tile-inspector .tile-thumbs {
     clear: both;
@@ -2131,7 +2131,7 @@ summary:focus-visible {
 }
 .feedback-saved {
   display: block;
-  font-size: 10px;
+  font-size: 11.5px;
   line-height: 1.6;
   margin: 5px 0 0;
   color: #426359;
@@ -2170,7 +2170,7 @@ summary:focus-visible {
 .feedback-comment small {
   display: block;
   margin-top: 8px;
-  font-size: 10px;
+  font-size: 11.5px;
   line-height: 1.6;
   color: #50655e;
 }
@@ -2180,10 +2180,62 @@ summary:focus-visible {
 }
 .feedback-history small {
   display: block;
-  font-size: 10px;
+  font-size: 11.5px;
   color: #526960;
   margin-top: 4px;
 }
 .mini-stats .quick-feedback-row {
   flex-wrap: wrap;
+}
+
+/* Judge ratings per question across passes (docs/judging-stability). */
+.votes {
+  display: grid;
+  gap: 4px;
+  margin: 10px 0;
+}
+.vote-group {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.vote-judge {
+  font-size: 12px;
+  color: #5e6f74;
+  min-width: 70px;
+}
+.vote {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+.vote.v2 {
+  background: #2f9e6e;
+}
+.vote.v1 {
+  background: #e3a33b;
+}
+.vote.v0 {
+  background: #c9533f;
+}
+html[data-colour="colour-safe"] .vote.v2 {
+  background: #0072b2;
+}
+html[data-colour="colour-safe"] .vote.v1 {
+  background: #e69f00;
+}
+html[data-colour="colour-safe"] .vote.v0 {
+  background: #000000;
+}
+.footer-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.footer-link:hover {
+  text-decoration: underline;
 }

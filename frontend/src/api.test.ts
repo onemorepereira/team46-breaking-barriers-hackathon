@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { basePath, candidatesOf, chipFor, formatScore, reviewPayload } from "./api.ts";
+import { basePath, candidatesOf, chipFor, draftPayload, formatScore, reviewPayload } from "./api.ts";
 test("API URLs preserve workshop authentication proxy and work on localhost", () => {
   assert.equal(basePath("/proxy/8787/workspace/"), "/proxy/8787");
   assert.equal(basePath("/workspace/"), "");
@@ -32,6 +32,9 @@ test("map candidates use recorded coordinates, deduplicate and keep zero coordin
 test("missing scores do not become a false zero", () => {
   assert.equal(formatScore(null), "—");
   assert.equal(formatScore(0), "0");
+  assert.equal(formatScore(87.5), "87.5");
+  assert.equal(formatScore(87.54), "87.5");
+  assert.equal(formatScore(100), "100");
 });
 test("review payload distinguishes agreeing from suggested scores and requires authors/reasons", () => {
   assert.deepEqual(
@@ -113,7 +116,25 @@ test("a location's imagery is the chip it names, else the nearest one within 300
   const chips = [chip("naip/obs:2", 31, -103), chip("naip/obs:22", 31.001, -103)];
   const at = (name: string, lat: number, lon: number): any => ({ name, lat, lon });
   assert.equal(chipFor(at("site (chip naip/obs:22)", 0, 0), chips), 1);
+  assert.equal(chipFor(at("Solar park location (naip/obs:22)", 0, 0), chips), 1);
   assert.equal(chipFor(at("site", 31.0002, -103), chips), 0);
   assert.equal(chipFor(at("site", 31.1, -103), chips), -1);
   assert.equal(chipFor(at("site", 31, -103), []), -1);
+});
+test("one review covers several questions; each suggestion needs a score and a reason", () => {
+  const p = draftPayload(" Ada ", {
+    grounding: { decision: "agree", score: "", reason: "", refs: "" },
+    efficiency: { decision: "disagree", score: "1", reason: "two repeat searches", refs: "T3 T4" },
+  });
+  assert.equal(p.reviewer, "Ada");
+  assert.deepEqual(p.criteria, {
+    grounding: { agree: true },
+    efficiency: { agree: false, score: 1, reason: "two repeat searches", refs: ["T3", "T4"] },
+  });
+  assert.throws(() => draftPayload("Ada", {}), /at least one/);
+  assert.throws(() => draftPayload("", { g: { decision: "agree", score: "", reason: "", refs: "" } }), /name/);
+  assert.throws(
+    () => draftPayload("Ada", { g: { decision: "disagree", score: "1", reason: " ", refs: "" } }),
+    /Explain/,
+  );
 });

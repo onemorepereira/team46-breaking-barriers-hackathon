@@ -68,6 +68,8 @@ Each teammate works in **their own sandbox account**. The committed `harness.yam
 | Effort | Purpose | Status | Owner | Records |
 | --- | --- | --- | --- | --- |
 | Value matching | Reject opposite verdicts, coordinates spliced across records, and failed tool output; label older replays | Implemented locally; independent review pending | Aditya | [spec](value-matching/spec.md) · [handoff](value-matching/handoff.md) |
+| Workspace map popups | Imagery on the workspace map with its details; open archived runs in about 2 s instead of 6–15 s | PR open | Miguel | [handoff](workspace-map-popups/handoff.md) |
+| Judging stability and workspace review | Scores that settle rather than flip, judging in about 20 s, per-question human review in the workspace, a result panel on the map, and a design pass | PR open | Miguel | [handoff](judging-stability/handoff.md) |
 
 ## Changes without a spec
 

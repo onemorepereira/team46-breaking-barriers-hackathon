@@ -88,6 +88,19 @@ export default function Evaluation({
         <div>
           <span>{scoreLabel(k.score)}</span>
           <p>{k.verdict}</p>
+          {card?.pass_count > 0 && (
+            <p>
+              {card.pass_count} {card.pass_count === 1 ? "pass" : "passes"} ·{" "}
+              {votesPerQuestion(card)} votes per question
+              {card.overall_se > 0 && ` · ±${formatScore(card.overall_se)}`}
+            </p>
+          )}
+          {card?.pass_count > 1 && card.overall_range && (
+            <p>
+              Single passes scored {formatScore(card.overall_range[0])}–
+              {formatScore(card.overall_range[1])}
+            </p>
+          )}
         </div>
       </div>
       {quick("overall", "overall evaluation score", k.score)}
@@ -120,8 +133,9 @@ export default function Evaluation({
       </Disclosure>
       <Disclosure id="score-method" title="What this score means">
         <p>
-          Each judged question uses the panel’s median rubric rating, normalised
-          to 100. Workflow and output are the averages of their applicable
+          Each judged question averages every judge’s rubric rating across all
+          passes (three per judging), normalised to 100. Judging the same
+          evidence again adds votes, so the score settles rather than flips. Workflow and output are the averages of their applicable
           questions and measured checks; the overall result averages those two
           dimensions. Required spatial conditions can cap the output dimension.
           Fatal gates force zero; missing valid judgements or required
@@ -178,6 +192,7 @@ export default function Evaluation({
             <div className="score-bar">
               <span style={{ width: `${c.score ?? 0}%` }} />
             </div>
+            {c.kind === "judged" && <Votes votes={card.votes_all?.[c.id]} />}
             {c.original_median != null && (
               <p>Original panel rating: {c.original_median}</p>
             )}
@@ -198,6 +213,7 @@ export default function Evaluation({
                 <div className="judge-reason" key={j.key}>
                   <strong>
                     {j.key} · rubric rating {jc.score}
+                    {card.pass_count > 1 ? " (pass 1)" : ""}
                   </strong>
                   <p>{jc.rationale}</p>
                   <small>
@@ -282,10 +298,17 @@ export default function Evaluation({
             <li key={r}>{r}</li>
           ))}
         </ul>
+        {card?.passes_dropped > 0 && (
+          <p className="fine-print">
+            {card.passes_dropped} slow{" "}
+            {card.passes_dropped === 1 ? "pass was" : "passes were"} left out so
+            the score didn’t wait on it.
+          </p>
+        )}
         {card?.judges?.map((j: any) => (
           <Disclosure
             id={`judge-${j.key}`}
-            title={`${j.key} · ${j.family} · ${j.status === "ok" ? formatScore(j.score) + "/100" : "Unavailable"}`}
+            title={`${j.key} · ${j.family} · ${j.status === "ok" ? formatScore(judgeMean(card, j.key) ?? j.score) + "/100" : "Unavailable"}`}
             key={j.key}
           >
             <p>{j.model_id}</p>
@@ -295,7 +318,14 @@ export default function Evaluation({
             </p>
             <p>
               Cost: {money(j.cost_usd)} · Time: {j.latency_s ?? "—"} seconds
+              {card.pass_count > 1 ? " (pass 1)" : ""}
             </p>
+            {j.temperature === null && (
+              <p>
+                This model rejects temperature 0 on Bedrock, so it judged with
+                its default sampling.
+              </p>
+            )}
             <p>{j.verdict}</p>
             {j.error && <p className="error-message">{j.error}</p>}
           </Disclosure>
@@ -531,4 +561,34 @@ export default function Evaluation({
       </Disclosure>
     </>
   );
+}
+
+// Every judge's vote on a question across all passes (docs/judging-stability).
+function Votes({ votes }: { votes?: Record<string, number[]> }) {
+  if (!votes) return null;
+  return (
+    <div className="votes" aria-label="Judge ratings, every pass">
+      {Object.entries(votes).map(([judge, vs]) => (
+        <span key={judge} className="vote-group">
+          <span className="vote-judge">{judge}</span>
+          {vs.map((v, i) => (
+            <i key={i} className={`vote v${v}`} title={`${judge}: ${v}`} />
+          ))}
+          <span className="sr-only">{vs.join(", ")}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+function votesPerQuestion(card: any): number {
+  const first = Object.values(card?.votes_all || {})[0] as
+    | Record<string, number[]>
+    | undefined;
+  return first ? Object.values(first).flat().length : 0;
+}
+function judgeMean(card: any, key: string): number | null {
+  const all = Object.values(card?.votes_all || {}).flatMap(
+    (v: any) => v[key] || [],
+  ) as number[];
+  return all.length ? (all.reduce((a, b) => a + b, 0) / all.length / 2) * 100 : null;
 }

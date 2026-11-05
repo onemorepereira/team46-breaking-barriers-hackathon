@@ -834,13 +834,6 @@ export default function App() {
           >
             <span aria-hidden="true">Aa</span>
           </button>
-          <button
-            className="avatar"
-            aria-label="About this workspace"
-            onClick={() => setModal(true)}
-          >
-            <Icon name="info" />
-          </button>
         </div>
       </header>
       {error && (
@@ -1392,6 +1385,9 @@ export default function App() {
           <i /> Team Foundry · Clay Earth Dataset Foundry
         </span>
         <span>Evidence first. Human judgement always.</span>
+        <button className="footer-link" onClick={() => setModal(true)}>
+          About
+        </button>
         <a href={endpoint("/api/docs")}>API</a>
         <a href={endpoint("/")}>Classic console</a>
       </footer>

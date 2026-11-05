@@ -67,6 +67,7 @@ def scorecard(
     reconsider: bool = True,
     rubric_path: str | None = None,
     result: Any = None,
+    measured: Any = None,
 ) -> dict[str, Any] | None:
     jd = run.judgement
     if not jd:
@@ -91,6 +92,7 @@ def scorecard(
                 "error": j.get("error"),
                 "cost_usd": j.get("cost_usd"),
                 "latency_s": j.get("latency_s"),
+                "temperature": j.get("temperature", 0),  # None: the model rejected temperature 0
                 "verdict": j.get("verdict"),
                 "failure_modes": j.get("failure_modes", []),
                 "score": round(sum(scores.values()) / len(scores) / top * 100, 1) if scores else None,
@@ -109,6 +111,7 @@ def scorecard(
         )
     return {
         **result,
+        **pass_stability(jd, run, measured if measured is not None else measure.measure(run)),
         "judges": judges,
         "anchors": anchors,
         "rubric": {k: jd["rubric"][k] for k in ("id", "version")},
@@ -117,6 +120,35 @@ def scorecard(
         "judging_cost_usd": jd.get("judging_cost_usd"),
         "seats": jd.get("seats", []),
         **review_layer(run, jd, result, deploy_store, reconsider),
+    }
+
+
+def pass_stability(jd: dict[str, Any], run: Run, measured: Any) -> dict[str, Any]:
+    """How settled the score is (docs/judging-stability): every judge's vote on every criterion across all
+    passes, and the spread of the per-pass scores. `overall_range` is the lowest and highest score a single
+    pass gave; `overall_se` the standard error of the headline (sd of pass scores / sqrt(passes))."""
+    passes = [p for p in jd.get("passes") or [] if p.get("judges")]
+    votes: dict[str, dict[str, list[int]]] = {}
+    for p in passes:
+        for j in p["judges"]:
+            if j.get("status") != "ok":
+                continue
+            for cid, v in (j.get("scores") or {}).items():
+                votes.setdefault(cid, {}).setdefault(j["key"], []).append(int(v))
+    singles = [
+        x for p in passes if (x := judge.rescore({**jd, "passes": [p]}, run, measured).overall) is not None
+    ]
+    se = None
+    if len(singles) > 1:
+        mean = sum(singles) / len(singles)
+        sd = (sum((x - mean) ** 2 for x in singles) / (len(singles) - 1)) ** 0.5
+        se = round(sd / len(singles) ** 0.5, 1)
+    return {
+        "votes_all": votes,
+        "pass_count": len(passes),
+        "overall_range": [min(singles), max(singles)] if singles else None,
+        "overall_se": se,
+        "passes_dropped": jd.get("dropped_slow_passes", 0),
     }
 
 
@@ -183,7 +215,7 @@ def run_view(
     sig = signals.compute(run)
     summ = summary.build(run, prov)
     result = judge.rescore(run.judgement, run, m) if run.judgement else None
-    card = scorecard(run, deploy_store, reconsider, rubric_path, result=result)
+    card = scorecard(run, deploy_store, reconsider, rubric_path, result=result, measured=m)
     entries = [e.as_dict() for e in timeline.entries(run.spans)]
     by_ref: dict[str, list[float]] = {}
     for x in m.located:
