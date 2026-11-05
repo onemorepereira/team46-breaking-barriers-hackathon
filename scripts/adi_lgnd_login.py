@@ -68,8 +68,8 @@ def main() -> int:
             if path.path == "/":
                 body = (
                     "<!doctype html><title>Connect LGND to Aditya event sandbox</title>"
-                    "<h1>Connect LGND Geo</h1><p>This stores your LGND login only in event AWS account "
-                    "952337755619, in the team46-adi-lgnd secret. No AWS keys are requested.</p>"
+                    "<h1>Connect LGND Geo</h1><p>This stores your LGND login only in the event AWS account, "
+                    "in the team46-adi-lgnd secret. No AWS keys are requested.</p>"
                     '<p><a href="' + html.escape(auth_url, quote=True) + '">Sign in to LGND Geo</a></p>'
                 )
             elif path.path == "/callback":
