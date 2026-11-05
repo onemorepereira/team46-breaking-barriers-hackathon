@@ -22,7 +22,7 @@ pnpm --dir frontend build
 
 For a read-only synthetic preview, `uv run python -m scripts.demo_evals`, then open `http://127.0.0.1:8789/workspace/?run=run-0001`. That preview intentionally has no real imagery and rejects writes. It is not a live AWS test. For Vite hot reload, run the backend at 8787 and `pnpm --dir frontend dev`; Vite proxies the API to localhost.
 
-In Aditya's event workshop, keep the private `harness.local.yaml` outside Git and use `uv run python -m scripts.adi_sandbox ui --workshop-proxy`. The guard requires account 952337755619 / WSParticipantRole / us-west-2; it rejects personal profiles and other accounts. Never put AWS keys, LGND tokens, or client secrets in frontend environment variables, browser storage or Git. The UI only uses same-origin authenticated backend APIs. The workshop's existing sign-in protects its `/proxy/<port>/` path; these changes do not create a public deployment or change IAM permissions.
+In Aditya's event workshop, keep the private `harness.local.yaml` outside Git and use `uv run python -m scripts.adi_sandbox ui --workshop-proxy`. The guard requires the event account (set `event_account_id` in your private `harness.local.yaml`; it isn't in the repo) / WSParticipantRole / us-west-2, and refuses to start without it; it rejects personal profiles and other accounts. Never put AWS keys, LGND tokens, or client secrets in frontend environment variables, browser storage or Git. The UI only uses same-origin authenticated backend APIs. The workshop's existing sign-in protects its `/proxy/<port>/` path; these changes do not create a public deployment or change IAM permissions.
 
 ## What works
 

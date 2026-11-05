@@ -2,8 +2,13 @@ import pytest
 
 from scripts.adi_sandbox import check_identity
 
-GOOD = {"Account": "952337755619", "Arn": "arn:aws:sts::952337755619:assumed-role/WSParticipantRole/i-test"}
-CFG = {"region": "us-west-2", "archive_uri": "file://./archive", "local_archive_uri": "file://./archive"}
+GOOD = {"Account": "111122223333", "Arn": "arn:aws:sts::111122223333:assumed-role/WSParticipantRole/i-test"}
+CFG = {
+    "region": "us-west-2",
+    "archive_uri": "file://./archive",
+    "local_archive_uri": "file://./archive",
+    "event_account_id": "111122223333",
+}  # AWS's documented example account id
 
 
 def test_guard_accepts_workshop_and_refuses_wrong_identity(monkeypatch):
@@ -12,7 +17,7 @@ def test_guard_accepts_workshop_and_refuses_wrong_identity(monkeypatch):
     with pytest.raises(ValueError):
         check_identity({**GOOD, "Account": "000000000000"}, CFG)
     with pytest.raises(ValueError):
-        check_identity({**GOOD, "Arn": "arn:aws:iam::952337755619:user/personal"}, CFG)
+        check_identity({**GOOD, "Arn": "arn:aws:iam::111122223333:user/personal"}, CFG)
 
 
 def test_guard_refuses_inherited_resources_and_profile(monkeypatch):
@@ -94,3 +99,10 @@ def test_proxy_rewrites_event_streams_one_whole_event_at_a_time():
     out = _run_proxy("text/event-stream", pieces).decode()
     assert '"events": "/proxy/8787/api/runs/1/events"' in out and "Nîmes" in out
     assert '"tile_url": "/proxy/8787/tiles/chip/1/x.jpg"' in out
+
+
+def test_guard_refuses_without_a_configured_event_account(monkeypatch):
+    monkeypatch.delenv("AWS_PROFILE", raising=False)
+    for bad in (None, "", "12345", "not-an-account"):
+        with pytest.raises(ValueError, match="event_account_id"):
+            check_identity(GOOD, {**CFG, "event_account_id": bad})

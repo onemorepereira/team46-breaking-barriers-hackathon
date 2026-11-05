@@ -4,16 +4,28 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from pathlib import Path
 from typing import Any
 
-EXPECTED_ACCOUNT = "952337755619"
+# The event account comes from the private, git-ignored harness.local.yaml (`event_account_id`), not the repo.
+ACCOUNT_RE = re.compile(r"\d{12}")
+
+
+def expected_account(cfg: Any) -> str:
+    account = str(cfg.get("event_account_id") or "")
+    if not ACCOUNT_RE.fullmatch(account):
+        raise ValueError(
+            "Set event_account_id (the 12-digit event AWS account) in your private harness.local.yaml."
+        )
+    return account
 
 
 def check_identity(identity: dict[str, Any], cfg: Any) -> None:
     if os.environ.get("AWS_PROFILE"):
         raise ValueError("Unset AWS_PROFILE; use the supplied workshop identity.")
-    if identity.get("Account") != EXPECTED_ACCOUNT or ":assumed-role/WSParticipantRole/" not in identity.get(
+    account = expected_account(cfg)
+    if identity.get("Account") != account or ":assumed-role/WSParticipantRole/" not in identity.get(
         "Arn", ""
     ):
         raise ValueError("Refusing AWS access: this is not Aditya's event WSParticipantRole account.")
@@ -22,7 +34,7 @@ def check_identity(identity: dict[str, Any], cfg: Any) -> None:
     if cfg.get("runtime_arn") or cfg.get("lgnd_secret_id"):
         for key in ("runtime_arn", "lgnd_secret_id"):
             value = cfg.get(key)
-            if value and f":{EXPECTED_ACCOUNT}:" not in value:
+            if value and f":{account}:" not in value:
                 raise ValueError(f"{key} belongs to another account.")
     if not str(cfg["archive_uri"]).startswith("file://") or not str(cfg["local_archive_uri"]).startswith(
         "file://"
@@ -48,7 +60,7 @@ def main() -> int:
     check_identity(boto3.client("sts", region_name="us-west-2").get_caller_identity(), cfg)
     os.environ["AWS_DEFAULT_REGION"] = "us-west-2"
     os.environ["AWS_REGION"] = "us-west-2"
-    print(f"Verified event account {EXPECTED_ACCOUNT}; personal profiles refused.", flush=True)
+    print("Verified the event account; personal profiles refused.", flush=True)
     if args.mode == "check":
         return 0
     from harness.cli import main as harness_main
