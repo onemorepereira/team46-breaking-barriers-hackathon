@@ -2441,6 +2441,7 @@ html[data-colour="colour-safe"] .vote.v0 {
   .live-judge.working .live-judge-dot {
     animation: none !important;
   }
+}
 /* The legend never runs under the bottom-right controls (zoom, attribution); its caveat wraps instead. */
 .map-key {
   flex-wrap: wrap;
