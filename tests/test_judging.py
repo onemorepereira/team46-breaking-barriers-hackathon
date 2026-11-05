@@ -577,3 +577,60 @@ def test_a_tribunal_short_a_vote_is_not_scored_by_two(tmp_path):
     fake = FakeBedrock({"deepseek": RuntimeError("down"), "qwen": RuntimeError("down")})
     jd = judge.judge_run(TRIBUNAL, run, run.store, client=fake)
     assert jd["panel"]["valid_judges"] == [2] and jd["panel"]["status"] != "scored"
+
+
+def test_rejudging_unchanged_inputs_adds_passes_and_new_inputs_start_afresh(tmp_path):
+    """docs/judging-stability: same dossier, prompt and panel -> the new votes join the earlier ones (newest
+    MAX_PASSES kept); anything changed -> a fresh judgement. Passes run together; each records its
+    sampling."""
+    run = lgnd_run(tmp_path)
+    run.store.write_text(f"runs/{run.run_id}/conditions.json", '{"conditions": []}')
+    cfg = {**TRIBUNAL, "judging": {**TRIBUNAL["judging"], "passes": 2}}
+    cfg["models"] = {**cfg["models"], "kimi": {**cfg["models"]["kimi"], "judge_request_fields": {"x": 1}}}
+    seen = []
+
+    class Recording(FakeBedrock):
+        def converse(self, modelId, system, messages, inferenceConfig, additionalModelRequestFields=None):  # noqa: N803
+            seen.append((modelId, additionalModelRequestFields))
+            return super().converse(modelId, system, messages, inferenceConfig)
+
+    first = judge.judge_run(cfg, run, run.store, client=Recording({}))
+    assert len(first["passes"]) == 2 and first["passes_added"] == 2 and first["inputs_sha"]
+    assert ("kimi", {"x": 1}) in seen and ("deepseek", None) in seen
+    temps = {j["key"]: j["temperature"] for j in first["passes"][0]["judges"]}
+    assert temps == {"mistral": 0, "deepseek": 0, "kimi": None}  # kimi rejects temperature
+    again = judge.judge_run(cfg, run, run.store, client=Recording({}))
+    assert [p["pass"] for p in again["passes"]] == [1, 2, 3, 4] and again["inputs_sha"] == first["inputs_sha"]
+    assert again["panel"]["passes"] == 4
+    for _ in range(4):
+        last = judge.judge_run(cfg, run, run.store, client=Recording({}))
+    assert len(last["passes"]) == judge.MAX_PASSES
+    # A different panel (Opus seats on a Kimi run) is a different question: start afresh.
+    run.manifest["model_key"] = "kimi"
+    fresh = judge.judge_run(cfg, run, run.store, client=Recording({}))
+    assert len(fresh["passes"]) == 2 and fresh["inputs_sha"] != first["inputs_sha"]
+
+
+def test_a_straggling_pass_is_left_out_once_two_are_complete(tmp_path, monkeypatch):
+    import time as _time
+
+    run = lgnd_run(tmp_path)
+    run.store.write_text(f"runs/{run.run_id}/conditions.json", '{"conditions": []}')
+    cfg = {**TRIBUNAL, "judging": {**TRIBUNAL["judging"], "passes": 3}}
+    monkeypatch.setattr(judge, "STRAGGLER_S", 0.5)
+    calls = {"n": 0}
+
+    class Slow(FakeBedrock):
+        def converse(self, modelId, system, messages, inferenceConfig, additionalModelRequestFields=None):  # noqa: N803
+            if modelId == "deepseek":
+                with self.lock:
+                    calls["n"] += 1
+                    nth = calls["n"]
+                if nth == 3:  # one pass's deepseek call hangs
+                    _time.sleep(3)
+            return super().converse(modelId, system, messages, inferenceConfig)
+
+    t0 = _time.monotonic()
+    jd = judge.judge_run(cfg, run, run.store, client=Slow({}))
+    assert _time.monotonic() - t0 < 2.5
+    assert len(jd["passes"]) == 2 and jd["dropped_slow_passes"] == 1 and jd["panel"]["status"] == "scored"

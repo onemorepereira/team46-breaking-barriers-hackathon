@@ -1,51 +1,78 @@
 import { useEffect, useRef, useState } from "react";
 import { candidatesOf, chipFor, endpoint, type View } from "./api";
 const CYAN = "#01bdda",
-  ORANGE = "#e97800",
-  POPUP_ROOM = 150; // px the focused point sits below centre, so the popup above it stays in frame
-function node(tag: string, cls: string, text?: string): HTMLElement {
-  const n = document.createElement(tag);
-  n.className = cls;
-  if (text) n.textContent = text;
-  return n;
+  ORANGE = "#e97800";
+type Detail = { title: string; p: any; at: [number, number] };
+const DRAWER_W = 340; // px; the panel docked inside the map's right edge
+// Where the focused point should sit: left of centre beside the side panel, or above a phone's bottom sheet.
+function focusOffset(host: HTMLElement | null): [number, number] {
+  const w = host?.clientWidth || 0;
+  return w >= 700 ? [-DRAWER_W / 2, 0] : [0, -(host?.clientHeight || 0) / 4];
 }
-// Popup body built from DOM nodes (never innerHTML): tool output is untrusted text.
-function popupBody(title: string, p: any): HTMLElement {
-  const box = node("div", "chip-popup");
-  if (p?.tile_url) {
-    const img = document.createElement("img");
-    img.src = p.tile_url;
-    img.alt = `Imagery under ${p.node || title}`;
-    img.onerror = () => img.replaceWith(node("div", "chip-popup-missing", "Tile unavailable"));
-    box.append(img);
-  } else box.append(node("div", "chip-popup-missing", "No imagery tile for this location"));
-  box.append(node("strong", "chip-popup-title", title));
+function DetailPanel({ d, onClose }: { d: Detail; onClose: () => void }) {
+  const p = d.p || {};
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [p.tile_url]);
+  const inside = p.inside === true || p.inside === "true",
+    outside = p.inside === false || p.inside === "false";
   const facts = [
-    p?.index ? String(p.index).toUpperCase() : null,
-    p?.observed ? `observed ${p.observed}` : null,
-    Number.isFinite(Number(p?.similarity)) && p?.similarity !== null
-      ? `similarity ${Number(p.similarity).toFixed(2)}`
+    p.index ? String(p.index).toUpperCase() : null,
+    p.observed ? `Observed ${p.observed}` : null,
+    p.similarity != null && Number.isFinite(Number(p.similarity))
+      ? `Similarity ${Number(p.similarity).toFixed(2)}`
       : null,
   ].filter(Boolean);
-  if (facts.length) box.append(node("span", "chip-popup-meta", facts.join(" · ")));
-  if (Number.isFinite(Number(p?.lat)) && Number.isFinite(Number(p?.lon)))
-    box.append(
-      node("span", "chip-popup-meta", `${Number(p.lat).toFixed(4)}, ${Number(p.lon).toFixed(4)}`),
-    );
-  const badges = node("div", "chip-popup-badges");
-  const inside = p?.inside === true || p?.inside === "true",
-    outside = p?.inside === false || p?.inside === "false";
-  badges.append(
-    node(
-      "span",
-      `chip-popup-badge ${outside ? "out" : inside ? "in" : ""}`,
-      outside ? "Outside the requested area" : inside ? "Inside the requested area" : "No area to check",
-    ),
+  return (
+    <aside className="map-drawer" aria-label="Selected result">
+      <button className="map-drawer-close" onClick={onClose} aria-label="Close details">
+        ×
+      </button>
+      {p.tile_url && !broken ? (
+        <img
+          src={p.tile_url}
+          alt={`Imagery under ${p.node || d.title}`}
+          onError={() => setBroken(true)}
+        />
+      ) : (
+        <div className="map-drawer-missing">
+          {p.tile_url ? "Tile unavailable" : "No imagery tile for this location"}
+        </div>
+      )}
+      <div className="map-drawer-body">
+        <h3>{d.title}</h3>
+        {p.node && !d.title.includes(p.node) && <code>{p.node}</code>}
+        <dl>
+          {facts.length > 0 && (
+            <div>
+              <dt>Imagery</dt>
+              <dd>{facts.join(" · ")}</dd>
+            </div>
+          )}
+          {Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lon)) && (
+            <div>
+              <dt>Location</dt>
+              <dd>
+                {Number(p.lat).toFixed(4)}, {Number(p.lon).toFixed(4)}
+              </dd>
+            </div>
+          )}
+          <div>
+            <dt>Requested area</dt>
+            <dd className={outside ? "out" : inside ? "in" : ""}>
+              {outside ? "Outside" : inside ? "Inside" : "Not checked"}
+            </dd>
+          </div>
+          {p.ref && (
+            <div>
+              <dt>Returned by</dt>
+              <dd>Step {p.ref}</dd>
+            </div>
+          )}
+        </dl>
+        {p.tile_source && <small>{String(p.tile_source)}</small>}
+      </div>
+    </aside>
   );
-  if (p?.ref) badges.append(node("span", "chip-popup-badge ref", `from ${p.ref}`));
-  box.append(badges);
-  if (p?.tile_source) box.append(node("span", "chip-popup-source", p.tile_source));
-  return box;
 }
 let loading: Promise<any> | null = null;
 function library(): Promise<any> {
@@ -82,17 +109,17 @@ export default function EvidenceMap({
   const host = useRef<HTMLDivElement>(null),
     map = useRef<any>(null),
     markers = useRef<any[]>([]),
-    popup = useRef<any>(null),
+    [detail, setDetail] = useState<Detail | null>(null),
     viewRef = useRef<View | null>(view);
   viewRef.current = view;
-  function showPopup(lngLat: [number, number], title: string, p: any) {
-    const lib = (window as any).maplibregl;
-    if (!map.current || !lib) return;
-    popup.current?.remove();
-    popup.current = new lib.Popup({ anchor: "bottom", offset: 18, maxWidth: "260px", focusAfterOpen: false })
-      .setLngLat(lngLat)
-      .setDOMContent(popupBody(title, p))
-      .addTo(map.current);
+  useEffect(() => {
+    if (!detail) return;
+    const close = (e: KeyboardEvent) => e.key === "Escape" && setDetail(null);
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [detail]);
+  function showPopup(at: [number, number], title: string, p: any) {
+    setDetail({ title, p, at });
   }
   function chipCenter(f: any): [number, number] | null {
     const lon = Number(f?.properties?.lon),
@@ -142,7 +169,6 @@ export default function EvidenceMap({
       .catch((e) => setError(e.message));
     return () => {
       cancelled = true;
-      popup.current?.remove();
       map.current?.remove();
       map.current = null;
       setReady(false);
@@ -170,7 +196,7 @@ export default function EvidenceMap({
       lib = (window as any).maplibregl;
     markers.current.forEach((x) => x.remove());
     markers.current = [];
-    popup.current?.remove();
+    setDetail(null);
     const empty = { type: "FeatureCollection", features: [] };
     const area = view?.map.area
       ? { type: "FeatureCollection", features: [view.map.area] }
@@ -243,7 +269,7 @@ export default function EvidenceMap({
               ? [Number(p.lon), Number(p.lat)]
               : [e.lngLat.lng, e.lngLat.lat];
           showPopup(at, p.node || p.claim || "Imagery result", p);
-          m.easeTo({ center: at, offset: [0, POPUP_ROOM], duration: 500 });
+          m.easeTo({ center: at, offset: focusOffset(host.current), duration: 500 });
           return;
         }
       });
@@ -302,7 +328,7 @@ export default function EvidenceMap({
     map.current.easeTo({
       center: site.coordinates,
       zoom: Math.max(map.current.getZoom(), 14),
-      offset: [0, POPUP_ROOM],
+      offset: focusOffset(host.current),
       duration: 650,
     });
     const chips = viewRef.current?.map.chips?.features || [];
@@ -323,14 +349,15 @@ export default function EvidenceMap({
     map.current.easeTo({
       center: at,
       zoom: Math.max(map.current.getZoom(), 15),
-      offset: [0, POPUP_ROOM],
+      offset: focusOffset(host.current),
       duration: 650,
     });
     showPopup(at, f.properties.node || "Imagery result", f.properties);
   }, [focusChip]);
   return (
-    <div className="evidence-map">
+    <div className={`evidence-map ${detail ? "has-drawer" : ""}`}>
       <div ref={host} className="map-canvas" />
+      {detail && <DetailPanel d={detail} onClose={() => setDetail(null)} />}
       <div className="map-style">
         <button
           className={layer === "satellite" ? "active" : ""}
@@ -346,15 +373,18 @@ export default function EvidenceMap({
         </button>
       </div>
       {error && <div className="map-warning">{error}</div>}
-      <div className="map-key">
+      <div className="map-key" aria-label="Map legend">
         <span>
-          <i /> Requested area
+          <i className="key-area" /> Requested area
         </span>
         <span>
-          <b /> Reported locations
+          <i className="key-location">1</i> Reported location
         </span>
-        <span className="map-key-caption">
-          Map context is not independent verification
+        <span>
+          <i className="key-imagery" /> Imagery result
+        </span>
+        <span>
+          <i className="key-outside" /> Outside the area
         </span>
       </div>
     </div>

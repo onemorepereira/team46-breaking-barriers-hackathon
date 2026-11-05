@@ -96,16 +96,59 @@ export function candidatesOf(view: View | null): Candidate[] {
       coordinates: f.geometry.coordinates,
     }));
 }
+// One rule everywhere: whole numbers as is, anything else to one decimal (87.5, never 88 beside "87.5").
 export function formatScore(value: unknown): string {
-  return typeof value === "number" && Number.isFinite(value)
-    ? `${Math.round(value)}`
-    : "—";
+  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
+  const r = Math.round(value * 10) / 10;
+  return Number.isInteger(r) ? `${r}` : r.toFixed(1);
 }
 export function money(value: unknown): string {
   return typeof value === "number" ? `$${value.toFixed(2)}` : "Not recorded";
 }
 export function localTime(value?: string): string {
   return value ? new Date(value).toLocaleString() : "Time not recorded";
+}
+export type Draft = {
+  decision: "agree" | "disagree";
+  score: string;
+  reason: string;
+  refs: string;
+};
+// One review covering every question the reviewer assessed (docs/judge-feedback): agreeing needs nothing
+// else; suggesting a score needs a whole-number score and a reason.
+export function draftPayload(
+  reviewer: string,
+  drafts: Record<string, Draft>,
+  note = "",
+) {
+  if (!reviewer.trim())
+    throw new Error("Enter your name so the review has an author.");
+  const entries = Object.entries(drafts);
+  if (!entries.length)
+    throw new Error("Agree or disagree with at least one question first.");
+  const criteria: Record<string, unknown> = {};
+  for (const [id, d] of entries) {
+    if (d.decision === "agree") {
+      criteria[id] = { agree: true };
+      continue;
+    }
+    const value = d.score.trim() === "" ? NaN : Number(d.score);
+    if (!Number.isInteger(value))
+      throw new Error("Choose the score you would give.");
+    if (!d.reason.trim()) throw new Error("Explain your suggested score.");
+    criteria[id] = {
+      agree: false,
+      score: value,
+      reason: d.reason.trim(),
+      refs: d.refs.split(/[\s,]+/).filter(Boolean),
+    };
+  }
+  return {
+    reviewer: reviewer.trim(),
+    criteria,
+    note: note.trim(),
+    measured_note: "",
+  };
 }
 export function reviewPayload(
   reviewer: string,
@@ -115,39 +158,25 @@ export function reviewPayload(
   note: string,
   refText: string,
 ) {
-  if (!criterion || decision === "note")
+  if (!criterion || (decision !== "agree" && decision !== "disagree"))
     throw new Error(
       "Choose a rubric question and an assessment before saving.",
     );
-  if (!reviewer.trim())
-    throw new Error("Enter your name so the review has an author.");
   if (decision === "disagree" && !note.trim())
     throw new Error("Explain your suggested score.");
-  const value = score.trim() === "" ? NaN : Number(score);
-  if (decision === "disagree" && !Number.isInteger(value))
-    throw new Error("Choose the score you would give.");
-  const criteria: Record<string, unknown> = {
-    [criterion]:
-      decision === "agree"
-        ? { agree: true }
-        : {
-            agree: false,
-            score: value,
-            reason: note.trim(),
-            refs: refText.split(/[\s,]+/).filter(Boolean),
-          },
-  };
   return {
-    reviewer: reviewer.trim(),
-    criteria,
-    note: note.trim(),
-    measured_note: "",
+    ...draftPayload(
+      reviewer,
+      { [criterion]: { decision, score, reason: note, refs: refText } },
+      note,
+    ),
   };
 }
 // The imagery result behind a reported location: the chip the claim names ("chip naip/obs:123"),
 // else the chip at the same coordinates, else the nearest chip within ~300 m. -1 when none.
 export function chipFor(c: Candidate, chips: any[]): number {
-  const node = c.name.match(/\bchip\s+([^\s,;)]+)/)?.[1];
+  // Claims name their chip as "chip naip/obs:123" or just "(s2/obs:123)".
+  const node = c.name.match(/\b([a-z0-9]+\/obs:\d+)\b/i)?.[1];
   const named = node
     ? chips.findIndex((f) => String(f?.properties?.node) === node)
     : -1;

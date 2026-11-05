@@ -76,7 +76,8 @@ A tribunal of three judges from three families:
 
 ## From votes to a score
 
-1. **Per judged criterion:** the median vote (the lower median for an even count, from older five-judge records). The score is median ÷ 2 × 100.
+1. **Per judged criterion:** the median vote (the lower median for an even count, from older five-judge records). The score is median ÷ 2 × 100. With several passes, it is the mean of the pass medians.
+   - **Passes:** each judging runs three passes at the same time (`judging.passes`). Re-judging evidence the judges already saw (same dossier, prompt and panel) adds new passes to the recorded ones, keeping the newest nine. So the score settles instead of flipping. Once two passes are in, a pass still running 25 s after judging began is left out and counted (`dropped_slow_passes`). Why: [judging stability](../judging-stability/handoff.md).
 2. **Measured criteria:** the share × 100, or N/A when there's nothing to measure (no area, no coordinates).
 3. **Dimensions:** the mean of their criteria. **Overall:** the mean of the two dimensions.
 4. **Fatal gates** override everything: no final answer, or no successful tool call. The run scores **FAILED** (0 overall, 0 on every output criterion), and its workflow scores stay visible for diagnosis.

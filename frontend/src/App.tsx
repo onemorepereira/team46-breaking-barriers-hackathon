@@ -9,7 +9,8 @@ import {
   formatScore,
   money,
   localTime,
-  reviewPayload,
+  draftPayload,
+  type Draft,
   type View,
   type Row,
 } from "./api";
@@ -119,49 +120,211 @@ function DataTable({ rows }: { rows: any[] }) {
     </div>
   );
 }
-function Reviewer({
+const VOTE_WORD = ["No", "Partly", "Yes"];
+function Votes({ votes }: { votes: Record<string, number[]> | undefined }) {
+  if (!votes) return null;
+  return (
+    <span className="votes" aria-label="Judge votes, every pass">
+      {Object.entries(votes).map(([judge, vs]) => (
+        <span key={judge} className="vote-group" title={`${judge}: ${vs.join(", ")}`}>
+          <span className="vote-judge">{judge}</span>
+          {vs.map((v, i) => (
+            <i key={i} className={`vote v${v}`} aria-hidden="true" />
+          ))}
+          <span className="sr-only">{vs.join(", ")}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+function CriterionCard({
+  c,
   view,
+  draft,
+  onDraft,
+  reviewable,
+}: {
+  c: any;
+  view: View;
+  draft: Draft | undefined;
+  onDraft: (d: Draft | undefined) => void;
+  reviewable: boolean;
+}) {
+  const card = view.scorecard;
+  const anchors: Record<string, string> = card.anchors?.[c.id] || {};
+  const judged = c.kind === "judged";
+  const set = (patch: Partial<Draft>) =>
+    onDraft({
+      decision: "agree",
+      score: "",
+      reason: "",
+      refs: "",
+      ...draft,
+      ...patch,
+    });
+  return (
+    <details className={`criterion ${draft ? "has-draft" : ""}`}>
+      <summary>
+        <span className="criterion-q">
+          {c.plain || c.question}
+          <small>
+            {judged ? c.dimension : "Measured by code"}
+            {c.human != null && (
+              <b className="human-tag">
+                Reviewer: {formatScore((c.human / 2) * 100)}
+              </b>
+            )}
+            {draft && (
+              <b className="draft-tag">
+                {draft.decision === "agree" ? "You agree" : `You suggest ${draft.score || "?"}`}
+              </b>
+            )}
+          </small>
+        </span>
+        {judged && <Votes votes={card.votes_all?.[c.id]} />}
+        <strong className="criterion-score">
+          {formatScore(c.score)}
+          {c.score !== null && <small>/100</small>}
+        </strong>
+      </summary>
+      <div className="criterion-body">
+        <p className="criterion-full">{c.question}</p>
+        {c.value && <p className="criterion-full">Measured: {c.value}</p>}
+        {judged && Object.keys(anchors).length > 0 && (
+          <dl className="anchors">
+            {Object.entries(anchors).map(([s, t]) => (
+              <div key={s}>
+                <dt>
+                  {s} · {VOTE_WORD[Number(s)] || s}
+                </dt>
+                <dd>{String(t)}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {judged &&
+          card.judges?.map((j: any) => {
+            const jc = j.criteria?.find((x: any) => x.id === c.id);
+            return jc ? (
+              <div key={j.key} className="judge-reason">
+                <strong>
+                  {j.key} <span>voted {jc.score}</span>
+                </strong>
+                <p>{jc.rationale || "No rationale recorded."}</p>
+                {jc.refs?.length > 0 && <small>Cites {jc.refs.join(", ")}</small>}
+              </div>
+            ) : null;
+          })}
+        {judged && card.pass_count > 1 && (
+          <p className="fine-print">
+            Rationales are from the first of {card.pass_count} passes; the
+            votes above are from every pass.
+          </p>
+        )}
+        {judged && reviewable && (
+          <div className="your-call" role="group" aria-label="Your assessment">
+            <span className="your-call-label">Your assessment</span>
+            <div className="segmented">
+              <button
+                type="button"
+                className={draft?.decision === "agree" ? "on" : ""}
+                aria-pressed={draft?.decision === "agree"}
+                onClick={() =>
+                  draft?.decision === "agree" ? onDraft(undefined) : set({ decision: "agree" })
+                }
+              >
+                Agree with the panel
+              </button>
+              <button
+                type="button"
+                className={draft?.decision === "disagree" ? "on" : ""}
+                aria-pressed={draft?.decision === "disagree"}
+                onClick={() =>
+                  draft?.decision === "disagree"
+                    ? onDraft(undefined)
+                    : set({ decision: "disagree" })
+                }
+              >
+                Suggest a different score
+              </button>
+            </div>
+            {draft?.decision === "disagree" && (
+              <>
+                <div className="score-pick" role="radiogroup" aria-label="Your score">
+                  {(Object.keys(anchors).length ? Object.keys(anchors) : ["0", "1", "2"]).map(
+                    (s) => (
+                      <button
+                        type="button"
+                        key={s}
+                        role="radio"
+                        aria-checked={draft.score === s}
+                        className={draft.score === s ? "on" : ""}
+                        onClick={() => set({ score: s })}
+                      >
+                        <b>{s}</b> {VOTE_WORD[Number(s)] || ""}
+                      </button>
+                    ),
+                  )}
+                </div>
+                <label>
+                  Why
+                  <textarea
+                    value={draft.reason}
+                    maxLength={2000}
+                    onChange={(e) => set({ reason: e.target.value })}
+                    placeholder="What in the evidence supports your score?"
+                  />
+                </label>
+                <label>
+                  Steps you relied on <span className="optional">optional</span>
+                  <input
+                    value={draft.refs}
+                    onChange={(e) => set({ refs: e.target.value })}
+                    placeholder="T2, T4"
+                  />
+                </label>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+function readName(): string {
+  try {
+    return localStorage.getItem("foundry.reviewer") || "";
+  } catch {
+    return "";
+  }
+}
+function ReviewBar({
+  view,
+  drafts,
   onSaved,
-  onReconsider,
-  busy,
 }: {
   view: View;
+  drafts: Record<string, Draft>;
   onSaved: () => void;
-  onReconsider: (id: string) => void;
-  busy: boolean;
 }) {
-  const judged =
-    view.scorecard?.criteria?.filter(
-      (c: any) => c.kind === "judged" && c.score !== null,
-    ) || [];
-  const [name, setName] = useState(""),
-    [criterion, setCriterion] = useState(""),
-    [decision, setDecision] = useState("agree"),
-    [score, setScore] = useState("1"),
-    [notes, setNotes] = useState(""),
-    [refs, setRefs] = useState(""),
-    [saved, setSaved] = useState(""),
+  const [name, setName] = useState(readName),
+    [note, setNote] = useState(""),
     [error, setError] = useState(""),
     [sending, setSending] = useState(false);
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  const count = Object.keys(drafts).length;
+  if (!count) return null;
+  async function save() {
     setError("");
-    setSaved("");
     setSending(true);
     try {
-      const payload = reviewPayload(
-        name,
-        criterion,
-        decision,
-        score,
-        notes,
-        refs,
-      );
+      const payload = draftPayload(name, drafts, note);
+      try {
+        localStorage.setItem("foundry.reviewer", name.trim());
+      } catch {
+        /* a per-viewer convenience only */
+      }
       await request(`/api/runs/${view.run.id}/reviews`, payload);
-      setSaved(
-        "Review saved to the run archive. The automated score has not been changed.",
-      );
-      setNotes("");
+      setNote("");
       onSaved();
     } catch (e) {
       setError((e as Error).message);
@@ -170,149 +333,92 @@ function Reviewer({
     }
   }
   return (
-    <section className="review-card">
-      <div className="section-kicker">Human review</div>
-      <h3>What would you check or change?</h3>
-      <p>
-        Your assessment is kept separately from the automated score. It can
-        inform a later judge reconsideration.
-      </p>
-      <form onSubmit={submit}>
-        <label>
-          Your name
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            maxLength={100}
-          />
-        </label>
-        <label>
-          What are you reviewing?
-          <select
-            value={criterion}
-            onChange={(e) => {
-              setCriterion(e.target.value);
-              setDecision("agree");
-            }}
-          >
-            <option value="">Choose a rubric question</option>
-            {judged.map((c: any) => (
-              <option key={c.id} value={c.id}>
-                {c.plain || c.question}
-              </option>
-            ))}
-          </select>
-        </label>
-        {criterion && (
-          <div className="review-pair">
-            <label>
-              Assessment
-              <select
-                value={decision}
-                onChange={(e) => setDecision(e.target.value)}
-              >
-                <option value="agree">Agree with panel</option>
-                <option value="disagree">Suggest a different score</option>
-              </select>
-            </label>
-            {decision === "disagree" && (
-              <label>
-                Suggested score
-                <select
-                  value={score}
-                  onChange={(e) => setScore(e.target.value)}
-                >
-                  {Object.keys(
-                    view.scorecard.anchors?.[criterion] || {
-                      0: "",
-                      1: "",
-                      2: "",
-                    },
-                  ).map((s) => (
-                    <option key={s}>{s}</option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </div>
-        )}
-        {criterion && (
-          <p className="fine-print">
-            Current panel score:{" "}
-            {formatScore(judged.find((c: any) => c.id === criterion)?.score)}
-            /100.{" "}
-            {decision === "disagree" &&
-              `Your selected rubric anchor: ${view.scorecard.anchors?.[criterion]?.[score] || "No anchor recorded"}`}
-          </p>
-        )}
-        <label>
-          Notes
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            maxLength={2000}
-            placeholder="What supports your assessment? What remains uncertain?"
-          />
-        </label>
-        {decision === "disagree" && (
-          <label>
-            Evidence step IDs
-            <input
-              value={refs}
-              onChange={(e) => setRefs(e.target.value)}
-              placeholder="For example: T2, T4"
-            />
-          </label>
-        )}
-        <button
-          className="primary"
-          disabled={
-            sending || !criterion || !view.scorecard || view.kpis.score === null
-          }
-        >
-          {sending ? "Saving…" : "Save human review"}
-        </button>
-        {!view.scorecard && (
-          <small>Judge this run before submitting a review.</small>
-        )}
-      </form>
-      {saved && (
-        <p role="status" className="success-message">
-          {saved}
-        </p>
-      )}
+    <div className="review-bar" role="region" aria-label="Your review">
+      <strong>
+        Your review · {count} {count === 1 ? "question" : "questions"}
+      </strong>
+      <input
+        aria-label="Your name"
+        placeholder="Your name"
+        value={name}
+        maxLength={100}
+        onChange={(e) => setName(e.target.value)}
+      />
+      <input
+        aria-label="Overall note (optional)"
+        placeholder="Overall note (optional)"
+        value={note}
+        maxLength={2000}
+        onChange={(e) => setNote(e.target.value)}
+      />
+      <button className="primary" disabled={sending} onClick={() => void save()}>
+        {sending ? "Saving…" : "Save review"}
+      </button>
       {error && (
         <p role="alert" className="error-message">
           {error}
         </p>
       )}
-      <div className="saved-reviews">
-        {view.scorecard?.reviews?.map((r: any, i: number) => (
-          <details key={r.id || i}>
-            <summary>
-              {r.reviewer} · {localTime(r.created_at)}
-              {r.current === false ? " · earlier judgement" : ""}
-            </summary>
-            <p>{r.note || "Criterion review saved."}</p>
-            <pre>{JSON.stringify(r.criteria, null, 2)}</pre>
-            {r.current &&
-              !r.reconsidered &&
-              view.scorecard.reconsider_enabled && (
-                <button
-                  className="secondary"
-                  disabled={busy}
-                  onClick={() => onReconsider(r.id)}
-                >
-                  Ask judges to reconsider
-                </button>
-              )}
-            {r.reconsidered && (
-              <small>Reconsidered {localTime(r.reconsidered)}</small>
-            )}
-          </details>
-        ))}
-      </div>
+    </div>
+  );
+}
+function SavedReviews({
+  view,
+  busy,
+  onReconsider,
+}: {
+  view: View;
+  busy: boolean;
+  onReconsider: (id: string) => void;
+}) {
+  const card = view.scorecard;
+  const reviews = card?.reviews || [];
+  if (!reviews.length) return null;
+  const name = (id: string) =>
+    card.criteria?.find((c: any) => c.id === id)?.plain || id;
+  return (
+    <section className="saved-reviews">
+      <h3 className="section-title">Human reviews</h3>
+      {reviews.map((r: any, i: number) => (
+        <article key={r.id || i} className="saved-review">
+          <header>
+            <strong>{r.reviewer}</strong>
+            <span>
+              {localTime(r.created_at)}
+              {r.current === false ? " · about an earlier judgement" : ""}
+            </span>
+          </header>
+          <ul>
+            {Object.entries(r.criteria || {}).map(([id, v]: [string, any]) => (
+              <li key={id}>
+                <b>{name(id)}</b>
+                {v.agree ? (
+                  <span className="agree">agrees with the panel</span>
+                ) : (
+                  <span>
+                    suggests <em>{v.score}</em>
+                    {v.reason ? ` — ${v.reason}` : ""}
+                    {v.refs?.length ? ` (${v.refs.join(", ")})` : ""}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {r.note && <p>{r.note}</p>}
+          {r.current && !r.reconsidered && card.reconsider_enabled && (
+            <button
+              className="secondary small"
+              disabled={busy}
+              onClick={() => onReconsider(r.id)}
+            >
+              Ask the judges to reconsider with this review
+            </button>
+          )}
+          {r.reconsidered && (
+            <small>Judges reconsidered {localTime(r.reconsidered)}</small>
+          )}
+        </article>
+      ))}
     </section>
   );
 }
@@ -332,7 +438,8 @@ export default function App() {
     [loading, setLoading] = useState(false),
     [modal, setModal] = useState(false),
     [focusedRef, setFocusedRef] = useState<string | null>(null),
-    [focusChip, setFocusChip] = useState<{ index: number; nonce: number } | null>(null);
+    [focusChip, setFocusChip] = useState<{ index: number; nonce: number } | null>(null),
+    [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const stream = useRef<{ close: () => void } | null>(null),
     active = useRef(""),
     busyRef = useRef(false),
@@ -371,6 +478,8 @@ export default function App() {
       active.current = id;
       setSelected(null);
       setFocusChip(null);
+    setDrafts({});
+      setDrafts({});
       setEvents([]);
       setPhase(data.kpis.verdict || "Run loaded");
       setHistory(null);
@@ -425,6 +534,7 @@ export default function App() {
     setPrompt("");
     setSelected(null);
     setFocusChip(null);
+    setDrafts({});
     setHistory(null);
     setEvents([]);
     setTab("findings");
@@ -439,6 +549,7 @@ export default function App() {
     setBusy(true);
     setSelected(null);
     setFocusChip(null);
+    setDrafts({});
     setEvents([]);
     setPhase("Following a run in progress");
     if (updateUrl)
@@ -544,6 +655,7 @@ export default function App() {
     setView(null);
     setSelected(null);
     setFocusChip(null);
+    setDrafts({});
     setEvents([]);
     setPhase("Starting research");
     try {
@@ -660,30 +772,12 @@ export default function App() {
           </a>
         </nav>
         <div className="header-actions">
-          <div
-            className={`run-status ${busy ? "running" : view ? "completed" : "before"}`}
-            role="status"
-          >
-            <span />
-            {busy ? "Working" : view ? view.kpis.verdict : "Ready"}
-          </div>
-          <button
-            className="evaluation-button"
-            onClick={() => {
-              setTab("evaluation");
-              setHistory(null);
-            }}
-            disabled={!view}
-          >
-            <Icon name="panel" size={16} /> Evaluation
-          </button>
-          <button
-            className="avatar"
-            aria-label="About this workspace"
-            onClick={() => setModal(true)}
-          >
-            <Icon name="info" />
-          </button>
+          {busy && (
+            <div className="run-status running" role="status">
+              <span />
+              {phase}
+            </div>
+          )}
         </div>
       </header>
       {error && (
@@ -884,14 +978,6 @@ export default function App() {
                   Loading archived evidence…
                 </div>
               )}
-              {view && (
-                <div className="research-area">
-                  <span>
-                    <Icon name="target" size={14} /> Saved search area
-                  </span>
-                  {view.run.area || "No boundary recorded"}
-                </div>
-              )}
             </section>
             {view && (
               <section className="live-summary">
@@ -995,7 +1081,14 @@ export default function App() {
                           <button
                             key={s.id}
                             className={`candidate-row ${selected === s.id ? "selected" : ""}`}
-                            onClick={() => setSelected(s.id)}
+                            onClick={() => {
+                              setSelected(s.id);
+                              // On a phone the map sits above the list: bring it into view.
+                              if (window.matchMedia("(max-width: 800px)").matches)
+                                document
+                                  .querySelector(".map-stage")
+                                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }}
                           >
                             <span className="candidate-index">
                               {String(i + 1).padStart(2, "0")}
@@ -1080,49 +1173,79 @@ export default function App() {
                       </summary>
                       <DataTable rows={view.claims} />
                     </details>
-                    <Reviewer
-                      key={view.run.id}
-                      view={view}
-                      busy={busy}
-                      onReconsider={(id) => void reconsider(id)}
-                      onSaved={() =>
-                        void request<View>(`/api/runs/${view.run.id}`)
-                          .then(setView)
-                          .catch((e) => setError(e.message))
-                      }
-                    />
+                    {view.scorecard && (
+                      <button
+                        className="review-cta"
+                        onClick={() => setTab("evaluation")}
+                      >
+                        <span>
+                          <strong>Do you agree with the judges?</strong>
+                          Review each rubric question in Evaluation. Your
+                          review is kept beside the score and can teach the
+                          judges.
+                        </span>
+                        <Icon name="arrow" size={16} />
+                      </button>
+                    )}
                   </>
                 ) : tab === "evaluation" ? (
                   <>
-                    <div className="section-kicker">Quality and trust</div>
                     <div className="evaluation-heading">
-                      <h2>Evaluate the result</h2>
+                      <div>
+                        <div className="section-kicker">Quality and trust</div>
+                        <h2>Evaluation</h2>
+                      </div>
                       <button
                         className="secondary small"
                         disabled={busy}
                         onClick={() => void rejudge()}
+                        title="Asks the panel again. Unchanged evidence adds votes to the ones already recorded."
                       >
-                        Re-judge
+                        Judge again
                       </button>
                     </div>
                     <div className="score-hero">
                       <strong>
                         {formatScore(view.kpis.score)}
-                        <small>/100</small>
+                        {view.kpis.score !== null && <small>/100</small>}
                       </strong>
                       <div>
-                        <span>{view.kpis.verdict}</span>
-                        <p>
-                          {view.kpis.confidence
-                            ? `${view.kpis.confidence} evidence agreement`
-                            : "Not judged"}
-                        </p>
+                        <span>
+                          {view.kpis.verdict === "scored"
+                            ? `${view.kpis.confidence || "Unknown"} agreement`
+                            : view.kpis.verdict}
+                        </span>
+                        {view.scorecard && (
+                          <p>
+                            {view.scorecard.pass_count}{" "}
+                            {view.scorecard.pass_count === 1 ? "pass" : "passes"}{" "}
+                            ·{" "}
+                            {
+                              Object.values(
+                                (Object.values(view.scorecard.votes_all || {})[0] ||
+                                  {}) as Record<string, number[]>,
+                              ).flat().length
+                            }{" "}
+                            votes per question
+                            {view.scorecard.overall_se > 0 &&
+                              ` · ±${formatScore(view.scorecard.overall_se)}`}
+                          </p>
+                        )}
+                        {view.scorecard?.overall_range &&
+                          view.scorecard.pass_count > 1 && (
+                            <p>
+                              Single passes scored{" "}
+                              {formatScore(view.scorecard.overall_range[0])}–
+                              {formatScore(view.scorecard.overall_range[1])}
+                            </p>
+                          )}
                       </div>
                     </div>
                     <p className="fine-print">
-                      Agreement measures how closely the judges agree on the
-                      evidence. It is not a probability that the answer is
-                      correct.
+                      Agreement is how closely the judges agree on the evidence,
+                      not a probability that the answer is correct. Judging
+                      unchanged evidence again adds votes, so the score settles
+                      rather than flips.
                     </p>
                     <div className="mini-stats">
                       <Stat
@@ -1134,7 +1257,7 @@ export default function App() {
                         value={formatScore(view.kpis.output)}
                       />
                       <Stat
-                        label="Trace integrity"
+                        label="Trace"
                         value={
                           view.kpis.trace_integrity ? "Intact" : "Needs review"
                         }
@@ -1143,7 +1266,7 @@ export default function App() {
                     {view.licences?.presentable === false && (
                       <p className="notice">
                         Some source licences need review before sharing these
-                        results. Open the source and licence record below.
+                        results. See Sources and licences below.
                       </p>
                     )}
                     {view.source_check_note && (
@@ -1152,51 +1275,51 @@ export default function App() {
                     {view.kpis.not_scored_cause && (
                       <p className="notice">{view.kpis.not_scored_cause}</p>
                     )}
-                    <h3 className="section-title">Rubric scorecard</h3>
+                    <div className="scorecard-head">
+                      <h3 className="section-title">Rubric scorecard</h3>
+                      <span className="vote-key" aria-hidden="true">
+                        <i className="vote v2" /> yes <i className="vote v1" />{" "}
+                        partly <i className="vote v0" /> no
+                      </span>
+                    </div>
+                    {view.scorecard && view.kpis.score !== null && (
+                      <p className="fine-print">
+                        Open a question to read the judges’ reasons and give
+                        your own assessment.
+                      </p>
+                    )}
                     {view.scorecard?.criteria?.map((c: any) => (
-                      <details key={c.id} className="criterion">
-                        <summary>
-                          <span>
-                            {c.plain || c.question}
-                            <small>
-                              {c.kind === "measured"
-                                ? "Measured by code"
-                                : c.dimension}
-                            </small>
-                          </span>
-                          <strong>
-                            {formatScore(c.score)}
-                            {c.score !== null && <small>/100</small>}
-                          </strong>
-                        </summary>
-                        <p>{c.question}</p>
-                        {c.value && <p>Measured: {c.value}</p>}
-                        <div className="score-bar">
-                          <span style={{ width: `${c.score || 0}%` }} />
-                        </div>
-                        {Object.entries(
-                          view.scorecard.anchors?.[c.id] || {},
-                        ).map(([s, t]) => (
-                          <p key={s} className="anchor">
-                            <b>{s}</b> {String(t)}
-                          </p>
-                        ))}
-                        {view.scorecard.judges?.map((j: any) => {
-                          const jc = j.criteria?.find(
-                            (x: any) => x.id === c.id,
-                          );
-                          return jc ? (
-                            <div key={j.key} className="judge-reason">
-                              <strong>
-                                {j.key} · {jc.score}
-                              </strong>
-                              <p>{jc.rationale}</p>
-                              <small>{jc.refs?.join(" · ")}</small>
-                            </div>
-                          ) : null;
-                        })}
-                      </details>
+                      <CriterionCard
+                        key={c.id}
+                        c={c}
+                        view={view}
+                        draft={drafts[c.id]}
+                        reviewable={!!view.scorecard && view.kpis.score !== null}
+                        onDraft={(d) =>
+                          setDrafts((old) => {
+                            const next = { ...old };
+                            if (d) next[c.id] = d;
+                            else delete next[c.id];
+                            return next;
+                          })
+                        }
+                      />
                     ))}
+                    <ReviewBar
+                      view={view}
+                      drafts={drafts}
+                      onSaved={() => {
+                        setDrafts({});
+                        void request<View>(`/api/runs/${view.run.id}`)
+                          .then(setView)
+                          .catch((e) => setError(e.message));
+                      }}
+                    />
+                    <SavedReviews
+                      view={view}
+                      busy={busy}
+                      onReconsider={(id) => void reconsider(id)}
+                    />
                     <h3 className="section-title">
                       Every condition in your request
                     </h3>
@@ -1240,24 +1363,39 @@ export default function App() {
                       </p>
                     )}
                     <h3 className="section-title">Independent judge panel</h3>
-                    {view.scorecard?.judges?.map((j: any) => (
-                      <div key={j.key} className="judge-line">
-                        <div>
-                          <strong>{j.key}</strong>
-                          <small>
-                            {j.family}
-                            {j.stood_in_for
-                              ? ` · replacing ${j.stood_in_for}`
-                              : ""}
-                          </small>
+                    {view.scorecard?.judges?.map((j: any) => {
+                      const all = Object.values(
+                        view.scorecard.votes_all || {},
+                      ).flatMap((v: any) => v[j.key] || []) as number[];
+                      const mean = all.length
+                        ? (all.reduce((a, b) => a + b, 0) / all.length / 2) * 100
+                        : null;
+                      return (
+                        <div key={j.key} className="judge-line">
+                          <div>
+                            <strong>{j.key}</strong>
+                            <small>
+                              {j.family}
+                              {j.recused_for ? ` · sitting for ${j.recused_for}` : ""}
+                              {j.stood_in_for ? ` · replacing ${j.stood_in_for}` : ""}
+                              {j.temperature === null ? " · model’s default sampling" : ""}
+                            </small>
+                          </div>
+                          <span>
+                            {j.status === "ok" && mean !== null
+                              ? `${formatScore(mean)}/100`
+                              : "Unavailable"}
+                          </span>
                         </div>
-                        <span>
-                          {j.status === "ok"
-                            ? `${formatScore(j.score)}/100`
-                            : "Unavailable"}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
+                    {view.scorecard?.passes_dropped > 0 && (
+                      <p className="fine-print">
+                        {view.scorecard.passes_dropped} slow{" "}
+                        {view.scorecard.passes_dropped === 1 ? "pass was" : "passes were"}{" "}
+                        left out so the score didn’t wait on it.
+                      </p>
+                    )}
                     <h3 className="section-title">Cost and review effort</h3>
                     <div className="mini-stats">
                       <Stat
@@ -1430,6 +1568,9 @@ export default function App() {
           <i /> Team Foundry · Clay Earth Dataset Foundry
         </span>
         <span>Evidence first. Human judgement always.</span>
+        <button className="footer-link" onClick={() => setModal(true)}>
+          About
+        </button>
         <a href={endpoint("/api/docs")}>API</a>
         <a href={endpoint("/")}>Classic console</a>
       </footer>
