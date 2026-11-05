@@ -2239,3 +2239,11 @@ html[data-colour="colour-safe"] .vote.v0 {
 .footer-link:hover {
   text-decoration: underline;
 }
+/* The Team Foundry mark (same asset as the classic console's header). */
+.brand-logo {
+  width: 38px;
+  height: 26px;
+  object-fit: contain;
+  margin-right: 10px;
+  flex-shrink: 0;
+}

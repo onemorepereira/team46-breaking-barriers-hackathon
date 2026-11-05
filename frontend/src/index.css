@@ -74,39 +74,10 @@
   min-width: 305px;
 }
 
-.brand-mark {
-  width: 28px;
-  height: 28px;
-  position: relative;
-  margin-right: 10px;
-  transform: rotate(-30deg);
-}
 
-.brand-mark i {
-  position: absolute;
-  display: block;
-  width: 8px;
-  border-radius: 2px;
-  background: var(--navy);
-  bottom: 3px;
-}
 
-.brand-mark i:nth-child(1) {
-  left: 2px;
-  height: 12px;
-}
 
-.brand-mark i:nth-child(2) {
-  left: 11px;
-  height: 21px;
-  background: #04c9e7;
-}
 
-.brand-mark i:nth-child(3) {
-  left: 20px;
-  height: 16px;
-  background: #fd8800;
-}
 
 .brand-name {
   font: 700 16px/1 'Manrope', sans-serif;
