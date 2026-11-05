@@ -777,7 +777,13 @@ export default function App() {
           onClick={() => !busy && reset()}
           aria-label="Team Foundry home"
         >
-          <img className="brand-logo" src={foundryMark} alt="" width={38} height={26} />
+          <img
+            className="brand-logo"
+            src={foundryMark}
+            alt=""
+            width={38}
+            height={26}
+          />
           <span className="brand-name">Team Foundry</span>
           <span className="brand-context">Evidence workspace</span>
         </button>
@@ -1164,8 +1170,8 @@ export default function App() {
                     <div className="live-progress" aria-hidden="true">
                       <span />
                     </div>
-                    <Trace entries={timeline} live />
                     <LiveNow events={events} timeline={timeline} />
+                    <Trace entries={timeline} live />
                   </>
                 ) : tab === "findings" ? (
                   <>
@@ -1433,8 +1439,8 @@ function LiveNow({ events, timeline }: { events: any[]; timeline: any[] }) {
           <span>
             <strong>Independent judges are reviewing the evidence</strong>
             <small>
-              {replies.length} of {passes * (judging.seats?.length || 3)} verdicts
-              · {elapsed}s since the last
+              {replies.length} of {passes * (judging.seats?.length || 3)}{" "}
+              verdicts · {elapsed}s since the last
             </small>
           </span>
         </div>
@@ -1457,7 +1463,11 @@ function LiveNow({ events, timeline }: { events: any[]; timeline: any[] }) {
                 ))}
               </span>
               <span className="live-judge-score">
-                {scores.length ? scores.join(" · ") : done ? "Unavailable" : "reading…"}
+                {scores.length
+                  ? scores.join(" · ")
+                  : done
+                    ? "Unavailable"
+                    : "reading…"}
               </span>
             </div>
           );
@@ -1506,36 +1516,50 @@ function Trace({
         .getElementById(`step-${focusedRef}`)
         ?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [focusedRef]);
+  // While live, keep the trail short: the latest steps, older ones one click away.
+  const [showAll, setShowAll] = useState(false);
+  const LIVE_WINDOW = 6;
+  const hidden =
+    live && !showAll ? Math.max(0, entries.length - LIVE_WINDOW) : 0;
   return (
-    <div className="real-timeline">
-      {entries.map((e, i) => (
-        <details
-          key={`${e.ref}-${i}`}
-          id={`step-${e.ref}`}
-          open={focusedRef === e.ref}
-          className={`trace-step ${e.status === "error" ? "trace-error" : ""} ${live ? "trace-live" : ""} ${live && i === entries.length - 1 ? "trace-latest" : ""}`}
-        >
-          <summary>
-            <span className="trace-ref">{e.ref || i + 1}</span>
-            <span>
-              <strong>
-                {e.title || e.sentence || e.tool || "Recorded step"}
-              </strong>
-              <small>
-                {e.kind} {e.ms != null ? `· ${(e.ms / 1000).toFixed(1)}s` : ""}
-              </small>
-            </span>
-            <Icon name="chevron" size={14} />
-          </summary>
-          {e.bounds?.length === 4 && onZoom && (
-            <button className="secondary" onClick={() => onZoom(e.bounds)}>
-              Show this step on map
-            </button>
-          )}
-          {e.detail && <p>{e.detail}</p>}
-          <pre>{JSON.stringify(e.raw || e, null, 2)}</pre>
-        </details>
-      ))}
+    <div className={`real-timeline ${live ? "compact" : ""}`}>
+      {hidden > 0 && (
+        <button className="trail-more" onClick={() => setShowAll(true)}>
+          + {hidden} earlier {hidden === 1 ? "step" : "steps"}
+        </button>
+      )}
+      {entries.slice(hidden).map((e, j) => {
+        const i = j + hidden;
+        return (
+          <details
+            key={`${e.ref}-${i}`}
+            id={`step-${e.ref}`}
+            open={focusedRef === e.ref}
+            className={`trace-step ${e.status === "error" ? "trace-error" : ""} ${live ? "trace-live" : ""} ${live && i === entries.length - 1 ? "trace-latest" : ""}`}
+          >
+            <summary>
+              <span className="trace-ref">{e.ref || i + 1}</span>
+              <span>
+                <strong>
+                  {e.title || e.sentence || e.tool || "Recorded step"}
+                </strong>
+                <small>
+                  {e.kind}{" "}
+                  {e.ms != null ? `· ${(e.ms / 1000).toFixed(1)}s` : ""}
+                </small>
+              </span>
+              <Icon name="chevron" size={14} />
+            </summary>
+            {e.bounds?.length === 4 && onZoom && (
+              <button className="secondary" onClick={() => onZoom(e.bounds)}>
+                Show this step on map
+              </button>
+            )}
+            {e.detail && <p>{e.detail}</p>}
+            <pre>{JSON.stringify(e.raw || e, null, 2)}</pre>
+          </details>
+        );
+      })}
     </div>
   );
 }
