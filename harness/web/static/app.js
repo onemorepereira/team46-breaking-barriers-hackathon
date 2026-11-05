@@ -487,7 +487,7 @@
     if (!card) return;
     judgeRows(card.seats.map((s) => ({ ...s })));
     for (const j of card.judges) judgeResult(j);
-    setText("panel-note", `median of ${card.valid_judges.join("/")} valid · judged ${card.judged_at || ""}`);
+    setText("panel-note", `mean of votes from ${card.valid_judges.join("/")} valid · judged ${card.judged_at || ""}`);
   }
 
   // ---------- claims, answer ----------

@@ -22,8 +22,9 @@ class CriterionResult:
     dimension: str
     kind: str
     question: str
-    score: float | None  # 0..100, None = N/A
-    median: float | None = None  # judged: mean of pass medians on the 0..2 scale
+    score: float | None  # 0..100, None = N/A; judged: the mean of every valid vote in every usable pass
+    median: float | None = None  # judged: mean of pass medians on the 0..2 scale (reviews compare with it)
+    mean: float | None = None  # judged: mean of every valid vote on the 0..2 scale (the score)
     std: float | None = None  # judged: std of pass medians (passes > 1)
     votes: dict[str, int] = field(default_factory=dict)  # judge key -> pass-1 vote
     spread: float | None = None
@@ -104,11 +105,13 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
             )
             continue
         medians, pass_spreads, pass_mads = [], [], []
+        all_votes: list[int] = []
         votes1: dict[str, int] = {}
         for i, p in enumerate(usable):
             v = {j["key"]: int(j["scores"][c.id]) for j in _valid(p) if c.id in j.get("scores", {})}
             if len(v) < MIN_VALID:
                 continue
+            all_votes += list(v.values())
             med = lower_median(list(v.values()))
             medians.append(med)
             pass_spreads.append(max(v.values()) - min(v.values()))
@@ -120,6 +123,9 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
             results.append(CriterionResult(c.id, c.dimension, c.kind, c.question, None))
             continue
         mean_med = sum(medians) / len(medians)
+        # The score averages every vote: one flipped vote moves a criterion by a third of a step, not a
+        # whole step as with the median, so repeat judgings agree far more closely (docs/judging-stability).
+        mean_vote = sum(all_votes) / len(all_votes)
         spread = sum(pass_spreads) / len(pass_spreads)
         mad = sum(pass_mads) / len(pass_mads)
         spreads.append(spread)
@@ -130,8 +136,9 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
                 c.dimension,
                 c.kind,
                 c.question,
-                round(mean_med / top * 100, 1),
+                round(mean_vote / top * 100, 1),
                 median=round(mean_med, 3),
+                mean=round(mean_vote, 3),
                 std=round(statistics.pstdev(medians), 3) if len(medians) > 1 else None,
                 votes=votes1,
                 spread=spread,

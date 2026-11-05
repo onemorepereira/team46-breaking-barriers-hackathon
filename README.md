@@ -36,7 +36,7 @@ harness CLI ──▶ AgentCore Runtime ──▶ Strands agent ──▶ Bedroc
    │                                       └─▶ LGND Geo MCP server (NAIP imagery search and checks)
    │                                  every span ──▶ S3 archive (JSONL)  +  CloudWatch (AgentCore Observability)
    ├─ reads the archive ──▶ check · claim provenance · area compliance · signals · summary · report · replay · compare
-   ├─ judge panel ──▶ evidence dossier ──▶ 3 judges, 3 model families (Bedrock) ──▶ median · agreement · confidence
+   ├─ judge panel ──▶ evidence dossier ──▶ 3 judges, 3 model families (Bedrock) ──▶ mean vote · agreement · confidence
    └─ Team Foundry console (FastAPI) ──▶ live steps in plain English · satellite map and tiles · KPIs · scorecard
 ```
 
@@ -49,7 +49,7 @@ harness CLI ──▶ AgentCore Runtime ──▶ Strands agent ──▶ Bedroc
 - **OpenTelemetry is the only telemetry API.** The deployed backend is AgentCore Observability (CloudWatch); a CI test proves the exporter can be swapped by config alone[^T177][^V164] **[team]**.
 - **A panel scores every run.** A generalized rubric ([`rubrics/geo-dataset-v1.yaml`](rubrics/geo-dataset-v1.yaml)) scores the workflow and the output, matching the brief's two dimensions[^T116][^V110]:
   - two criteria are measured by code: claim provenance and area compliance;
-  - eight are judged by a tribunal of Claude Opus 5.5, DeepSeek V3.2 and Kimi K3, and each criterion's score is the median vote. Reserves (Mistral Large 3, Qwen3 235B, then Sonnet 5.5) sit for a recused judge or stand in for one that fails.
+  - eight are judged by a tribunal of Claude Opus 5.5, DeepSeek V3.2 and Kimi K3, and each criterion's score is the mean of every vote across three passes. Reserves (Mistral Large 3, Qwen3 235B, then Sonnet 5.5) sit for a recused judge or stand in for one that fails.
 
   A judge from the agent's own model family recuses itself. Every judgement carries its confidence (judge agreement plus trace integrity). `harness calibrate` proves the panel lowers the right criterion when we plant a defect **[team]**. See [how a run is scored](docs/judging/guide.md).
 - **The console shows the run.** `harness ui` is a FastAPI app[^T99] built on the Tabler dashboard kit and MapLibre. It shows:
@@ -129,7 +129,7 @@ From the Verify stage on Nov 4; the evidence is in the [handoff](docs/eval-harne
 1. **One loop, end to end.** An agent calls geospatial tools over MCP, and every run ends in a report[^T34][^V162].
 2. **Trace everything, including the model's decisions.** Trace capture is our top priority **[team]**. Every run keeps its traces and inputs[^V34], and never gets judged on its final output alone[^T176]. See [Traceability](#traceability).
 3. **Summarize the run.** A readable account, generated from the trace, of what the agent did and where it struggled[^T115].
-4. **Score two things.** The workflow, from the traces[^T117], and the output, against a rubric[^T31][^T118]. ADB's rubric hasn't arrived[^V191], so a generalized rubric stands in and ADB's drops in as a file **[team]**. Two criteria are measured by code; eight are judged by a three-model, cross-family tribunal. Its median vote, agreement and confidence come with every score **[team]**.
+4. **Score two things.** The workflow, from the traces[^T117], and the output, against a rubric[^T31][^T118]. ADB's rubric hasn't arrived[^V191], so a generalized rubric stands in and ADB's drops in as a file **[team]**. Two criteria are measured by code; eight are judged by a three-model, cross-family tribunal. Its mean vote, agreement and confidence come with every score **[team]**.
 5. **Keep observation pluggable.** The model and the tracing tool both stay swappable[^T10][^V113]. OpenTelemetry is the linchpin that proves it: a CI test sends the same agent spans to two different exporters, changing only config **[team]**. See [OpenTelemetry](#opentelemetry-the-pluggability-contract).
 6. **Never fail the demo.** Recorded traces replay through the scorer and still produce a full report[^T121][^V114].
 7. **Ship it open.** Apache-2.0[^V33], in an open-source repo Clay can access after the event[^V166]. Infrastructure as code with CDK, public before judging **[team]**.

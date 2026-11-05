@@ -180,7 +180,7 @@ def passes_with(votes_by_judge, modes=None):
     ]
 
 
-def test_median_dimensions_and_majority_failure_modes(tmp_path):
+def test_mean_of_votes_dimensions_and_majority_failure_modes(tmp_path):
     m = measure.measure(lgnd_run(tmp_path))
     p = panel.aggregate(
         RUBRIC,
@@ -196,10 +196,12 @@ def test_median_dimensions_and_majority_failure_modes(tmp_path):
         m,
     )
     tool = next(c for c in p.criteria if c.id == "tool_selection")
-    assert tool.median == 2 and tool.score == 100 and tool.spread == 2 and not tool.unanimous
+    # The score is the mean of the votes (7/5 = 1.4 -> 70); the median is still reported for reviews.
+    assert tool.median == 2 and tool.mean == 1.4 and tool.score == 70.0 and tool.spread == 2
+    assert not tool.unanimous
     area = next(c for c in p.criteria if c.id == "area_compliance")
     assert area.score == 50.0 and area.value == "1/2"
-    assert p.dimensions["workflow"] == 100 and p.dimensions["output"] == round((100 * 4 + 100 + 50) / 6, 1)
+    assert p.dimensions["workflow"] == 70 and p.dimensions["output"] == round((70 * 4 + 100 + 50) / 6, 1)
     assert [f["id"] for f in p.failure_modes] == ["overconfidence"]  # 3 of 5; retry_loop 1 of 5 isn't
     assert p.within_one == 0.0 and p.confidence == "Low"
 

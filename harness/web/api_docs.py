@@ -26,7 +26,7 @@ OpenTelemetry spans, and scores the run for the quality and accuracy of the data
   compliance (is each claimed site inside the requested area?).
 - *Judged:* a tribunal of three LLM judges from three model families scores eight criteria (tool choice and
   arguments, sequencing and recovery, efficiency, result relevance, grounding, completeness, honest
-  uncertainty) on 0–2 scales. Each criterion takes the median vote.
+  uncertainty) on 0–2 scales. Each criterion takes the mean of every vote across passes.
 - *Gates:* a run with no answer, or no successful tool call, is **FAILED**. A run whose model calls all failed
   (for example, expired credentials) is **not scored**.
 - *Confidence* (High, Medium or Low) says how far the judges agreed and whether the trace is intact. It is not

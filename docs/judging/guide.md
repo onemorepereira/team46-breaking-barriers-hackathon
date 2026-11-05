@@ -12,7 +12,7 @@ The overall score is the mean of the two. Two criteria are **measured by code**:
 - whether each claimed value appears in the tool result it cites;
 - whether each claimed location is inside the requested area.
 
-Eight criteria are **judged** by a tribunal of three LLMs from three different model families. Each panel score is the median of the three votes. Next to the score sits a **confidence** label (High, Medium or Low). It says how far the judges agreed and whether the trace is intact. It does **not** say the answer is true: that would need an answer key, which is our main open gap ([gaps.md](gaps.md)).
+Eight criteria are **judged** by a tribunal of three LLMs from three different model families. Each panel score is the mean of the judges' votes across three passes. Next to the score sits a **confidence** label (High, Medium or Low). It says how far the judges agreed and whether the trace is intact. It does **not** say the answer is true: that would need an answer key, which is our main open gap ([gaps.md](gaps.md)).
 
 ## Plain explanation on each report
 
@@ -56,7 +56,7 @@ A tribunal of three judges from three families:
 | 3 | Kimi K3 | Moonshot | 3.30 / 16.50 |
 | Reserves, in order | Mistral Large 3 (Mistral), Qwen3 235B (Alibaba), Sonnet 5.5 (Anthropic) | | 0.50 / 1.50; 0.22 / 0.88; 2.00 / 10.00 |
 
-- **Why three, from three families:** an odd panel has no ties, and its median is always one judge's real vote. No single vendor can carry a majority. That answers the self-preference risk the GRA paper leaves open, since it rated Gemini with Gemini.
+- **Why three, from three families:** no single vendor can carry a majority, and averaging three families' votes dilutes any one vendor's bias. That answers the self-preference risk the GRA paper leaves open, since it rated Gemini with Gemini.
 - **Who was dropped, and why** (from the 7 runs judged by the earlier five-judge panel):
   - **Grok 4.7**: it averaged 143 s per verdict against 11–50 s for the others, so it set the time to a score, and it was the only judge that errored.
   - **Mistral Large 3** and **Qwen3 235B** are reserves: they were the two most lenient judges (+0.14 and +0.25 points above their peers' median on average). Kimi took Mistral's seat at the user's call. It voted closest to its peers (mean bias −0.09), so the tribunal isn't outvoted by lenient seats.
@@ -76,7 +76,7 @@ A tribunal of three judges from three families:
 
 ## From votes to a score
 
-1. **Per judged criterion:** the median vote (the lower median for an even count, from older five-judge records). The score is median ÷ 2 × 100. With several passes, it is the mean of the pass medians.
+1. **Per judged criterion:** the mean of every valid vote in every pass. The score is mean ÷ 2 × 100. It was the median vote until 2026-11-04: one flipped vote moved a criterion a whole step, and identical evidence scored 83–94 ([judging stability](../judging-stability/handoff.md)). The median (the lower median for an even count) is still recorded, and human reviews compare with it.
    - **Passes:** each judging runs three passes at the same time (`judging.passes`). Re-judging evidence the judges already saw (same dossier, prompt and panel) adds new passes to the recorded ones, keeping the newest nine. So the score settles instead of flipping. Once two passes are in, a pass still running 25 s after judging began is left out and counted (`dropped_slow_passes`). Why: [judging stability](../judging-stability/handoff.md).
 2. **Measured criteria:** the share × 100, or N/A when there's nothing to measure (no area, no coordinates).
 3. **Dimensions:** the mean of their criteria. **Overall:** the mean of the two dimensions.

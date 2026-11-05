@@ -64,7 +64,7 @@ Date: 2026-11-04. Records only; [How a run is scored](../judging/guide.md) descr
 | Mean of pass medians (unchanged) | 3.7 | 77–98 |
 | Mean of all votes | 2.3 | 81–94 |
 
-Switching rules is a scoring-method decision and was **not** made here (see Open).
+**Adopted 2026-11-04 (user's call):** the score is now the mean of all votes. The median is still recorded for review comparisons.
 
 **Tests and checks:**
 - `tests/test_judging.py::test_rejudging_unchanged_inputs_adds_passes_and_new_inputs_start_afresh`
@@ -80,7 +80,7 @@ Switching rules is a scoring-method decision and was **not** made here (see Open
 A review was **not** saved into the live deployment from the browser; the endpoint is unchanged and covered by `tests/test_feedback.py`.
 
 ## Open
-- **Mean of all votes instead of the median:** about 40% less spread, but one outlier judge moves the score by a third of a vote. This is your call.
+- **Mean of all votes:** adopted. One outlier judge now moves a criterion by a third of its vote, where under the median it moved nothing; recusal and three families limit that.
 - **Kimi at low effort** is a quality trade for speed. Its votes stayed within the panel's spread on Jodhpur. Calibration (`harness calibrate`) has not been rerun with it.
 - The S3 credentials expired during verification. The live-console check of the latest build ran against a local copy of the archive.
 
