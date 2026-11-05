@@ -11,4 +11,4 @@ Decide one thing: is the kind of asset the user asked for visibly present at or 
 - At coarse resolution (several metres per pixel) only large assets are visible; answer "unclear" rather than guess about small ones.
 
 Reply with only this JSON object and nothing else:
-{{"verdict": "present" | "absent" | "unclear", "reason": "<one short sentence describing what the image shows>"}}
+{"verdict": "present" | "absent" | "unclear", "reason": "<one short sentence describing what the image shows>"}

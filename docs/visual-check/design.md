@@ -232,10 +232,14 @@ Usage keys are snake_case, as in judgement passes. `cost_usd` totals every recor
 | Visual thread still running at join (a backstop that fires only if archive writes hang past `deadline_s + 15`) | join timeout, logged | assemble without waiting | `ensure`'s single write may still land after the judgement is stored. Accepted: like `conditions.json`, a v3 judgement's measured criteria are recomputed from the archive on view and rescore, so the display follows the latest `visual.json` |
 
 ## Security and privacy
-- Image URLs come from third-party catalogue JSON, and GDAL opens them, so a host allowlist (above) prevents fetching arbitrary hosts.
+- Image URLs come from third-party catalogue JSON, and GDAL opens them. Three guards apply:
+  - a host allowlist (https, port 443 only) prevents fetching arbitrary hosts;
+  - `scenes.render` opens with `driver="GTiff"`, so format detection can't turn a VRT saved as `.tif` on an allowed host (OAM's bucket holds user uploads) into reads of other URLs or local files. Tested with such a file;
+  - GDAL redirects aren't controlled: residual, accepted.
+- Error text is redacted of URL query strings (`scenes.redact`) before it reaches `visual.json`, logs, or the tile endpoint's 502 detail, because a signed NAIP href carries a Planetary Computer SAS token. This also fixes the same exposure in the existing chip endpoint.
 - The new endpoint reads only `runs/<id>/visual/<site_id>.jpg`. `site_id` must match `^[0-9a-f]{12}$`, and the run id is validated as on other run routes, so there's no path input.
 - The claim text is agent output, and catalogue metadata (OAM `license`, `provider`) is third-party:
-  - **Input:** the prompt passes the claim between `<claim>` tags. The system prompt says to treat text inside the tags as a description to check, never as instructions, and to judge only from the image.
+  - **Input:** the prompt passes the claim between `<claim>` tags; the request, the image credit (OAM `provider`) and the date are fenced the same way. The system prompt says to treat text inside the tags as a description to check, never as instructions, and to judge only from the image.
   - **Output:** the reply must be JSON with `verdict` in the enum. `reason` is cut to 300 characters, with control characters stripped.
   - **Display:** licence and provider strings are cut to 80 characters. Everything is rendered by React as text, never as HTML.
   - **Adversarial cases:**

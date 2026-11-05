@@ -195,3 +195,37 @@ def test_render_min_coverage_rejects_a_mostly_empty_window(tmp_path):
     assert scenes.render(part, BBOX, size=32)  # default: any data is enough, as before
     with pytest.raises(TileUnavailable, match="only part"):
         scenes.render(part, BBOX, size=32, min_coverage=0.9)
+
+
+def test_only_geotiff_is_opened_so_a_vrt_named_tif_cannot_reach_other_files(tmp_path):
+    inner = _tif(tmp_path, 10)
+    vrt = tmp_path / "evil.tif"
+    vrt.write_text(
+        '<VRTDataset rasterXSize="10" rasterYSize="10"><VRTRasterBand dataType="Byte" band="1">'
+        f"<SimpleSource><SourceFilename>{inner}</SourceFilename><SourceBand>1</SourceBand></SimpleSource>"
+        "</VRTRasterBand></VRTDataset>"
+    )
+    with pytest.raises(Exception) as e:
+        scenes.render(str(vrt), BBOX, size=32)
+    assert "not recognized" in str(e.value) or "GTiff" in str(e.value) or "TIFF" in str(e.value)
+
+
+def test_ports_other_than_443_are_refused():
+    assert sharp.allowed("https://vantor-opendata.s3.amazonaws.com:443/x.tif")
+    assert not sharp.allowed("https://vantor-opendata.s3.amazonaws.com:8443/x.tif")
+    assert not sharp.allowed("https://vantor-opendata.s3.amazonaws.com:notaport/x.tif")
+
+
+def test_a_failed_scene_read_never_returns_the_signed_url(monkeypatch):
+    monkeypatch.setattr(
+        scenes, "find", lambda index, bbox, observed: "https://naipeuwest.blob.core.windows.net/a.tif"
+    )
+    monkeypatch.setattr(scenes, "_signed", lambda index, href: f"{href}?sig=SECRET")
+
+    def boom(href, bbox, size=384, min_coverage=0.0):
+        raise RuntimeError(f"'/vsicurl/{href}' not recognized")
+
+    monkeypatch.setattr(scenes, "render", boom)
+    with pytest.raises(TileUnavailable) as e:
+        scenes.scene_jpeg("naip", list(BBOX), "2022-07-04")
+    assert "SECRET" not in str(e.value) and "a.tif?…" in str(e.value)

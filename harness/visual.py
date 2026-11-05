@@ -92,7 +92,9 @@ def sites(run: Run, max_sites: int, window_m: float) -> list[dict[str, Any]]:
         chip = next(
             (c for c in chips if (round(c.lat, 4), round(c.lon, 4)) == (round(x.lat, 4), round(x.lon, 4))),
             None,
-        ) or next((c for c in chips if c.node and c.node in claim), None)
+        ) or next(
+            (c for c in chips if c.node and re.search(rf"(?<![\w/:]){re.escape(c.node)}(?!\w)", claim)), None
+        )
         out.append(
             {
                 "site_id": sid,
@@ -168,7 +170,7 @@ def _check_one(
             img = cand
             break
         except Exception as e:  # noqa: BLE001 - no data there, storage down: next candidate
-            tried.append(f"read {cand.source}: {_clean(e, 120)}")
+            tried.append(f"read {cand.source}: {_clean(sharp.redact(str(e)), 120)}")
     if img is None or jpeg is None:
         return {**rec, "verdict": "no_image", "reason": "No open image of this site to check"}, None
     rec.update(
@@ -186,9 +188,9 @@ def _check_one(
         "harness/visual_check_site",
         request=_fence(request),
         claim=_fence(site["claim"]),
-        credit=rec["credit"],
+        credit=_fence(rec["credit"]),
         gsd=rec["gsd_m"],
-        date=img.date or "unknown",
+        date=_fence(img.date or "unknown"),
     )
     messages: list[dict[str, Any]] = [
         {
@@ -217,7 +219,11 @@ def _check_one(
                 ]
     except Exception as e:  # noqa: BLE001 - Bedrock error or a second bad reply: checked again on re-judge
         rec.update(usage=usage, cost_usd=_cost(cfg, key, usage), model=key, model_id=model_id)
-        return {**rec, "verdict": "error", "reason": _clean(f"{type(e).__name__}: {e}", REASON_MAX)}, None
+        return {
+            **rec,
+            "verdict": "error",
+            "reason": _clean(sharp.redact(f"{type(e).__name__}: {e}"), REASON_MAX),
+        }, None
     rec.update(
         verdict=verdict,
         reason=reason,
@@ -329,21 +335,8 @@ def _ensure(cfg: Any, run: Run, client: Any) -> dict[str, Any]:
         )
         run.store.write_text(key_json, json.dumps(out, indent=1))
     except Exception as e:  # noqa: BLE001 - archive unwritable: the criterion is N/A, re-judge retries
-        log.warning("visual check archive write failed: %s", e)
-        try:  # leave a visible status if the store takes a small write; earlier verdicts stay unscored
-            run.store.write_text(
-                key_json,
-                json.dumps(
-                    {
-                        **out,
-                        "status": "error",
-                        "sites": [],
-                        "reason": f"archive write failed: {type(e).__name__}",
-                    }
-                ),
-            )
-        except Exception:  # noqa: BLE001 - nothing more to do; re-judge retries
-            pass
+        # The earlier visual.json (if any) is left as it was: its final verdicts stay scored and reusable.
+        log.warning("visual check archive write failed: %s", type(e).__name__)
         return {
             **out,
             "status": "error",

@@ -383,3 +383,68 @@ def test_licences_list_each_visual_source_with_its_own_terms(tmp_path, monkeypat
     run2 = checked_run(tmp_path / "b", monkeypatch, licence="CC BY 4.0", source="oam")
     oam = next(i for i in licences.for_run(run2)["items"] if i["key"].startswith("visual:oam"))
     assert oam["presentable"] is True
+
+
+def test_a_failed_archive_write_keeps_the_earlier_verdicts(tmp_path, monkeypatch):
+    run = lgnd_run(tmp_path)
+    fake_imagery(monkeypatch)
+    visual.ensure(cfg(max_sites=1), run, Bedrock(['{"verdict": "absent", "reason": "Lot."}']))
+    before = run.store.read_text(f"runs/{run.run_id}/visual.json")
+
+    def broken(key, text):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(run.store, "write_text", broken)
+    out = visual.ensure(cfg(), run, Bedrock())
+    assert out["status"] == "error" and "archive write failed" in out["reason"]
+    assert run.store.read_text(f"runs/{run.run_id}/visual.json") == before
+
+
+def test_the_naip_read_token_never_reaches_the_record(tmp_path, monkeypatch):
+    from harness import scenes
+
+    token = "st=2026-11-05&se=2026-11-06&sp=rl&sig=SECRETSIGNATURE"
+    monkeypatch.setattr(scenes, "_signed", lambda index, href: f"{href}?{token}")
+
+    def failing_render(href, bbox, size=768, min_coverage=0.0):
+        raise RuntimeError(f"'/vsicurl/{href}' not recognized as a supported file format.")
+
+    monkeypatch.setattr(scenes, "render", failing_render)
+    img = sharp.Image("naip", "https://naipeuwest.blob.core.windows.net/naip/a.tif", 0.6, None, "", "")
+    try:
+        sharp.read(img, (0, 0, 1, 1))
+    except Exception as e:  # noqa: BLE001
+        assert "SECRET" not in str(e) and e.__cause__ is None
+    assert "SECRET" not in sharp.redact(f"x https://h/a.tif?{token} y")
+
+    run = lgnd_run(tmp_path)
+
+    def candidates(lat, lon, bbox, *, observed=None, index=None, sources=sharp.SOURCES, tried=None):
+        yield img
+
+    monkeypatch.setattr(sharp, "candidates", candidates)
+    out = visual.ensure(cfg(max_sites=1), run, Bedrock())
+    assert out["sites"][0]["verdict"] == "no_image"
+    assert "SECRET" not in run.store.read_text(f"runs/{run.run_id}/visual.json")
+
+
+def test_node_ids_match_whole_ids_only(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from analysis.judging import measure
+    from analysis.judging.measure import Located
+
+    def loc(source, lat, node=None, claim=None):
+        box = [-96.51, lat - 0.01, -96.49, lat + 0.01] if node else None
+        return Located(
+            source, "T1", node, lat, -96.5, True, bbox=box, index="naip" if node else None, claim=claim
+        )
+
+    located = [
+        loc("chip", 30.0, node="naip/obs:10916915"),
+        loc("chip", 31.0, node="naip/obs:109169150"),
+        loc("claim", 35.0, claim="Solar at naip/obs:109169150 (confirmed)"),
+    ]
+    monkeypatch.setattr(measure, "measure", lambda run: SimpleNamespace(located=located))
+    site = visual.sites(lgnd_run(tmp_path), 12, 250)[0]
+    assert site["chip_node"] == "naip/obs:109169150"

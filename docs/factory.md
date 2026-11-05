@@ -71,7 +71,7 @@ Each teammate works in **their own sandbox account**. The committed `harness.yam
 | Workspace map popups | Imagery on the workspace map with its details; open archived runs in about 2 s instead of 6–15 s | PR open | Miguel | [handoff](workspace-map-popups/handoff.md) |
 | Judging stability and workspace review | Scores that settle rather than flip, judging in about 20 s, per-question human review in the workspace, a result panel on the map, and a design pass | PR open | Miguel | [handoff](judging-stability/handoff.md) |
 | Observed scenes | Result tiles show the scene LGND matched (sensor, date, place), not a basemap mosaic | PR open | Miguel | [handoff](observed-scenes/handoff.md) |
-| Visual check | Each reported site is looked at in the sharpest open image (Vantor, OpenAerialMap, NAIP, Sentinel-2) by a vision model, and scored as `visual_confirmation` | PR open | Miguel | [spec](visual-check/spec.md) · [design](visual-check/design.md) · [handoff](visual-check/handoff.md) |
+| Visual check | Each reported site is looked at in the sharpest open image (Vantor, OpenAerialMap, NAIP, Sentinel-2) by a vision model, and scored as `visual_confirmation` | PR open | Miguel | [spec](visual-check/spec.md) · [design](visual-check/design.md) · [launch](visual-check/launch.md) · [handoff](visual-check/handoff.md) |
 
 ## Changes without a spec
 

@@ -47,6 +47,14 @@ GDAL_ENV = {
 }
 
 
+_QUERY = re.compile(r"\?[^\s'\"]*")
+
+
+def redact(text: str) -> str:
+    """Error text without URL query strings: a signed NAIP href carries a Planetary Computer SAS token."""
+    return _QUERY.sub("?…", text)
+
+
 def label(index: str | None, observed: str | None) -> str | None:
     """The credit for an observed scene, or None when there is no date to look one up by."""
     if index not in LABELS or not observed or not DATE_RE.match(observed):
@@ -123,7 +131,8 @@ def render(href: str, bbox: tuple[float, ...], size: int = 384, min_coverage: fl
     from rasterio.warp import transform_bounds
     from rasterio.windows import from_bounds
 
-    with rasterio.Env(**GDAL_ENV), rasterio.open(href) as src:
+    # GeoTIFF only: detection would let a VRT saved as .tif on an allowed host open other URLs or files.
+    with rasterio.Env(**GDAL_ENV), rasterio.open(href, driver="GTiff") as src:
         window = from_bounds(*transform_bounds("EPSG:4326", src.crs, *bbox), transform=src.transform)
         ratio = float(window.height) / float(window.width) if window.width else 1.0
         w, h = (size, max(1, round(size * ratio))) if ratio <= 1 else (max(1, round(size / ratio)), size)
@@ -150,7 +159,7 @@ def scene_jpeg(index: str, bbox: list[float], observed: str) -> bytes:
     try:
         href = find(index, key, observed)
     except Exception as e:  # noqa: BLE001 - catalogue down or slow
-        raise TileUnavailable(f"scene catalogue: {e}") from e
+        raise TileUnavailable(redact(f"scene catalogue: {e}")) from None
     if not href:
         raise TileUnavailable(f"no {index} scene observed {observed} covers this footprint")
     try:
@@ -158,4 +167,4 @@ def scene_jpeg(index: str, bbox: list[float], observed: str) -> bytes:
     except TileUnavailable:
         raise
     except Exception as e:  # noqa: BLE001 - storage unreachable, bad window
-        raise TileUnavailable(f"scene read: {e}") from e
+        raise TileUnavailable(redact(f"scene read: {e}")) from None  # the 502 detail must not carry the token

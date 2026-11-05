@@ -17,6 +17,7 @@ a JPEG, or raises TileUnavailable so the caller moves on to the next candidate.
 from __future__ import annotations
 
 import json
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -73,7 +74,11 @@ class Image:
 
 def allowed(href: str) -> bool:
     u = urllib.parse.urlparse(href)
-    return u.scheme == "https" and u.hostname in ALLOWED_HOSTS
+    try:
+        port = u.port
+    except ValueError:
+        return False
+    return u.scheme == "https" and u.hostname in ALLOWED_HOSTS and port in (None, 443)
 
 
 def _get_json(url: str) -> Any:
@@ -83,15 +88,24 @@ def _get_json(url: str) -> Any:
 
 
 _cache: dict[str, tuple[float, Any]] = {}
+_cache_lock = threading.Lock()
+CACHE_MAX = 4096  # catalogue documents (the Vantor catalogue is a few hundred)
 
 
 def _cached(url: str) -> Any:
-    hit = _cache.get(url)
-    if hit and time.time() - hit[0] < CACHE_S:
-        return hit[1]
-    data = _get_json(url)
-    _cache[url] = (time.time(), data)
-    return data
+    """A catalogue document, fetched once an hour; one fetch at a time so workers share a cold catalogue."""
+    with _cache_lock:
+        hit = _cache.get(url)
+        if hit and time.time() - hit[0] < CACHE_S:
+            return hit[1]
+        data = _get_json(url)
+        if len(_cache) >= CACHE_MAX:
+            _cache.clear()
+        _cache[url] = (time.time(), data)
+        return data
+
+
+redact = scenes.redact
 
 
 def _ring_contains(ring: list[Any], lon: float, lat: float) -> bool:
@@ -292,4 +306,4 @@ def read(img: Image, bbox: tuple[float, ...], size: int = 768) -> bytes:
     except TileUnavailable:
         raise
     except Exception as e:  # noqa: BLE001 - storage unreachable, bad window
-        raise TileUnavailable(f"image read: {e}") from e
+        raise TileUnavailable(redact(f"image read: {e}")) from None
