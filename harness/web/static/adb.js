@@ -37,8 +37,29 @@
       el("div", { class: "small" }, `${ref.found.length}/${ref.assets} assets found · ${ref.sites} claimed sites in ${ref.flagged_cells} ${cell} m cells · ${ref.outside_area} outside the reference area`),
       ...(ref.notes || []).map((n) => el("div", { class: "small text-secondary" }, icon("info-circle", "me-1"), n)),
       ref.missed?.length ? el("div", { class: "small mt-1" }, el("span", { class: "text-secondary", text: "Missed: " }), ref.missed.join(", ")) : null,
+      ...rankingRows(ref.ranking),
       el("div", { class: "small text-secondary mt-2" }, "On the map: reference assets green (found) or red (missed); claimed cells with no asset outlined orange.")].filter(Boolean));
     drawMap(ref);
+  }
+
+  // Ranking metrics over the run's ranked candidates (docs/ranking-metrics).
+  function effortText(e, random) {
+    if (!e) return "n/a";
+    return e.cells != null ? `${e.cells.toLocaleString("en-US")} cells (random ≈ ${random != null ? random.toLocaleString("en-US") : "—"})` : `not reached (${Math.round(e.reached * 100)}% after ${e.after} cells)`;
+  }
+  function rankingRows(rk) {
+    if (!rk) return [];
+    const eff = rk.effort || {};
+    return [
+      el("div", { class: "small fw-semibold mt-3 mb-1", text: "Ranking" }),
+      el("div", { class: "row g-2 mb-1" },
+        metric(`Recall@k (k = ${rk.k})`, rk.recall_at_k, "Share of reference assets touched by this run's top-k ranked cells"),
+        metric("AUROC", rk.auroc, "How often an asset cell ranks above an empty one (0.5 = random)"),
+        metric("AP", rk.ap, "Average precision down this run's ranking")),
+      el("div", { class: "small" }, `Review effort to find 50% / 80% / 90% of the assets: ${["50", "80", "90"].map((p) => effortText(eff[p], rk.random_effort?.[p])).join(" · ")}`),
+      el("div", { class: "small text-secondary" }, `${rk.candidates} ranked cells: the answer's sites first, then each LGND search's results by similarity, searches interleaved.`),
+      ...(rk.notes || []).map((n) => el("div", { class: "small text-secondary" }, icon("info-circle", "me-1"), n)),
+    ];
   }
 
   function clearMap() {

@@ -125,6 +125,25 @@ def located_results(run: Run, prov: Provenance, geom: dict[str, Any] | None) -> 
     return out
 
 
+def search_candidates(run: Run) -> list[tuple[float, float, float, str]]:
+    """Every LGND search result per call, as (lat, lon, similarity, call ref), in call order and each
+    call's own row order (docs/ranking-metrics). Unlike located_results, a place returned by two calls is
+    kept in both, so each call's ranking is whole. Only rows with a similarity count: search `matches`;
+    survey cells and classifier rows carry none."""
+    out: list[tuple[float, float, float, str]] = []
+    for span in run.tool_results:
+        if span.attr("harness.tool.server") != lgnd.SERVER or span.attr("harness.tool.status") == "error":
+            continue
+        text = run.tool_result_text(span) or str(span.attr("harness.tool.result", ""))
+        data = _json(text)
+        ref = str(span.attr("harness.tool.ref"))
+        for c in chips_of(data) if data else []:
+            sim = c.get("similarity")
+            if isinstance(sim, int | float) and not isinstance(sim, bool):
+                out.append((float(c["lat"]), float(c["lon"]), float(sim), ref))
+    return out
+
+
 def infrastructure_failure(run: Run) -> str | None:
     """Why the run can't be judged, when no model call ever succeeded (expired credentials, throttling,
     a model the account can't use). The agent was never given a chance, so the panel isn't asked and
