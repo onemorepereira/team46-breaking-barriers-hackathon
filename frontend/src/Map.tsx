@@ -1,5 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { candidatesOf, imageForCandidate, endpoint, type View } from "./api";
+import {
+  candidatesOf,
+  imageForCandidate,
+  endpoint,
+  VISUAL_MARK,
+  VISUAL_SOURCE,
+  visualCaption,
+  type Candidate,
+  type View,
+} from "./api";
 import { Icon } from "./Icon";
 import type { Preferences } from "./preferences";
 let loading: Promise<any> | null = null;
@@ -63,6 +72,7 @@ export default function EvidenceMap({
     [imageError, setImageError] = useState(false),
     [imageAttempt, setImageAttempt] = useState(0),
     [imageLoaded, setImageLoaded] = useState(false),
+    [imageMode, setImageMode] = useState<"checked" | "agent">("checked"),
     [overlays, setOverlays] = useState({
       area: true,
       chips: true,
@@ -72,6 +82,12 @@ export default function EvidenceMap({
     chip = chipIndex === null ? null : view?.map.chips?.features?.[chipIndex],
     candidate = selected === null ? null : candidatesOf(view)[selected];
   const inspecting = selected !== null || selectedChip !== null;
+  // A reported site opens on the image it was visually checked against (docs/visual-check).
+  const visual = selectedChip === null ? candidate?.visual || null : null,
+    checkedUrl =
+      visual?.image_url && imageMode === "checked" ? visual.image_url : null,
+    shownUrl: string | undefined = checkedUrl || chip?.properties?.tile_url,
+    caption = visualCaption(view?.map.visual);
   const reduced =
     preferences.reducedMotion ||
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -106,7 +122,10 @@ export default function EvidenceMap({
           });
           map.current = m;
           m.addControl(new lib.NavigationControl(), "bottom-right");
-          m.addControl(new lib.AttributionControl({ compact: true }), "bottom-right");
+          m.addControl(
+            new lib.AttributionControl({ compact: true }),
+            "bottom-right",
+          );
           // Evidence overlays must load even if a context basemap tile is unavailable.
           m.on("style.load", () => setReady(true));
           // MapLibre's compact attribution starts expanded and only folds after the first drag, so it
@@ -144,7 +163,8 @@ export default function EvidenceMap({
     setImageLoaded(false);
     // A new tile starts at its title, even when it was picked from thumbnails further down.
     tileBody.current?.scrollTo({ top: 0 });
-  }, [chipIndex, view?.run.id]);
+  }, [chipIndex, selected, imageMode, view?.run.id]);
+  useEffect(() => setImageMode("checked"), [selected, view?.run.id]);
   useEffect(() => {
     if (!ready || !map.current) return;
     const sources: Record<
@@ -368,9 +388,28 @@ export default function EvidenceMap({
     markers.current = [];
     candidatesOf(view).forEach((c) => {
       const el = document.createElement("button");
+      const verdict = c.visual?.verdict || "";
       el.className = `evidence-marker ${c.inside === false ? "outside" : ""}`;
       el.textContent = String(c.id + 1);
-      el.setAttribute("aria-label", `Open location ${c.id + 1}: ${c.name}`);
+      if (VISUAL_MARK[verdict]) {
+        const badge = document.createElement("span");
+        badge.className = `visual-badge v-${verdict}`;
+        badge.textContent = VISUAL_MARK[verdict];
+        badge.setAttribute("aria-hidden", "true");
+        el.appendChild(badge);
+      }
+      const seen =
+        verdict === "present"
+          ? ", seen in the checked image"
+          : verdict === "absent"
+            ? ", not seen in the checked image"
+            : verdict === "unclear"
+              ? ", can't tell from the checked image"
+              : "";
+      el.setAttribute(
+        "aria-label",
+        `Open location ${c.id + 1}: ${c.name}${seen}`,
+      );
       el.onclick = () => onSelectRef.current(c.id);
       markers.current.push(
         new lib.Marker({ element: el }).setLngLat(c.coordinates).addTo(m),
@@ -541,8 +580,16 @@ export default function EvidenceMap({
         {view?.reference && (
           <span>Reference: blue = found · orange = missed / false alarm</span>
         )}
-        <span className="map-key-caption">
-          Context map is not independent verification
+        <span
+          className="map-key-caption"
+          title={
+            view?.map.visual &&
+            (view.map.visual.unclear || view.map.visual.no_image)
+              ? `${view.map.visual.unclear} couldn’t be told, ${view.map.visual.no_image} had no open image`
+              : undefined
+          }
+        >
+          {caption || "Context map is not independent verification"}
         </span>
       </div>
       {inspecting && (
@@ -555,19 +602,45 @@ export default function EvidenceMap({
           >
             <Icon name="x" />
           </button>
+          {visual?.image_url && (
+            <div
+              className="image-switch"
+              role="group"
+              aria-label="Which image to show"
+            >
+              <button
+                aria-pressed={imageMode === "checked"}
+                onClick={() => setImageMode("checked")}
+              >
+                <span className="long">Checked image</span>
+                <span className="short">Checked</span>
+              </button>
+              <button
+                aria-pressed={imageMode === "agent"}
+                onClick={() => setImageMode("agent")}
+              >
+                <span className="long">Agent’s image</span>
+                <span className="short">Agent’s</span>
+              </button>
+            </div>
+          )}
           <div
             className={`tile-frame ${imageLoaded ? "loaded" : imageError ? "failed" : "loading"}`}
           >
-            {chip?.properties?.tile_url && !imageError && (
+            {shownUrl && !imageError && (
               <img
-                key={imageAttempt}
+                key={`${imageMode}-${imageAttempt}`}
                 className="inspected-image"
                 src={
                   imageAttempt
-                    ? `${chip.properties.tile_url}${chip.properties.tile_url.includes("?") ? "&" : "?"}retry=${imageAttempt}`
-                    : chip.properties.tile_url
+                    ? `${shownUrl}${shownUrl.includes("?") ? "&" : "?"}retry=${imageAttempt}`
+                    : shownUrl
                 }
-                alt={`Saved tool imagery ${chip.properties.node || ""}`}
+                alt={
+                  checkedUrl
+                    ? `Checked image of location ${(candidate?.id ?? 0) + 1}`
+                    : `Saved tool imagery ${chip?.properties?.node || ""}`
+                }
                 onLoad={() => setImageLoaded(true)}
                 onError={() =>
                   // A cold imagery provider can be slow; retry once on our own before giving up.
@@ -575,13 +648,22 @@ export default function EvidenceMap({
                 }
               />
             )}
-            {!chip?.properties?.tile_url ? (
+            {checkedUrl && imageLoaded && visual?.source && (
+              <span className="image-pill">
+                {VISUAL_SOURCE[visual.source] || visual.source}{" "}
+                {visual.gsd_m != null && `${formatGsd(visual.gsd_m)} m`}
+                {visual.date ? ` · ${visual.date}` : ""}
+              </span>
+            )}
+            {!shownUrl ? (
               <p className="tile-frame-note">
                 No imagery was saved for this location’s cited tool result.
               </p>
             ) : imageError ? (
               <p className="tile-frame-note">
-                The imagery provider didn’t answer in time.
+                {checkedUrl
+                  ? "The checked image couldn’t be loaded."
+                  : "The imagery provider didn’t answer in time."}
                 <button
                   className="secondary small"
                   onClick={() => {
@@ -596,14 +678,26 @@ export default function EvidenceMap({
             ) : (
               !imageLoaded && (
                 <p className="tile-frame-note">
-                  Fetching imagery from{" "}
-                  {chip.properties.index === "naip" ? "USGS" : "the provider"}…
-                  <small>An image not viewed before can take up to 15 s.</small>
+                  {checkedUrl ? (
+                    "Loading the checked image…"
+                  ) : (
+                    <>
+                      Fetching imagery from{" "}
+                      {chip?.properties?.index === "naip"
+                        ? "USGS"
+                        : "the provider"}
+                      …
+                      <small>
+                        An image not viewed before can take up to 15 s.
+                      </small>
+                    </>
+                  )}
                 </p>
               )
             )}
           </div>
           <div className="tile-inspector-body" ref={tileBody}>
+            {visual && <VisualVerdict visual={visual} />}
             <h3>
               {candidate ? `Location ${candidate.id + 1}` : "Tool imagery"}
             </h3>
@@ -658,8 +752,16 @@ export default function EvidenceMap({
               Similarity is a retrieval rank, not confidence. Imagery alone
               doesn’t establish what the asset is or its status.
             </p>
-            {chip?.properties?.tile_source && (
-              <p className="tile-credit">{chip.properties.tile_source}</p>
+            {checkedUrl && visual ? (
+              <p className="tile-credit">
+                Checked by {visual.model || "a vision model"} ·{" "}
+                {visual.credit || VISUAL_SOURCE[visual.source || ""]}
+                {visual.licence ? ` (${visual.licence})` : ""}
+              </p>
+            ) : (
+              chip?.properties?.tile_source && (
+                <p className="tile-credit">{chip.properties.tile_source}</p>
+              )
             )}
             <div className="tile-thumbs">
               {(view?.map.chips?.features || []).map((f: any, i: number) =>
@@ -677,6 +779,55 @@ export default function EvidenceMap({
             </div>
           </div>
         </aside>
+      )}
+    </div>
+  );
+}
+
+function formatGsd(m: number): string {
+  return m >= 2
+    ? String(Math.round(m))
+    : m >= 0.1
+      ? m.toFixed(1)
+      : m.toFixed(2);
+}
+
+const VERDICT_TEXT: Record<string, string> = {
+  present: "Seen",
+  absent: "Not seen",
+  unclear: "Can’t tell",
+};
+
+function VisualVerdict({
+  visual,
+}: {
+  visual: NonNullable<Candidate["visual"]>;
+}) {
+  if (visual.verdict === "no_image")
+    return (
+      <p className="visual-verdict v-none">
+        No open image of this site to check.
+      </p>
+    );
+  if (!VERDICT_TEXT[visual.verdict])
+    return (
+      <p className="visual-verdict v-none">
+        Not checked{visual.reason ? `: ${visual.reason}` : "."}
+      </p>
+    );
+  return (
+    <div className={`visual-verdict v-${visual.verdict}`}>
+      <p>
+        <b>
+          <span aria-hidden="true">{VISUAL_MARK[visual.verdict]}</span>{" "}
+          {VERDICT_TEXT[visual.verdict]}
+        </b>
+        {visual.reason ? `: ${visual.reason}` : ""}
+      </p>
+      {visual.gsd_m != null && visual.gsd_m > 2 && (
+        <p className="fine-print">
+          {Math.round(visual.gsd_m)} m image: only large assets are visible.
+        </p>
       )}
     </div>
   );

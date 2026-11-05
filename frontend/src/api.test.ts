@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { basePath, candidatesOf, chipFor, draftPayload, formatScore, reviewPayload } from "./api.ts";
+import {
+  basePath,
+  candidatesOf,
+  chipFor,
+  draftPayload,
+  formatScore,
+  reviewPayload,
+  visualCaption,
+} from "./api.ts";
 test("API URLs preserve workshop authentication proxy and work on localhost", () => {
   assert.equal(basePath("/proxy/8787/workspace/"), "/proxy/8787");
   assert.equal(basePath("/workspace/"), "");
@@ -113,10 +121,20 @@ test("a location's imagery is the chip it names, else the nearest one within 300
   const chip = (node: string, lat: number, lon: number) => ({
     properties: { node, lat, lon },
   });
-  const chips = [chip("naip/obs:2", 31, -103), chip("naip/obs:22", 31.001, -103)];
-  const at = (name: string, lat: number, lon: number): any => ({ name, lat, lon });
+  const chips = [
+    chip("naip/obs:2", 31, -103),
+    chip("naip/obs:22", 31.001, -103),
+  ];
+  const at = (name: string, lat: number, lon: number): any => ({
+    name,
+    lat,
+    lon,
+  });
   assert.equal(chipFor(at("site (chip naip/obs:22)", 0, 0), chips), 1);
-  assert.equal(chipFor(at("Solar park location (naip/obs:22)", 0, 0), chips), 1);
+  assert.equal(
+    chipFor(at("Solar park location (naip/obs:22)", 0, 0), chips),
+    1,
+  );
   assert.equal(chipFor(at("site", 31.0002, -103), chips), 0);
   assert.equal(chipFor(at("site", 31.1, -103), chips), -1);
   assert.equal(chipFor(at("site", 31, -103), []), -1);
@@ -124,17 +142,96 @@ test("a location's imagery is the chip it names, else the nearest one within 300
 test("one review covers several questions; each suggestion needs a score and a reason", () => {
   const p = draftPayload(" Ada ", {
     grounding: { decision: "agree", score: "", reason: "", refs: "" },
-    efficiency: { decision: "disagree", score: "1", reason: "two repeat searches", refs: "T3 T4" },
+    efficiency: {
+      decision: "disagree",
+      score: "1",
+      reason: "two repeat searches",
+      refs: "T3 T4",
+    },
   });
   assert.equal(p.reviewer, "Ada");
   assert.deepEqual(p.criteria, {
     grounding: { agree: true },
-    efficiency: { agree: false, score: 1, reason: "two repeat searches", refs: ["T3", "T4"] },
+    efficiency: {
+      agree: false,
+      score: 1,
+      reason: "two repeat searches",
+      refs: ["T3", "T4"],
+    },
   });
   assert.throws(() => draftPayload("Ada", {}), /at least one/);
-  assert.throws(() => draftPayload("", { g: { decision: "agree", score: "", reason: "", refs: "" } }), /name/);
   assert.throws(
-    () => draftPayload("Ada", { g: { decision: "disagree", score: "1", reason: " ", refs: "" } }),
+    () =>
+      draftPayload("", {
+        g: { decision: "agree", score: "", reason: "", refs: "" },
+      }),
+    /name/,
+  );
+  assert.throws(
+    () =>
+      draftPayload("Ada", {
+        g: { decision: "disagree", score: "1", reason: " ", refs: "" },
+      }),
     /Explain/,
   );
+});
+
+test("visual check caption: score denominator, no verdicts, not run", () => {
+  assert.equal(visualCaption(null), null);
+  assert.equal(
+    visualCaption({ status: "checked", sites: 3, seen: 1, checked: 3 }),
+    "Visually checked: 1 of 3 sites seen",
+  );
+  assert.equal(
+    visualCaption({ status: "checked", sites: 0, seen: 0, checked: 0 }),
+    "Visual check: the answer listed no locations to check",
+  );
+  assert.equal(
+    visualCaption({ status: "checked", sites: 2, seen: 0, checked: 0 }),
+    "Visual check: no site could be confirmed or ruled out",
+  );
+  assert.equal(
+    visualCaption({
+      status: "not_checked",
+      checked: 0,
+      reason: "no eligible checker model",
+    }),
+    "Visual check not run: no eligible checker model",
+  );
+  assert.equal(
+    visualCaption({
+      status: "not_checked",
+      sites: 2,
+      seen: 1,
+      checked: 1,
+      reason: "no eligible checker model",
+    }),
+    "Visually checked: 1 of 1 sites seen",
+  );
+});
+
+test("reported sites carry their visual verdict", () => {
+  const view: any = {
+    map: {
+      claims: {
+        features: [
+          {
+            geometry: { coordinates: [-96.5, 32.5] },
+            properties: {
+              claim: "site",
+              ref: "T1",
+              visual: { verdict: "absent" },
+            },
+          },
+          {
+            geometry: { coordinates: [-96.4, 32.5] },
+            properties: { claim: "other", ref: "T1" },
+          },
+        ],
+      },
+    },
+  };
+  const c = candidatesOf(view);
+  assert.equal(c[0].visual?.verdict, "absent");
+  assert.equal(c[1].visual, null);
 });

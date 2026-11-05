@@ -9,7 +9,8 @@ Cloud-Optimized GeoTIFF (docs/observed-scenes):
 - s2: Sentinel-2 L2A true-colour (`visual`, 10 m) via Element84 Earth Search (AWS open data, no key).
 - naip: NAIP RGB(N) via Microsoft Planetary Computer, with its anonymous read token.
 
-Presentation only: nothing here reaches the agent or the judges.
+Shown in the console, and read by the visual check (harness/sharp.py, docs/visual-check); nothing here reaches
+the agent.
 """
 
 from __future__ import annotations
@@ -109,8 +110,12 @@ def _signed(index: str, href: str) -> str:
         return f"{href}?{_token['value']}"
 
 
-def render(href: str, bbox: tuple[float, ...], size: int = 384) -> bytes:
-    """Read the chip's window from a COG (RGB bands), keeping its proportions, as a JPEG."""
+def render(href: str, bbox: tuple[float, ...], size: int = 384, min_coverage: float = 0.0) -> bytes:
+    """Read the chip's window from a COG (RGB bands), keeping its proportions, as a JPEG.
+
+    min_coverage: the share of pixels that must hold data (any non-zero band); below it, TileUnavailable.
+    A catalogue footprint can be looser than the image's data (an OpenAerialMap mosaic whose bbox covered a
+    point held data in 21% of its extent), so a caller that needs the place itself asks for most of it."""
     import numpy as np
     import rasterio
     from PIL import Image
@@ -128,6 +133,8 @@ def render(href: str, bbox: tuple[float, ...], size: int = 384) -> bytes:
         )  # fmt: skip
     if not data.any():
         raise TileUnavailable("the scene has no data over this footprint")
+    if min_coverage and float(data.any(axis=0).mean()) < min_coverage:
+        raise TileUnavailable("the scene has data over only part of this footprint")
     buf = io.BytesIO()
     Image.fromarray(np.ascontiguousarray(data.transpose(1, 2, 0)).astype("uint8")).save(
         buf, "JPEG", quality=88

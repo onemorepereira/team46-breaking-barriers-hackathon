@@ -369,6 +369,7 @@ def judge_run(cfg: Config, run: Run, store: Store, passes: int | None = None, cl
         from harness.conditions import ensure
 
         ensure(cfg, run, client)
+    visual_thread = _start_visual_check(cfg, r, run, client)
     passes = int(passes or j.get("passes") or 1)
     d = dossier_mod.build(run)
     guidance, guidance_error = active_guidance_or_error(cfg, r)
@@ -384,7 +385,12 @@ def judge_run(cfg: Config, run: Run, store: Store, passes: int | None = None, cl
     report: dict[str, Any] = {}
     pass_results = run_panel(cfg, r, d, panel_seats, passes, client, on_event, spares, guidance, report)
     combined = [{**p, "pass": i + 1} for i, p in enumerate((earlier + pass_results)[-MAX_PASSES:])]
+    visual_out = _join_visual_check(cfg, visual_thread, on_event)
     judgement = assemble(r, run, combined, panel_seats, guidance)
+    if visual_out is not None:
+        # Only the checks this judgement paid for; reused verdicts were charged when they were made.
+        judgement["visual_cost_usd"] = visual_out.get("new_cost_usd") or 0.0
+        judgement["judging_cost_usd"] = round(judgement["judging_cost_usd"] + judgement["visual_cost_usd"], 6)
     judgement["inputs_sha"] = fingerprint
     judgement["passes_added"] = len(pass_results)
     judgement["dropped_slow_passes"] = report.get("dropped_slow_passes", 0)
@@ -393,6 +399,50 @@ def judge_run(cfg: Config, run: Run, store: Store, passes: int | None = None, cl
     keep_previous(store, run.run_id)
     store.write_text(f"runs/{run.run_id}/judgement.json", json.dumps(judgement, indent=1))
     return judgement
+
+
+class _VisualThread(threading.Thread):
+    """Runs the visual check alongside the panel (docs/visual-check, ADR-4); `out` holds its record."""
+
+    def __init__(self, cfg: Config, run: Run, client: Any) -> None:
+        super().__init__(name=f"visual-{run.run_id}", daemon=True)
+        self.cfg, self.run_, self.client = cfg, run, client
+        self.out: dict[str, Any] | None = None
+
+    def run(self) -> None:
+        from harness import visual
+
+        try:
+            self.out = visual.ensure(self.cfg, self.run_, self.client)
+        except Exception as e:  # noqa: BLE001 - the check is optional: judge without it, loudly
+            log.warning("visual check failed: %s", e)
+            self.out = {"status": "error", "reason": f"{type(e).__name__}", "sites": []}
+
+
+def _start_visual_check(cfg: Config, r: Rubric, run: Run, client: Any) -> _VisualThread | None:
+    from harness import visual
+
+    if not any(c.id == "visual_confirmation" for c in r.criteria) or not visual.settings(cfg)["enabled"]:
+        return None
+    t = _VisualThread(cfg, run, client)
+    t.start()
+    return t
+
+
+def _join_visual_check(cfg: Config, t: _VisualThread | None, on_event: Event | None) -> dict[str, Any] | None:
+    """Wait for the check: it returns at its deadline by itself; the join timeout is only a backstop."""
+    if t is None:
+        return None
+    from analysis.judging.visual import summary
+    from harness import visual
+
+    t.join(float(visual.settings(cfg)["deadline_s"]) + 15)
+    if t.is_alive():
+        log.warning("visual check still writing after its deadline; judging without waiting")
+        return None
+    if on_event and t.out is not None:
+        on_event({"type": "visual_check", **(summary(t.out) or {})})
+    return t.out
 
 
 def inputs_sha(r: Rubric, d: dossier_mod.Dossier, panel_seats: list[Seat],

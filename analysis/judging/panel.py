@@ -65,6 +65,19 @@ def _valid(pass_: dict[str, Any]) -> list[dict[str, Any]]:
     return [j for j in pass_.get("judges", []) if j.get("status") == "ok"]
 
 
+def _visual_value(measured: Measured) -> str:
+    v = measured.visual
+    if not v:
+        return "not applicable"
+    if measured.visual_checked and v.get("status") != "error":
+        return f"{measured.visual_seen}/{measured.visual_checked}"
+    if v.get("status") != "checked":
+        return "not checked"
+    if not v.get("sites"):
+        return "no locations listed"
+    return "no site could be confirmed or ruled out"
+
+
 def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) -> PanelResult:
     check_conditions = any(c.id == "condition_compliance" for c in rubric.criteria)
     usable = [p for p in passes if len(_valid(p)) >= MIN_VALID]
@@ -91,6 +104,8 @@ def aggregate(rubric: Rubric, passes: list[dict[str, Any]], measured: Measured) 
                         else "no locations listed"
                     )
                     if c.id == "condition_compliance"
+                    else _visual_value(measured)
+                    if c.id == "visual_confirmation"
                     else f"{measured.claims_inside}/{measured.claims_located}"
                 )
             )

@@ -62,6 +62,16 @@ judging:
   guidance: true                 # apply this deployment's approved guidance (docs/judge-feedback)
   reconsider: true               # let reviewers ask the judges to reconsider a run
 
+# Visual check of reported sites (docs/visual-check): each site is looked at in the sharpest open image of it
+# and a vision model says whether the requested asset is there; scored as `visual_confirmation`.
+visual_check:
+  enabled: true
+  sources: [vantor, oam, naip, s2]  # first with an image covering the site wins; vantor is CC BY-NC 4.0
+  models: [opus, kimi, grok]        # first not sharing the agent's family; all accept images (probed 2026-11-05)
+  max_sites: 12
+  window_m: 250                     # footprint for a site with no matched LGND chip
+  deadline_s: 60
+
 # Map imagery (docs/tile-cache): result tiles are archived with each run when its report is written, and the
 # console serves basemap and result tiles from a disk cache under out/tile-cache/. OSM always loads directly.
 tiles:

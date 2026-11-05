@@ -539,6 +539,25 @@ def create_app(cfg: config_mod.Config) -> FastAPI:
         except tiles.TileUnavailable as e:
             raise HTTPException(502, f"tile unavailable: {e}") from e
 
+    @app.get("/api/runs/{run_id}/visual/{site_id}.jpg", tags=["Runs"], response_class=Response,
+             summary="The image a reported site was checked against", responses=TILE_RESPONSES)  # fmt: skip
+    def visual_image(run_id: str, site_id: str) -> Response:
+        """The archived image the visual check showed its model for one reported site (docs/visual-check).
+        `site_id` is the site's 12-hex id from the run view (`map.claims[].properties.visual.image_url`)."""
+        if not re.fullmatch(imagery.RUN_ID_RE, run_id) or not re.fullmatch(r"[0-9a-f]{12}", site_id):
+            raise HTTPException(404, "unknown run or site")
+        store = archives.store_for(run_id)
+        if store is None:
+            raise HTTPException(503, "the archive is unavailable; try again shortly")
+        try:
+            data = store.read_bytes(f"runs/{run_id}/visual/{site_id}.jpg") or b""
+        except Exception as e:  # noqa: BLE001 - slow or unreachable archive
+            archives.failed()
+            raise HTTPException(503, "the archive is unavailable; try again shortly") from e
+        if tiles.image_type(data) != "image/jpeg":
+            raise HTTPException(404, "no checked image for this site")
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+
     @app.get("/tiles/chip/{idx}/{bbox}.jpg", tags=["Tiles"], response_class=Response,
              summary="The imagery under one search result", responses=TILE_RESPONSES)  # fmt: skip
     def chip_tile(

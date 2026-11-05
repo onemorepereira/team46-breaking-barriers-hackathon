@@ -74,7 +74,7 @@ All of this is pure, and reads only from the archive.
 
 `tools.lgnd.describe.describe(name, args, result) -> str` and the same for RODA, for example:
 - "Searched NAIP imagery for 'data center' inside Richardson, TX (polygon, 412 vertices): 24 matches, best similarity 0.81."
-- "Checked 12 chips with the imagery reasoner: 7 yes, 5 no."
+- "Checked 12 chips with the imagery reasoner: 7 yes, 5 no." (LGND's own `reasoning_imagery_check`. The harness's independent check of reported sites in sharper imagery is the [visual check](../visual-check/handoff.md).)
 - "Listed RODA datasets matching 'building footprints': 9 found."
 
 Unknown tools fall back to "Called `<name>` with <k>=<v>…: <first 120 chars>". `tools.describe.describe(server, …)` dispatches by server. It is a pure module, separate from `tools.registry`, which imports MCP clients. `analysis.timeline.entries(spans)` turns archive spans, or console-exported span dicts in the live view, into `Entry(ref, kind, title, sentence, status, ms, tokens_in, tokens_out, raw)`. The layer test allows `analysis` to import `tools.describe` and `tools.*.describe` (static, pure).

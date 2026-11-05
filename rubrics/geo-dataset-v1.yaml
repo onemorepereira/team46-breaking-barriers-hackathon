@@ -3,7 +3,7 @@
 # arrives; code names only the measured criteria (claim_provenance, area_compliance). Calibration targets are
 # declared below, so a replacement rubric maps its own criteria.
 id: geo-dataset
-version: 2
+version: 3
 title: Agentic geospatial dataset build — workflow and output
 scale: [0, 1, 2]
 
@@ -107,6 +107,12 @@ criteria:
     dimension: output
     kind: measured
     question: Share of location-by-condition checks supported by successful tool evidence. Missing evidence is unverified. N/A for legacy runs or requests without a distance condition.
+
+  - id: visual_confirmation
+    plain: Do the reported sites visibly show what you asked for?
+    dimension: output
+    kind: measured
+    question: Share of reported sites where the requested asset is visibly present in the sharpest open image of the site (Vantor Open Data, OpenAerialMap, NAIP or Sentinel-2), as judged by a vision model, among sites it could confirm or rule out (code-run, archived; docs/visual-check). N/A when no site could be confirmed or ruled out, or the check didn't run.
 
 failure_modes:
   - {id: premature_fallback, meaning: Gave up on a capable tool or approach too early and fell back to a weaker one.}

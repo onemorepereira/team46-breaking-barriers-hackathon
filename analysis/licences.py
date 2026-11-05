@@ -141,6 +141,59 @@ def _roda_source(dataset: str, lic: str | None) -> Source:
     )
 
 
+_VISUAL_SOURCES = {
+    # source: (name, provider, url, fact source); the licence comes from each record (docs/visual-check)
+    "vantor": ("Vantor Open Data imagery (visual check)", "Vantor (formerly Maxar)",
+               "https://registry.opendata.aws/vantor-open-data/", "s3://vantor-opendata/LICENSE.TXT"),
+    "oam": ("OpenAerialMap imagery (visual check)", "OpenAerialMap contributors (Open Imagery Network)",
+            "https://openaerialmap.org/legal", "OpenAerialMap terms; the item's own `license` field"),
+    "naip": ("NAIP aerial imagery (visual check)", "USDA Farm Production and Conservation Business Center",
+             "https://planetarycomputer.microsoft.com/dataset/naip",
+             "AWS Open Data registry, datasets/naip.yaml"),
+    "s2": ("Sentinel-2 imagery (visual check)", "European Space Agency / Copernicus",
+           "https://sentinels.copernicus.eu/documents/247904/690755/Sentinel_Data_Legal_Notice",
+           "Sentinel Data Legal Notice (ESA)"),
+}  # fmt: skip
+
+
+def _commercial(licence: str) -> bool | None:
+    """Commercial use allowed? NC licences: no; CC BY, public domain, Copernicus: yes; else unknown."""
+    text = licence.upper()
+    if "NC" in text.replace("-", " ").split() or "NON-COMMERCIAL" in text or "NONCOMMERCIAL" in text:
+        return False
+    if text.startswith(("CC BY", "CC-BY", "PUBLIC DOMAIN", "COPERNICUS")):
+        return True
+    return None
+
+
+def _visual_items(run: Run) -> list[dict[str, Any]]:
+    """One item per (source, licence) the run's visual check used, read from its archive (offline)."""
+    from analysis.judging import visual
+
+    pairs: dict[tuple[str, str], None] = {}
+    for x in (visual.load(run) or {}).get("sites") or []:
+        if isinstance(x, dict) and x.get("source") in _VISUAL_SOURCES and x.get("verdict") in VISUAL_USED:
+            pairs[(str(x["source"]), str(x.get("licence") or UNKNOWN))] = None
+    items = []
+    for source, licence in pairs:
+        name, provider, url, fact = _VISUAL_SOURCES[source]
+        ok = _commercial(licence)
+        # Presentable follows commercial use (the convention); an NC licence is "check before sharing".
+        items.append(_item(Source(name, provider, licence, url, provider, ok, ok or None, fact),
+                           "data", "visual check", f"visual:{source}:{licence}"))  # fmt: skip
+    return items
+
+
+def _visual_models(run: Run) -> list[str]:
+    from analysis.judging import visual
+
+    sites = (visual.load(run) or {}).get("sites") or []
+    return list(dict.fromkeys(str(x["model"]) for x in sites if isinstance(x, dict) and x.get("model")))
+
+
+VISUAL_USED = ("present", "absent", "unclear")
+
+
 def _item(src: Source, role: str, used_as: str, key: str) -> dict[str, Any]:
     return {"key": key, "role": role, "used_as": used_as, **asdict(src)}
 
@@ -191,6 +244,7 @@ def for_run(
             items.append(_item(_roda_source(name, roda_licence(run, name)), "data", f"via {d['via']}", name))
     if used_lgnd:
         items.append(_item(SOURCES["lgnd"], "service", "imagery search and checks", "lgnd"))
+    items += _visual_items(run)
     area = (run.manifest.get("snapshot") or {}).get("search_area") or {}
     src = str(area.get("source") or "")
     if src:
@@ -200,6 +254,7 @@ def for_run(
     if run.manifest.get("model_key"):
         models.append((str(run.manifest["model_key"]), "agent"))
     models += [(k, "judge") for k in judges or []]
+    models += [(k, "visual check") for k in _visual_models(run)]
     if narrative_model:
         models.append((narrative_model, "narrative"))
     roles: dict[str, list[str]] = {}

@@ -16,6 +16,7 @@ MEASURED = (
     "claim_provenance",
     "area_compliance",
     "condition_compliance",
+    "visual_confirmation",
 )  # the measured criteria code knows how to compute
 
 

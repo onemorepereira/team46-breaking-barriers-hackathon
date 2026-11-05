@@ -87,6 +87,10 @@ def explain(run: Run, result: PanelResult | None, *, measured: Measured | None =
         )
     if m.claims_total:
         facts.append(f"{m.claims_matched} of {m.claims_total} listed values matched the cited tool text.")
+    if m.visual_checked:
+        facts.append(
+            f"{m.visual_seen} of {m.visual_checked} reported sites were visibly seen in the checked imagery."
+        )
 
     doubts: list[str] = []
     checks: list[str] = []
@@ -145,6 +149,13 @@ def explain(run: Run, result: PanelResult | None, *, measured: Measured | None =
             condition_checks.append(
                 "Review each unverified or contradicted condition in the conditions table."
             )
+        absent = (m.visual or {}).get("absent") or 0
+        if absent:
+            doubts.append(
+                f"{absent} reported {'site' if absent == 1 else 'sites'} didn't show the requested asset "
+                "in the checked image."
+            )
+            checks.append("Open each site marked ✕ on the map and compare the checked image with the claim.")
         if result.confidence == "Medium" and result.judges_in_doubt:
             doubts.append("Some judge replies are missing or the judges disagree on parts of the work.")
         elif result.confidence == "Low" and m.trace_integrity:
