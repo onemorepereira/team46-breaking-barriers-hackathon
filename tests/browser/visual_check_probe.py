@@ -65,8 +65,12 @@ def main() -> int:
         checks["credit names the checker"] = str(seen["credit"]).startswith("Checked by")
         page.locator(".image-switch button").nth(1).dispatch_event("click")
         page.wait_for_timeout(300)
-        checks["switch shows the agent's image"] = page.locator(".image-pill").count() == 0 and (
-            page.locator(".image-switch button").nth(1).get_attribute("aria-pressed") == "true"
+        page.wait_for_selector(".tile-frame.loaded", timeout=30_000)
+        seen["agent_pill"] = text(page, ".image-pill")
+        checks["switch shows the agent's image, with its own pill"] = page.locator(
+            ".image-switch button"
+        ).nth(1).get_attribute("aria-pressed") == "true" and str(seen["agent_pill"]).startswith(
+            ("Sentinel-2 10 m", "NAIP 0.6–1 m")
         )
         page.close()
 
