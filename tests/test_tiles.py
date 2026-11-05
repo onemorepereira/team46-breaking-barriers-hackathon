@@ -127,7 +127,8 @@ def test_fetch_upstream_sends_user_agent_and_timeout(monkeypatch):
 
     monkeypatch.setattr(tiles.urllib.request, "urlopen", fake_urlopen)
     assert tiles.fetch_upstream("https://tiles.maps.eox.at/x.jpg") == JPEG
-    assert seen["ua"].startswith("TeamFoundryConsole/1 (+https://") and seen["timeout"] == 10
+    assert seen["ua"].startswith("TeamFoundryConsole/1 (+https://")
+    assert seen["timeout"] == tiles.TIMEOUT_S == 30  # USGS NAIP cold requests took ~13 s
     with pytest.raises(tiles.TileUnavailable):
         tiles.fetch_upstream("file:///etc/passwd")  # only https provider URLs
 

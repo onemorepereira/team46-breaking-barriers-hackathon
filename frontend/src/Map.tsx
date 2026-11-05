@@ -60,6 +60,8 @@ export default function EvidenceMap({
     [error, setError] = useState(""),
     [layer, setLayer] = useState("s2"),
     [imageError, setImageError] = useState(false),
+    [imageAttempt, setImageAttempt] = useState(0),
+    [imageLoaded, setImageLoaded] = useState(false),
     [overlays, setOverlays] = useState({
       area: true,
       chips: true,
@@ -133,6 +135,8 @@ export default function EvidenceMap({
   }, []);
   useEffect(() => {
     setImageError(false);
+    setImageAttempt(0);
+    setImageLoaded(false);
   }, [chipIndex, view?.run.id]);
   useEffect(() => {
     if (!ready || !map.current) return;
@@ -544,61 +548,108 @@ export default function EvidenceMap({
           >
             <Icon name="x" />
           </button>
-          {chip?.properties?.tile_url && !imageError ? (
-            <img
-              className="inspected-image"
-              src={chip.properties.tile_url}
-              alt={`Saved tool imagery ${chip.properties.node || ""}`}
-              onError={() => setImageError(true)}
-            />
-          ) : (
-            <p className="notice">
-              {imageError
-                ? "This archived image could not load. The source step is still available."
-                : "No imagery from this location’s cited tool result was saved."}
-            </p>
-          )}
+          <div
+            className={`tile-frame ${imageLoaded ? "loaded" : imageError ? "failed" : "loading"}`}
+          >
+            {chip?.properties?.tile_url && !imageError && (
+              <img
+                key={imageAttempt}
+                className="inspected-image"
+                src={
+                  imageAttempt
+                    ? `${chip.properties.tile_url}${chip.properties.tile_url.includes("?") ? "&" : "?"}retry=${imageAttempt}`
+                    : chip.properties.tile_url
+                }
+                alt={`Saved tool imagery ${chip.properties.node || ""}`}
+                onLoad={() => setImageLoaded(true)}
+                onError={() =>
+                  // A cold imagery provider can be slow; retry once on our own before giving up.
+                  imageAttempt === 0 ? setImageAttempt(1) : setImageError(true)
+                }
+              />
+            )}
+            {!chip?.properties?.tile_url ? (
+              <p className="tile-frame-note">
+                No imagery was saved for this location’s cited tool result.
+              </p>
+            ) : imageError ? (
+              <p className="tile-frame-note">
+                The imagery provider didn’t answer in time.
+                <button
+                  className="secondary small"
+                  onClick={() => {
+                    setImageError(false);
+                    setImageLoaded(false);
+                    setImageAttempt((n) => n + 1);
+                  }}
+                >
+                  Try again
+                </button>
+              </p>
+            ) : (
+              !imageLoaded && (
+                <p className="tile-frame-note">
+                  Fetching imagery from{" "}
+                  {chip.properties.index === "naip" ? "USGS" : "the provider"}…
+                  <small>An image not viewed before can take up to 15 s.</small>
+                </p>
+              )
+            )}
+          </div>
           <div className="tile-inspector-body">
             <h3>
               {candidate ? `Location ${candidate.id + 1}` : "Tool imagery"}
             </h3>
-            <p>{candidate?.name || chip?.properties?.node}</p>
-            <dl>
-              <dt>Location</dt>
-              <dd>
-                {candidate
-                  ? `${candidate.lat.toFixed(5)}, ${candidate.lon.toFixed(5)}`
-                  : "See tool footprint on map"}
-              </dd>
-              <dt>Observed</dt>
-              <dd>{chip?.properties?.observed || "Not recorded"}</dd>
-              <dt>Source</dt>
-              <dd>
-                {chip?.properties?.index || "Not recorded"} ·{" "}
-                {chip?.properties?.ref || candidate?.ref || "No reference"}
-              </dd>
-              <dt>Similarity</dt>
-              <dd>
-                {chip?.properties?.similarity ?? "Not recorded"} (retrieval
-                rank, not confidence)
-              </dd>
+            <p className="tile-name">
+              {candidate?.name || chip?.properties?.node}
+            </p>
+            <dl className="tile-facts">
+              <div>
+                <dt>Location</dt>
+                <dd>
+                  {candidate
+                    ? `${candidate.lat.toFixed(4)}, ${candidate.lon.toFixed(4)}`
+                    : chip?.properties?.lat != null
+                      ? `${Number(chip.properties.lat).toFixed(4)}, ${Number(chip.properties.lon).toFixed(4)}`
+                      : "—"}
+                </dd>
+              </div>
+              <div>
+                <dt>Observed</dt>
+                <dd>{chip?.properties?.observed || "—"}</dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd>
+                  {String(chip?.properties?.index || "—").toUpperCase()} ·{" "}
+                  {chip?.properties?.ref || candidate?.ref || "—"}
+                </dd>
+              </div>
+              <div>
+                <dt title="Retrieval rank, not confidence">Similarity</dt>
+                <dd>
+                  {chip?.properties?.similarity != null
+                    ? Number(chip.properties.similarity).toFixed(2)
+                    : "—"}
+                </dd>
+              </div>
             </dl>
             {(chip?.properties?.ref || candidate?.ref) && (
               <button
-                className="secondary"
+                className="secondary small tile-step"
                 onClick={() =>
                   onTrace(chip?.properties?.ref || candidate?.ref!)
                 }
               >
-                Inspect cited step
+                Inspect step {chip?.properties?.ref || candidate?.ref} →
               </button>
             )}
-            <p className="fine-print">
+            <p className="fine-print tile-caveat">
               {selectedChip === null
-                ? "Nearest imagery within the cited tool result. "
+                ? "Nearest imagery in the cited result. "
                 : ""}
-              Imagery does not independently establish asset identity or current
-              status.
+              Similarity is a retrieval rank, not confidence. Imagery alone
+              doesn’t establish what the asset is or its status.
             </p>
             <div className="tile-thumbs">
               {(view?.map.chips?.features || []).map((f: any, i: number) =>

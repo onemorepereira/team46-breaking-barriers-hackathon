@@ -156,3 +156,6 @@ Anything else returns 404. Upstream URLs come only from `imagery.py` templates.
 | AC3 | `test_archive_run_tiles_copies_each_result_tile_once` (second-machine replay with upstream failing) |
 | AC6 | `test_upstream_then_disk_then_stale_and_never_an_error_page` (error pages are never cached; stale on failure); `test_fetch_upstream_sends_user_agent_and_timeout` (faked `urlopen`) |
 | AC7 | `test_upstream_then_disk_then_stale_and_never_an_error_page` (expired, refetch fails, stale kept); `test_eviction_drops_least_recently_used_tiles_under_the_cap` |
+
+## Later change (2026-11-05)
+The upstream timeout is now 30 s (was 10 s), and the per-run archive deadline is 90 s (was 45 s). USGS's NAIP ImageServer took 12.6 s on a cold request and 0.06 s once warm, so a 10 s timeout failed every first request for an uncached US tile. Run `554470cb` archived 0 of 26 tiles, and the workspace showed "This archived image could not load".
