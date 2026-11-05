@@ -2814,6 +2814,12 @@ html[data-colour="colour-safe"] .vote.v0 {
 .tile-inspector .tile-thumbs img {
   background: #e3ebe7;
 }
+.tile-credit {
+  font-size: 11px !important;
+  color: #7c8e8f !important;
+  margin: -4px 0 10px !important;
+}
+
 /* MapLibre re-expands its compact attribution whenever the attribution list refreshes (load, basemap
    switch), so it kept opening over the legend. Keep it folded to its (i) unless hovered or focused
    (a tap focuses it on touch screens); the credit is always one gesture away. */

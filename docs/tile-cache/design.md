@@ -159,3 +159,5 @@ Anything else returns 404. Upstream URLs come only from `imagery.py` templates.
 
 ## Later change (2026-11-05)
 The upstream timeout is now 30 s (was 10 s), and the per-run archive deadline is 90 s (was 45 s). USGS's NAIP ImageServer took 12.6 s on a cold request and 0.06 s once warm, so a 10 s timeout failed every first request for an uncached US tile. Run `554470cb` archived 0 of 26 tiles, and the workspace showed "This archived image could not load".
+
+Result tiles now show the scene observed on the result's date, with these mosaics as the fallback: [observed scenes](../observed-scenes/handoff.md).

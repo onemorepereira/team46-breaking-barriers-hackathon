@@ -10,7 +10,7 @@ from analysis.judging import measure, rubric
 from analysis.judging.explain import explain
 from analysis.trace import Run
 from core import geometry
-from harness import imagery, judge
+from harness import imagery, judge, scenes
 
 
 def _bbox_polygon(b: list[float]) -> dict[str, Any]:
@@ -37,11 +37,13 @@ def map_layers(m: measure.Measured, run_id: str | None = None, serve_tiles: bool
         }
         if x.source == "chip" and x.bbox:
             props["tile_url"] = (
-                imagery.console_chip_url(x.index, x.bbox, run_id)
+                imagery.console_chip_url(x.index, x.bbox, run_id, x.observed)
                 if serve_tiles
                 else imagery.tile_url(x.index, x.bbox)
             )
-            props["tile_source"] = imagery.ATTRIBUTION.get(x.index or "", imagery.ATTRIBUTION["s2"])
+            props["tile_source"] = (
+                serve_tiles and scenes.label(x.index, x.observed)
+            ) or imagery.ATTRIBUTION.get(x.index or "", imagery.ATTRIBUTION["s2"])
             chips.append({"type": "Feature", "geometry": _bbox_polygon(x.bbox), "properties": props})
         elif x.source == "claim":
             claims.append(

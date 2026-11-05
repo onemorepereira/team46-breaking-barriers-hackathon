@@ -12,10 +12,13 @@ dependencies = [
   "jinja2>=3.1",
   "markdown-it-py>=4",
   "mcp>=2.3",
+  "numpy>=2.5.4",
   "opentelemetry-exporter-otlp-proto-http>=1.45",
   "opentelemetry-sdk>=1.45",
+  "pillow>=13.0.0",
   "pydantic>=2.14",
   "pyyaml>=6.0",
+  "rasterio>=1.5.2",
   "strands-agents[otel]>=1.63",
   "uvicorn>=0.54",
 ]

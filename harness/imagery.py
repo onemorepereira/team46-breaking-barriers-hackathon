@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import re
 from urllib.parse import urlencode
 
 NAIP = "https://imagery.nationalmap.gov/arcgis/rest/services/USGSNAIPImagery/ImageServer/exportImage"
@@ -99,19 +100,33 @@ def bbox_text(bbox: list[float]) -> str:
     return ",".join(f"{float(v):.6f}" for v in bbox)
 
 
-def chip_key(index: str, bbox: list[float]) -> str:
-    """The file name of a result tile in the disk cache and the archive."""
-    return hashlib.sha1(f"{index}|{bbox_text(bbox)}|384".encode(), usedforsecurity=False).hexdigest()[:20]
+def chip_key(index: str, bbox: list[float], observed: str | None = None) -> str:
+    """The file name of a result tile in the disk cache and the archive. With an observation date it names the
+    observed scene (harness/scenes.py); without one, the mosaic (older archives keep their keys)."""
+    tail = f"|{observed}" if observed else ""
+    return hashlib.sha1(f"{index}|{bbox_text(bbox)}|384{tail}".encode(), usedforsecurity=False).hexdigest()[
+        :20
+    ]
+
+
+def scene_url(index: str, bbox: list[float], observed: str) -> str:
+    """The cache's handle for an observed scene (not fetched over HTTP: harness/scenes.py reads it)."""
+    return f"scene://{index}/{bbox_text(bbox)}/{observed}"
 
 
 RUN_ID_RE = r"^[A-Za-z0-9-]{1,64}$"  # the shape of a run ID (a UUID, or a test's run-0001)
 
 
-def console_chip_url(index: str | None, bbox: list[float], run_id: str | None = None) -> str:
+def console_chip_url(
+    index: str | None, bbox: list[float], run_id: str | None = None, observed: str | None = None
+) -> str:
     """Where the console page loads a result tile: our endpoint. A bbox the endpoint would refuse (wider than
     MAX_CHIP_DEG, or outside Web Mercator) keeps its provider URL, so it still shows, uncached."""
     if parse_bbox(bbox_text(bbox)) is None:
         return tile_url(index, bbox)
     idx = index if index in CHIP_INDEXES else "s2"
     url = f"/tiles/chip/{idx}/{bbox_text(bbox)}.jpg"
-    return f"{url}?run={run_id}" if run_id else url
+    query = [f"run={run_id}"] if run_id else []
+    if observed and re.fullmatch(r"\d{4}-\d{2}-\d{2}", observed):
+        query.append(f"observed={observed}")  # the scene the tool matched, not a mosaic
+    return f"{url}?{'&'.join(query)}" if query else url
