@@ -67,11 +67,27 @@ Every run tied to a reference now shows how well its search ranked the real asse
 
 The spec's AC1 is amended to match.
 
+**Verify:** an independent review found no blocking issues.
+- **Maths:** checked against a brute-force version in 3,000 random trials (ties, the unranked block, P = 0, N = 0, short rankings, multi-cell assets), with 0 mismatches.
+- **Bundle:** a fresh build reproduces the committed workspace bundle exactly.
+- **Its non-blocking findings, fixed:**
+  - the random baseline now shows on "not reached" effort too (console and workspace);
+  - a search call with no call number gets its own group instead of merging (`test_calls_without_a_number_stay_separate_groups`);
+  - cells outside the area are tested once;
+  - untied runs skip parsing candidates;
+  - a note explains a null AUROC when every area cell is an asset;
+  - spec AC1's opening sentence now matches the code.
+- **Speed at scale** (the reviewer's timing): about 0.17 s at 3,000 candidates and 1.8 s at 30,000. Real runs so far have tens.
+
 ## Known limits
 - **AUROC and AP for agents** are dominated by the cells the agent never ranked (30 of 482,799 on Pecos), so they sit near 0.5 and 0. Recall@k and review effort carry the signal.
 - **The per-concept `effort_80` mean** averages only the runs that reached 80%.
 - **Chips are scored at their centre cell** (spec open question, default kept).
 - **`complete_within_blocks`** references (R2) will count as complete once R2 adds them.
+
+## Launch
+- **Ships with the PR.** The console and `harness replay` compute the ranking when a run is viewed. There's no migration, nothing is stored, and no AgentCore redeploy is needed: the agent is unchanged.
+- **Monitor:** a run whose reference card shows "Not defined" for every ranking metric on a complete reference means no candidates fell inside the area, and the note says so.
 
 ## Rollback
 Revert the PR. Nothing is stored; the ranking is computed from each run's archive when it's viewed.

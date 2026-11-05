@@ -311,9 +311,13 @@ def rank_cells(grid: Grid, area: dict[str, Any], claims: list[tuple[float, float
         order += [(q[depth][0], q[depth][1]) for q in queues if depth < len(q)]
     out: list[Cell] = []
     seen: set[Cell] = set()
+    rejected: set[Cell] = set()  # outside the area: test each cell once (large runs repeat cells)
     for lat, lon in order:
         cell = grid.cell(lon, lat)
-        if cell in seen or not in_area(grid, area, cell):
+        if cell in seen or cell in rejected:
+            continue
+        if not in_area(grid, area, cell):
+            rejected.add(cell)
             continue
         seen.add(cell)
         out.append(cell)
@@ -374,6 +378,8 @@ def ranking_metrics(ranked: list[Cell], cell_assets: dict[Cell, set[str]], n_ass
         ap = ap_sum / P
     else:
         notes.append("no reference assets inside the area")
+    if P and not neg_total:
+        notes.append("every area cell touches an asset, so AUROC is undefined")
     r3 = lambda v: None if v is None else round(v, 3)  # noqa: E731
     out: dict[str, Any] = {
         "candidates": len(ranked), "positives": P, "negatives": N, "k": k_default,

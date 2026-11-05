@@ -45,7 +45,8 @@
   // Ranking metrics over the run's ranked candidates (docs/ranking-metrics).
   function effortText(e, random) {
     if (!e) return "n/a";
-    return e.cells != null ? `${e.cells.toLocaleString("en-US")} cells (random ≈ ${random != null ? random.toLocaleString("en-US") : "—"})` : `not reached (${Math.round(e.reached * 100)}% after ${e.after} cells)`;
+    const r = random != null ? random.toLocaleString("en-US") : "—";
+    return e.cells != null ? `${e.cells.toLocaleString("en-US")} cells (random ≈ ${r})` : `not reached (${Math.round(e.reached * 100)}% after ${e.after} cells; random ≈ ${r})`;
   }
   function rankingRows(rk) {
     if (!rk) return [];

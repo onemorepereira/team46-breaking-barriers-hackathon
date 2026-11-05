@@ -681,7 +681,7 @@ function effortText(e: any, random: number | undefined): string {
   if (!e) return "Not defined";
   return e.cells != null
     ? `${e.cells.toLocaleString("en-US")} cells (random ≈ ${random != null ? random.toLocaleString("en-US") : "—"})`
-    : `Not reached (${Math.round((e.reached ?? 0) * 100)}% after ${e.after} cells)`;
+    : `Not reached (${Math.round((e.reached ?? 0) * 100)}% after ${e.after} cells; random ≈ ${random != null ? random.toLocaleString("en-US") : "—"})`;
 }
 function Ranking({ rk }: { rk: any }) {
   const num = (v: any) => (typeof v === "number" ? String(v) : "Not defined");

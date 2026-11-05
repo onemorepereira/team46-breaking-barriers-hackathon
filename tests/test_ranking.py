@@ -252,3 +252,13 @@ def test_calls_are_interleaved_in_the_order_they_were_made_not_completed():
         g.cell(0.0060, 0.0060),
         g.cell(0.0030, 0.0030),
     ]
+
+
+def test_calls_without_a_number_stay_separate_groups(tmp_path):
+    from analysis.judging import measure
+
+    run = two_call_run(tmp_path)
+    for span in run.tool_results:  # strip the refs, as a call without a number would arrive
+        span.attributes["harness.tool.ref"] = "T?"
+    groups = {c[3] for c in measure.search_candidates(run)}
+    assert len(groups) == 2 and all(g.startswith("T?:") for g in groups)

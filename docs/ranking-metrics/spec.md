@@ -26,7 +26,7 @@ Our reference metrics score only the sites the agent reported: site recall, cell
 - As an evaluator, I want recall@k with k equal to the number of asset cells, so that I can read an agent beside the benchmark's warehouse table.
 
 ## Acceptance criteria
-- [ ] **AC1 The ranking.** A run's ranked candidate list is built from its located results (analysis/judging/measure.py:93-125), deduplicated by 160 m cell, keeping each cell's first and best entry:
+- [ ] **AC1 The ranking.** A run's ranked candidate list is built from its coordinate claims and each LGND call's own search results (`measure.search_candidates`, which reads each call's raw tool result), deduplicated by 160 m cell, keeping each cell's first entry:
   1. the coordinate claims, in answer order;
   2. then LGND **search results** (the rows that carry a `similarity`; survey grid cells and classifier rows don't, so they are not candidates). Similarities aren't comparable across calls, so each tool call's results are ordered by descending similarity (ties keep first-seen order), and the calls are interleaved round-robin in the order they were made (their call number, `T1`, `T2`, …, assigned when a call starts; results can arrive in a different order when calls run in parallel).
 

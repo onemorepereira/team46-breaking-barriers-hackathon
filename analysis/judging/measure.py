@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -136,7 +137,9 @@ def search_candidates(run: Run) -> list[tuple[float, float, float, str]]:
             continue
         text = run.tool_result_text(span) or str(span.attr("harness.tool.result", ""))
         data = _json(text)
-        ref = str(span.attr("harness.tool.ref"))
+        ref = str(span.attr("harness.tool.ref") or "")
+        if not re.fullmatch(r"T\d+", ref):  # a call with no number ("T?"): its own group, never merged
+            ref = f"T?:{span.span_id}"
         for c in chips_of(data) if data else []:
             sim = c.get("similarity")
             if isinstance(sim, int | float) and not isinstance(sim, bool):

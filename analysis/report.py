@@ -62,8 +62,10 @@ class RunReport:
 def reference_of(run: Run, m: measure.Measured, prov: provenance.Provenance,
                  repo_sha: str | None = None) -> dict[str, Any] | None:  # fmt: skip
     claims = [(x.lat, x.lon) for x in m.located if x.source == "claim"]
-    # every LGND search result per call, not deduplicated across calls (docs/ranking-metrics)
-    chips = measure.search_candidates(run)
+    # every LGND search result per call, not deduplicated across calls (docs/ranking-metrics); untied runs
+    # have no reference to rank against, so skip the parse
+    tied = run.store.read_text(f"runs/{run.run_id}/{ref_mod.SNAPSHOT}/tie.json")
+    chips = measure.search_candidates(run) if tied else None
     return ref_mod.from_run(run, claims, prov.claims_block_missing, repo_sha, chips)
 
 
