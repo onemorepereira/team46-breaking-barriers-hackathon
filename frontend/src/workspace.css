@@ -1204,9 +1204,6 @@
   .header-actions {
     margin-left: auto !important;
   }
-  .evaluation-button {
-    display: none !important;
-  }
   .live-workspace .workspace {
     flex-direction: column;
     padding: 8px;
