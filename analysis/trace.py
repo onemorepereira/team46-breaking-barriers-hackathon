@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import threading
+from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from functools import cached_property
 from typing import Any
@@ -80,6 +83,37 @@ class ArchiveError(Exception):
     pass
 
 
+class _LRU:
+    """Bounded, thread-safe cache of immutable archive objects, by total characters."""
+
+    def __init__(self, max_chars: int) -> None:
+        self.max_chars, self.size = max_chars, 0
+        self.items: OrderedDict[tuple[str, str], str] = OrderedDict()
+        self.lock = threading.Lock()
+
+    def get(self, key: tuple[str, str]) -> str | None:
+        with self.lock:
+            if key in self.items:
+                self.items.move_to_end(key)
+                return self.items[key]
+            return None
+
+    def put(self, key: tuple[str, str], text: str) -> None:
+        if len(text) > self.max_chars // 4:
+            return
+        with self.lock:
+            if key in self.items:
+                return
+            self.items[key] = text
+            self.size += len(text)
+            while self.size > self.max_chars:
+                _, old = self.items.popitem(last=False)
+                self.size -= len(old)
+
+
+_ARCHIVE_CACHE = _LRU(200_000_000)  # ~200 MB of write-once archive objects (tool results, span chunks)
+
+
 @dataclass
 class Run:
     run_id: str
@@ -88,27 +122,46 @@ class Run:
     result: dict[str, Any] | None
     summary: dict[str, Any] | None
     all_spans: list[Span]
+    _tool_text: dict[str, str | None] = field(default_factory=dict, repr=False, compare=False)
 
     @classmethod
     def load(cls, store: Store, run_id: str) -> Run:
         prefix = f"runs/{run_id}"
-        manifest_text = store.read_text(f"{prefix}/run.json")
-        files = store.list(prefix)
-        span_files = sorted(f for f in files if f.rsplit("/", 1)[-1].startswith("spans-"))
+        # Every object is its own S3 GET (~100 ms): fetch the listing and the fixed files together, then
+        # all span files together, instead of one after another.
+        with ThreadPoolExecutor(max_workers=16) as pool:
+            fixed = pool.map(
+                store.read_text, [f"{prefix}/{n}" for n in ("run.json", "result.json", "summary.json")]
+            )
+            files = store.list(prefix)
+            span_files = sorted(f for f in files if f.rsplit("/", 1)[-1].startswith("spans-"))
+            cached = {f: _ARCHIVE_CACHE.get((store.uri, f)) for f in span_files}
+            fetched = dict(
+                zip(
+                    todo := [f for f, t in cached.items() if t is None],
+                    pool.map(store.read_text, todo),
+                    strict=True,
+                )
+            )
+            span_texts = [cached[f] if cached[f] is not None else fetched[f] for f in span_files]
+            manifest_text, result_text, summary_text = list(fixed)
+        manifest_status = (json.loads(manifest_text) if manifest_text else {}).get("status")
+        if manifest_status not in (None, "running", "unknown"):
+            # A finished run's span chunks are each written once (agent/archive.py numbers them).
+            for f, text in fetched.items():
+                if text is not None:
+                    _ARCHIVE_CACHE.put((store.uri, f), text)
         if manifest_text is None and not span_files:
             raise ArchiveError(
                 f"no archive for run {run_id} under {store.uri}/runs/. "
                 "Check the run ID or archive_uri in harness.yaml."
             )
         spans: list[Span] = []
-        for f in span_files:
-            text = store.read_text(f) or ""
-            for line in text.splitlines():
+        for text in span_texts:
+            for line in (text or "").splitlines():
                 if line.strip():
                     spans.append(Span.from_line(json.loads(line)))
         spans.sort(key=lambda s: (s.start_ns, s.span_id))
-        result_text = store.read_text(f"{prefix}/result.json")
-        summary_text = store.read_text(f"{prefix}/summary.json")
         manifest = json.loads(manifest_text) if manifest_text else {"run_id": run_id, "status": "unknown"}
         return cls(
             run_id=run_id,
@@ -214,7 +267,34 @@ class Run:
         uri = span.attr("harness.tool.result_uri")
         if not uri:
             return None
+        key = self._tool_key(uri)
+        if key not in self._tool_text:
+            self._prefetch_tool_results(key)
+        return self._tool_text.get(key)
+
+    def _tool_key(self, uri: Any) -> str:
         key = str(uri)
-        if not key.startswith("runs/"):
-            key = f"runs/{self.run_id}/{key}"
-        return self.store.read_text(key)
+        return key if key.startswith("runs/") else f"runs/{self.run_id}/{key}"
+
+    def _prefetch_tool_results(self, wanted: str) -> None:
+        """Read every tool result of the run at once, in parallel (one S3 GET each, ~100 ms apiece, was
+        serial and dominated opening a run). Results are write-once (<ref>.a<attempt>.txt), so they are
+        also kept in a bounded process-wide cache and reopening a run doesn't fetch them again."""
+        keys = {wanted} | {
+            self._tool_key(u) for s in self.all_spans if (u := s.attr("harness.tool.result_uri"))
+        }
+        missing = []
+        for k in keys:
+            hit = _ARCHIVE_CACHE.get((self.store.uri, k))
+            if hit is not None:
+                self._tool_text[k] = hit
+            else:
+                missing.append(k)
+        if not missing:
+            return
+        with ThreadPoolExecutor(max_workers=min(16, len(missing))) as pool:
+            texts = list(pool.map(self.store.read_text, missing))
+        for k, text in zip(missing, texts, strict=True):
+            self._tool_text[k] = text
+            if text is not None:
+                _ARCHIVE_CACHE.put((self.store.uri, k), text)

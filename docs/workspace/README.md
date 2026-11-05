@@ -62,6 +62,7 @@ Both panels scored 100 under the current starting rubric. These smoke results de
 Local checks: 301 Python tests passed, one infrastructure-only test module skipped because it requires the optional CDK group; four frontend contract tests passed; TypeScript build, Python lint/format/type checks passed. GitHub CI also runs the optional infrastructure checks, frontend rebuild consistency and secret scanning. The finished-source ZIP contains tracked source and built assets only, excluding credentials, local configuration, dependencies, traces and private outputs.
 
 Review fixes after PR #12's code review: [review-fixes.md](review-fixes.md).
+Map imagery and fast run opening (PR #14; the inspector has since replaced its popup): [handoff](../workspace-map-popups/handoff.md).
 
 ## Workspace usability update
 

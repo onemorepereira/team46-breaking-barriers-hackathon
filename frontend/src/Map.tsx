@@ -50,8 +50,12 @@ export default function EvidenceMap({
     fit = useRef<(animate?: boolean) => void>(() => {}),
     lastInspection = useRef({ open: false, runId: "" }),
     onSelectRef = useRef(onSelect),
+    onSelectChipRef = useRef(onSelectChip),
+    viewRef = useRef(view),
     tileFocus = useRef<HTMLButtonElement>(null);
   onSelectRef.current = onSelect;
+  onSelectChipRef.current = onSelectChip;
+  viewRef.current = view;
   const [ready, setReady] = useState(false),
     [error, setError] = useState(""),
     [layer, setLayer] = useState("s2"),
@@ -179,6 +183,23 @@ export default function EvidenceMap({
     }
     source("area", area);
     source("chips", view?.map.chips || empty);
+    // A dot per imagery result: its ~150 m footprint is invisible until zoomed in (PR #14).
+    source("chip-dots", {
+      type: "FeatureCollection",
+      features: (view?.map.chips?.features || []).flatMap((f: any, i: number) => {
+        const lon = Number(f?.properties?.lon),
+          lat = Number(f?.properties?.lat);
+        return Number.isFinite(lon) && Number.isFinite(lat)
+          ? [
+              {
+                type: "Feature",
+                geometry: { type: "Point", coordinates: [lon, lat] },
+                properties: { i, inside: f.properties.inside },
+              },
+            ]
+          : [];
+      }),
+    });
     source("reference", view?.reference?.features || empty);
     source("false-alarms", {
       type: "FeatureCollection",
@@ -225,6 +246,34 @@ export default function EvidenceMap({
         source: "chips",
         paint: { "line-color": blue, "line-width": 1 },
       });
+      m.addLayer({
+        id: "chip-dots",
+        type: "circle",
+        source: "chip-dots",
+        maxzoom: 14,
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 3, 13, 6],
+          "circle-color": ["case", ["==", ["get", "inside"], false], orange, blue],
+          "circle-stroke-width": 1.5,
+          "circle-stroke-color": "#ffffff",
+        },
+      });
+      // Clicking an imagery result opens it in the inspector (dot when zoomed out, footprint up close).
+      m.on("click", (e: any) => {
+        const dot = m.queryRenderedFeatures(e.point, { layers: ["chip-dots"] })[0];
+        if (dot) return onSelectChipRef.current(Number(dot.properties.i));
+        const hit = m.queryRenderedFeatures(e.point, { layers: ["chips-fill"] })[0];
+        if (!hit) return;
+        const chips = viewRef.current?.map.chips?.features || [];
+        const i = chips.findIndex(
+          (f: any) => f?.properties?.node && f.properties.node === hit.properties.node,
+        );
+        if (i >= 0) onSelectChipRef.current(i);
+      });
+      for (const id of ["chip-dots", "chips-fill"]) {
+        m.on("mouseenter", id, () => (m.getCanvas().style.cursor = "pointer"));
+        m.on("mouseleave", id, () => (m.getCanvas().style.cursor = ""));
+      }
       const colour = ["case", ["get", "found"], blue, orange];
       m.addLayer({
         id: "ref-fill",
@@ -271,6 +320,12 @@ export default function EvidenceMap({
       blue,
     ]);
     m.setPaintProperty("chips-line", "line-color", blue);
+    m.setPaintProperty("chip-dots", "circle-color", [
+      "case",
+      ["==", ["get", "inside"], false],
+      orange,
+      blue,
+    ]);
     for (const [id, prop] of [
       ["ref-fill", "fill-color"],
       ["ref-line", "line-color"],
@@ -326,7 +381,7 @@ export default function EvidenceMap({
         "visibility",
         overlays.area ? "visible" : "none",
       );
-    for (const id of ["chips-fill", "chips-line"])
+    for (const id of ["chips-fill", "chips-line", "chip-dots"])
       map.current.setLayoutProperty(
         id,
         "visibility",
