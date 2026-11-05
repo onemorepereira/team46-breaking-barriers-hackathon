@@ -2982,3 +2982,56 @@ html[data-colour="colour-safe"] .visual-verdict.v-absent {
 .map-key-visual .visual-badge:not(:first-child) {
   margin-left: 6px;
 }
+
+/* Issue badges and filter in the Evaluation panel (docs/evaluation-issues). */
+.disclosure-title > span:first-child {
+  flex: 1;
+}
+.issue-badge {
+  flex-shrink: 0;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #c2362f;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+.issue-badge.dot {
+  min-width: 9px;
+  width: 9px;
+  height: 9px;
+  padding: 0;
+}
+html[data-colour="colour-safe"] .issue-badge {
+  background: #d55e00;
+}
+.issue-filter {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 14px 0 4px;
+  padding: 10px 12px;
+  border: 1px solid #e7c9c6;
+  border-radius: 8px;
+  background: #fbf1f0;
+  color: #5a2420;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.issue-filter input {
+  width: 17px;
+  height: 17px;
+  accent-color: #c2362f;
+  flex-shrink: 0;
+}
+.issue-filter.is-clean {
+  border-color: #cfe3d6;
+  background: #eef6f0;
+  color: #23573a;
+  cursor: default;
+}
