@@ -1163,28 +1163,20 @@ export default function App() {
               >
                 {!view ? (
                   <>
-                    <div className="section-kicker">Live research</div>
+                    <div className="section-kicker live-kicker">
+                      <span className="live-dot" aria-hidden="true" />
+                      Live research
+                    </div>
                     <h2>Building an evidence trail</h2>
                     <p>
                       Results and scores appear when the agent finishes.
                       Activity below comes from the actual run.
                     </p>
-                    {timeline.length === 0 && (
-                      <Empty title="Connecting to the research tools">
-                        Resolving the request and preparing the agent.
-                      </Empty>
-                    )}
-                    <Trace entries={timeline} />
-                    {judgedEvents.map((j, i) => (
-                      <div key={i} className="judge-line">
-                        <strong>{j.key}</strong>
-                        <span>
-                          {j.status === "ok"
-                            ? `${formatScore(j.score)}/100`
-                            : j.error || "Unavailable"}
-                        </span>
-                      </div>
-                    ))}
+                    <div className="live-progress" aria-hidden="true">
+                      <span />
+                    </div>
+                    <Trace entries={timeline} live />
+                    <LiveNow events={events} timeline={timeline} />
                   </>
                 ) : tab === "findings" ? (
                   <>
@@ -1423,14 +1415,101 @@ export default function App() {
     </div>
   );
 }
+// What the run is doing right now, while it runs: the agent's next move after its last recorded step,
+// then each judge's progress through its passes. Elapsed time ticks from the last thing that happened.
+function LiveNow({ events, timeline }: { events: any[]; timeline: any[] }) {
+  const [now, setNow] = useState(Date.now());
+  const since = useRef(Date.now());
+  const count = events.length;
+  useEffect(() => {
+    since.current = Date.now();
+  }, [count]);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const elapsed = Math.max(0, Math.round((now - since.current) / 1000));
+  const judging = [...events].reverse().find((e) => e.type === "judging");
+  const replies = events.filter((e) => e.type === "judge");
+  if (judging) {
+    const passes = judging.passes || 1;
+    return (
+      <div className="live-judges" role="status" aria-live="polite">
+        <div className="live-now">
+          <span className="live-badge" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          <span>
+            <strong>Independent judges are reviewing the evidence</strong>
+            <small>
+              {replies.length} of {passes * (judging.seats?.length || 3)} verdicts
+              · {elapsed}s since the last
+            </small>
+          </span>
+        </div>
+        {(judging.seats || []).map((seat: any) => {
+          const mine = replies.filter((r) => r.key === seat.key);
+          const done = mine.length >= passes;
+          const scores = mine
+            .filter((r) => r.status === "ok")
+            .map((r) => formatScore(r.score));
+          return (
+            <div
+              key={seat.key}
+              className={`live-judge ${done ? "done" : "working"}`}
+            >
+              <span className="live-judge-dot" aria-hidden="true" />
+              <strong>{seat.key}</strong>
+              <span className="live-judge-passes" aria-hidden="true">
+                {Array.from({ length: passes }, (_, i) => (
+                  <i key={i} className={i < mine.length ? "in" : ""} />
+                ))}
+              </span>
+              <span className="live-judge-score">
+                {scores.length ? scores.join(" · ") : done ? "Unavailable" : "reading…"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+  const last = timeline[timeline.length - 1];
+  const doing =
+    last?.kind === "model"
+      ? "Calling a tool"
+      : timeline.length
+        ? "The agent is thinking"
+        : "Starting the agent";
+  return (
+    <div className="live-now" role="status" aria-live="polite">
+      <span className="live-badge" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      <span>
+        <strong>{doing}</strong>
+        <small>
+          {elapsed}s since the last step · {timeline.length}{" "}
+          {timeline.length === 1 ? "step" : "steps"} so far
+        </small>
+      </span>
+    </div>
+  );
+}
 function Trace({
   entries,
   focusedRef,
   onZoom,
+  live = false,
 }: {
   onZoom?: (bounds: number[]) => void;
   entries: any[];
   focusedRef?: string | null;
+  live?: boolean;
 }) {
   useEffect(() => {
     if (focusedRef)
@@ -1445,7 +1524,7 @@ function Trace({
           key={`${e.ref}-${i}`}
           id={`step-${e.ref}`}
           open={focusedRef === e.ref}
-          className={`trace-step ${e.status === "error" ? "trace-error" : ""}`}
+          className={`trace-step ${e.status === "error" ? "trace-error" : ""} ${live ? "trace-live" : ""} ${live && i === entries.length - 1 ? "trace-latest" : ""}`}
         >
           <summary>
             <span className="trace-ref">{e.ref || i + 1}</span>
