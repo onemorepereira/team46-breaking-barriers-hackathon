@@ -2961,3 +2961,24 @@ html[data-colour="colour-safe"] .visual-verdict.v-absent {
   border-left-color: #d55e00;
   background: #fff0e3;
 }
+
+/* Legend for the visual-check badges: the same marks as on the map, inline. */
+.map-key-visual {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.map-key-visual .visual-badge {
+  position: static;
+  font-style: normal;
+  width: 15px;
+  height: 15px;
+  font-size: 9.5px;
+  border-width: 1px;
+  box-shadow: none;
+}
+.map-key-visual .visual-badge + .visual-badge,
+.map-key-visual .visual-badge:not(:first-child) {
+  margin-left: 6px;
+}

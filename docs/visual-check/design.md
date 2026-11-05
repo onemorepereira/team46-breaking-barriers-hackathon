@@ -16,7 +16,7 @@ When a run is judged, a new step looks at each reported site. For each one it fi
   - `?` can't tell;
   - no badge when the site wasn't checked.
   
-  The badge uses an icon plus colour, so colour-safe mode still reads.
+  The badge uses an icon plus colour, so colour-safe mode still reads. The map legend shows the three badges with their meaning ("✓ seen ✕ not seen ? can't tell") whenever the run has a check with sites. This was added after the user asked for a legend.
 - Legend caption, by state:
   - check present: "Visually checked: {seen} of {checked} sites seen", where `checked` = sites with a present/absent verdict, the same denominator as the score, so caption and score agree. The caption's `title` adds "{unclear} couldn't be told, {no_image} had no open image" when either is non-zero;
   - check present, but no site got present/absent: "Visual check: no site could be confirmed or ruled out";

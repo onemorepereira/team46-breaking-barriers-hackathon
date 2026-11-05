@@ -580,6 +580,25 @@ export default function EvidenceMap({
         {view?.reference && (
           <span>Reference: blue = found · orange = missed / false alarm</span>
         )}
+        {view?.map.visual?.sites ? (
+          <span
+            className="map-key-visual"
+            title="Each site was looked at in the sharpest open image of it (docs/visual-check)"
+          >
+            <em className="visual-badge v-present" aria-hidden="true">
+              ✓
+            </em>
+            seen
+            <em className="visual-badge v-absent" aria-hidden="true">
+              ✕
+            </em>
+            not seen
+            <em className="visual-badge v-unclear" aria-hidden="true">
+              ?
+            </em>
+            can’t tell
+          </span>
+        ) : null}
         <span
           className="map-key-caption"
           title={

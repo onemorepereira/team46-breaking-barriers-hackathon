@@ -112,9 +112,9 @@ Nothing in an evaluation looked at the place a run reported. The judges read the
 - the endpoint reads only `runs/<id>/visual/<12 hex>.jpg`;
 - accepted residual risk: GDAL follows redirects.
 
-**Browser probe** (`uv run --no-project --with playwright python tests/browser/visual_check_probe.py RUN_ID`): all 11 checks pass on Abilene wind (NAIP, not seen) and Tokyo (Sentinel-2, seen/can't tell):
+**Browser probe** (`uv run --no-project --with playwright python tests/browser/visual_check_probe.py RUN_ID`): all 12 checks pass on Abilene wind (NAIP, not seen) and Tokyo (Sentinel-2, seen/can't tell):
 - caption;
-- badges;
+- badges, and the legend explaining them (✓ seen, ✕ not seen, ? can't tell; added after the user asked for one);
 - pill;
 - verdict;
 - credit;

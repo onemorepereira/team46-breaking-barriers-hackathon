@@ -3,9 +3,9 @@
     uv run harness ui &                      # a console whose archive has a visually checked run
     uv run --no-project --with playwright python tests/browser/visual_check_probe.py RUN_ID [--base URL]
 
-Checks the map caption and marker badges, then the inspector in each state: the checked image loaded (pill,
-verdict, credit), still loading, failed to load (with Try again), switched to the agent's image, and at
-phone width (no horizontal scroll). Prints one JSON object, and exits 1 if any check fails.
+Checks the map caption, marker badges and their legend, then the inspector in each state: the checked image
+loaded (pill, verdict, credit), still loading, failed to load (with Try again), switched to the agent's image,
+and at phone width (no horizontal scroll). Prints one JSON object, and exits 1 if any check fails.
 """
 
 from __future__ import annotations
@@ -56,6 +56,10 @@ def main() -> int:
         )
         checks["caption names the check"] = str(seen["caption"]).startswith("Visual")
         checks["markers carry a verdict badge"] = bool(seen["badges"])
+        seen["legend"] = text(page, ".map-key-visual")
+        checks["legend explains the badges"] = all(
+            w in str(seen["legend"]) for w in ("seen", "not seen", "can’t tell")
+        )
         checks["checked image loaded with its pill"] = bool(seen["pill"]) and " m" in str(seen["pill"])
         checks["verdict shown"] = any(w in str(seen["verdict"]) for w in ("Seen", "Not seen", "Can’t tell"))
         checks["credit names the checker"] = str(seen["credit"]).startswith("Checked by")
