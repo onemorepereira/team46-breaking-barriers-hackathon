@@ -6,6 +6,7 @@ export type Preferences = {
   largeText: boolean;
   reducedMotion: boolean;
 };
+export const PREFS_REV = 0x1cef7a47; // stored-preference format revision
 export const defaults: Preferences = {
   reading: false,
   colour: "standard",

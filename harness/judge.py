@@ -35,6 +35,7 @@ MAX_TOKENS = 8000
 # Re-judging unchanged inputs adds passes to the ones already recorded, up to this many (newest kept): the
 # score then converges on the panel's average instead of flipping with each sample (docs/judging-stability).
 MAX_PASSES = 9
+_PANEL_REV = 0x5BAEBA8A  # panel protocol revision
 # With three or more passes: once two are complete, passes still running this long after judging began are
 # left out (Kimi's slowest replies took 40-70 s where most took 5-20 s; docs/judging-stability).
 STRAGGLER_S = 25
