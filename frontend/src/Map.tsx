@@ -1,52 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { candidatesOf, chipFor, endpoint, type View } from "./api";
-const CYAN = "#01bdda",
-  ORANGE = "#e97800",
-  POPUP_ROOM = 150; // px the focused point sits below centre, so the popup above it stays in frame
-function node(tag: string, cls: string, text?: string): HTMLElement {
-  const n = document.createElement(tag);
-  n.className = cls;
-  if (text) n.textContent = text;
-  return n;
-}
-// Popup body built from DOM nodes (never innerHTML): tool output is untrusted text.
-function popupBody(title: string, p: any): HTMLElement {
-  const box = node("div", "chip-popup");
-  if (p?.tile_url) {
-    const img = document.createElement("img");
-    img.src = p.tile_url;
-    img.alt = `Imagery under ${p.node || title}`;
-    img.onerror = () => img.replaceWith(node("div", "chip-popup-missing", "Tile unavailable"));
-    box.append(img);
-  } else box.append(node("div", "chip-popup-missing", "No imagery tile for this location"));
-  box.append(node("strong", "chip-popup-title", title));
-  const facts = [
-    p?.index ? String(p.index).toUpperCase() : null,
-    p?.observed ? `observed ${p.observed}` : null,
-    Number.isFinite(Number(p?.similarity)) && p?.similarity !== null
-      ? `similarity ${Number(p.similarity).toFixed(2)}`
-      : null,
-  ].filter(Boolean);
-  if (facts.length) box.append(node("span", "chip-popup-meta", facts.join(" · ")));
-  if (Number.isFinite(Number(p?.lat)) && Number.isFinite(Number(p?.lon)))
-    box.append(
-      node("span", "chip-popup-meta", `${Number(p.lat).toFixed(4)}, ${Number(p.lon).toFixed(4)}`),
-    );
-  const badges = node("div", "chip-popup-badges");
-  const inside = p?.inside === true || p?.inside === "true",
-    outside = p?.inside === false || p?.inside === "false";
-  badges.append(
-    node(
-      "span",
-      `chip-popup-badge ${outside ? "out" : inside ? "in" : ""}`,
-      outside ? "Outside the requested area" : inside ? "Inside the requested area" : "No area to check",
-    ),
-  );
-  if (p?.ref) badges.append(node("span", "chip-popup-badge ref", `from ${p.ref}`));
-  box.append(badges);
-  if (p?.tile_source) box.append(node("span", "chip-popup-source", p.tile_source));
-  return box;
-}
+import { candidatesOf, imageForCandidate, endpoint, type View } from "./api";
+import { Icon } from "./Icon";
+import type { Preferences } from "./preferences";
 let loading: Promise<any> | null = null;
 function library(): Promise<any> {
   if ((window as any).maplibregl)
@@ -57,58 +12,75 @@ function library(): Promise<any> {
       css.rel = "stylesheet";
       css.href = endpoint("/static/vendor/maplibre/maplibre-gl.css");
       document.head.append(css);
-      const script = document.createElement("script");
-      script.src = endpoint("/static/vendor/maplibre/maplibre-gl.js");
-      script.onload = () => resolve((window as any).maplibregl);
-      script.onerror = () => {
+      const s = document.createElement("script");
+      s.src = endpoint("/static/vendor/maplibre/maplibre-gl.js");
+      s.onload = () => resolve((window as any).maplibregl);
+      s.onerror = () => {
         loading = null;
         reject(new Error("Map library could not load"));
       };
-      document.head.append(script);
+      document.head.append(s);
     });
   return loading;
 }
 export default function EvidenceMap({
   view,
   selected,
+  selectedChip,
   onSelect,
-  focusChip,
+  onSelectChip,
+  onClose,
+  onTrace,
+  preferences,
+  focusBounds,
 }: {
   view: View | null;
   selected: number | null;
+  selectedChip: number | null;
   onSelect: (n: number) => void;
-  focusChip?: { index: number; nonce: number } | null;
+  onSelectChip: (n: number) => void;
+  onClose: () => void;
+  onTrace: (ref: string) => void;
+  preferences: Preferences;
+  focusBounds: number[] | null;
 }) {
   const host = useRef<HTMLDivElement>(null),
     map = useRef<any>(null),
     markers = useRef<any[]>([]),
-    popup = useRef<any>(null),
-    viewRef = useRef<View | null>(view);
+    fit = useRef<(animate?: boolean) => void>(() => {}),
+    lastInspection = useRef({ open: false, runId: "" }),
+    onSelectRef = useRef(onSelect),
+    onSelectChipRef = useRef(onSelectChip),
+    viewRef = useRef(view),
+    tileFocus = useRef<HTMLButtonElement>(null);
+  onSelectRef.current = onSelect;
+  onSelectChipRef.current = onSelectChip;
   viewRef.current = view;
-  function showPopup(lngLat: [number, number], title: string, p: any) {
-    const lib = (window as any).maplibregl;
-    if (!map.current || !lib) return;
-    popup.current?.remove();
-    popup.current = new lib.Popup({ anchor: "bottom", offset: 18, maxWidth: "260px", focusAfterOpen: false })
-      .setLngLat(lngLat)
-      .setDOMContent(popupBody(title, p))
-      .addTo(map.current);
-  }
-  function chipCenter(f: any): [number, number] | null {
-    const lon = Number(f?.properties?.lon),
-      lat = Number(f?.properties?.lat);
-    return Number.isFinite(lon) && Number.isFinite(lat) ? [lon, lat] : null;
-  }
   const [ready, setReady] = useState(false),
     [error, setError] = useState(""),
-    [layer, setLayer] = useState("satellite");
+    [layer, setLayer] = useState("s2"),
+    [imageError, setImageError] = useState(false),
+    [overlays, setOverlays] = useState({
+      area: true,
+      chips: true,
+      reference: true,
+    });
+  const chipIndex = selectedChip ?? imageForCandidate(view, selected),
+    chip = chipIndex === null ? null : view?.map.chips?.features?.[chipIndex],
+    candidate = selected === null ? null : candidatesOf(view)[selected];
+  const inspecting = selected !== null || selectedChip !== null;
+  const reduced =
+    preferences.reducedMotion ||
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const duration = reduced ? 0 : 550;
   useEffect(() => {
     let cancelled = false;
+    let resize: ResizeObserver | undefined;
     library()
       .then((lib) => {
         if (cancelled || !host.current) return;
         try {
-          map.current = new lib.Map({
+          const m = new lib.Map({
             container: host.current,
             center: [78, 23],
             zoom: 2.3,
@@ -126,75 +98,134 @@ export default function EvidenceMap({
               layers: [{ id: "base", type: "raster", source: "base" }],
             },
           });
-          map.current.addControl(new lib.NavigationControl(), "bottom-right");
-          map.current.on("load", () => setReady(true));
-          map.current.on("error", () =>
+          map.current = m;
+          m.addControl(new lib.NavigationControl(), "bottom-right");
+          // Evidence overlays must load even if a context basemap tile is unavailable.
+          m.on("style.load", () => setReady(true));
+          m.on("error", () =>
             setError(
-              "Some basemap imagery is unavailable. Evidence markers remain available.",
+              "Some map imagery is unavailable. The saved evidence and coordinates remain accessible.",
             ),
           );
+          resize = new ResizeObserver(() => m.resize());
+          resize.observe(host.current);
         } catch {
           setError(
-            "Interactive map is unavailable in this browser. Coordinates and evidence remain in the results panel.",
+            "Map unavailable in this browser. Use the saved coordinates and evidence below.",
           );
         }
       })
       .catch((e) => setError(e.message));
     return () => {
       cancelled = true;
-      popup.current?.remove();
+      resize?.disconnect();
       map.current?.remove();
       map.current = null;
-      setReady(false);
     };
   }, []);
   useEffect(() => {
+    setImageError(false);
+  }, [chipIndex, view?.run.id]);
+  useEffect(() => {
     if (!ready || !map.current) return;
-    map.current
-      .getSource("base")
-      ?.setTiles([
-        layer === "satellite"
-          ? endpoint("/tiles/base/s2/{z}/{x}/{y}.jpg")
-          : "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-      ]);
-    const attribution = document.querySelector(".maplibregl-ctrl-attrib-inner");
-    if (attribution)
-      attribution.textContent =
-        layer === "satellite"
-          ? "Sentinel-2 cloudless 2023 by EOX · modified Copernicus Sentinel data"
-          : "© OpenStreetMap contributors";
+    const sources: Record<
+      string,
+      { tiles: string; credit: string; max: number }
+    > = {
+      s2: {
+        tiles: endpoint("/tiles/base/s2/{z}/{x}/{y}.jpg"),
+        credit:
+          "Sentinel-2 cloudless 2023 by EOX · modified Copernicus Sentinel data",
+        max: 15,
+      },
+      usgs: {
+        tiles: endpoint("/tiles/base/usgs/{z}/{x}/{y}.jpg"),
+        credit: "USGS The National Map · imagery coverage varies",
+        max: 16,
+      },
+      naip: {
+        tiles: endpoint("/tiles/base/naip/{z}/{x}/{y}.jpg"),
+        credit: "USGS The National Map · NAIP (US coverage)",
+        max: 19,
+      },
+      streets: {
+        tiles: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        credit: "© OpenStreetMap contributors",
+        max: 19,
+      },
+    };
+    const source = sources[layer];
+    const m = map.current;
+    if (m.getLayer("base")) m.removeLayer("base");
+    if (m.getSource("base")) m.removeSource("base");
+    m.addSource("base", {
+      type: "raster",
+      tiles: [source.tiles],
+      tileSize: 256,
+      maxzoom: source.max,
+      attribution: source.credit,
+    });
+    const first = m.getStyle().layers?.[0]?.id;
+    m.addLayer({ id: "base", type: "raster", source: "base" }, first);
+    setError("");
   }, [layer, ready]);
   useEffect(() => {
     if (!ready || !map.current) return;
     const m = map.current,
-      lib = (window as any).maplibregl;
-    markers.current.forEach((x) => x.remove());
-    markers.current = [];
-    popup.current?.remove();
-    const empty = { type: "FeatureCollection", features: [] };
+      lib = (window as any).maplibregl,
+      empty = { type: "FeatureCollection", features: [] };
     const area = view?.map.area
       ? { type: "FeatureCollection", features: [view.map.area] }
       : empty;
-    if (m.getSource("area")) m.getSource("area").setData(area);
-    else {
-      m.addSource("area", { type: "geojson", data: area });
+    function source(id: string, data: any) {
+      if (m.getSource(id)) m.getSource(id).setData(data);
+      else m.addSource(id, { type: "geojson", data });
+    }
+    source("area", area);
+    source("chips", view?.map.chips || empty);
+    // A dot per imagery result: its ~150 m footprint is invisible until zoomed in (PR #14).
+    source("chip-dots", {
+      type: "FeatureCollection",
+      features: (view?.map.chips?.features || []).flatMap((f: any, i: number) => {
+        const lon = Number(f?.properties?.lon),
+          lat = Number(f?.properties?.lat);
+        return Number.isFinite(lon) && Number.isFinite(lat)
+          ? [
+              {
+                type: "Feature",
+                geometry: { type: "Point", coordinates: [lon, lat] },
+                properties: { i, inside: f.properties.inside },
+              },
+            ]
+          : [];
+      }),
+    });
+    source("reference", view?.reference?.features || empty);
+    source("false-alarms", {
+      type: "FeatureCollection",
+      features: (view?.reference?.false_alarm_cells || []).map(
+        (geometry: any) => ({ type: "Feature", geometry, properties: {} }),
+      ),
+    });
+    const blue = preferences.colour === "colour-safe" ? "#0072b2" : "#01bdda",
+      orange = preferences.colour === "colour-safe" ? "#e69f00" : "#e97800";
+    if (!m.getLayer("area-fill")) {
       m.addLayer({
         id: "area-fill",
         type: "fill",
         source: "area",
-        paint: { "fill-color": "#01bdda", "fill-opacity": 0.08 },
+        paint: { "fill-color": blue, "fill-opacity": 0.07 },
       });
       m.addLayer({
         id: "area-line",
         type: "line",
         source: "area",
         paint: {
-          "line-color": "#01bdda",
+          "line-color": blue,
           "line-width": 2,
           "line-dasharray": [3, 2],
         },
       });
-      m.addSource("chips", { type: "geojson", data: empty });
       m.addLayer({
         id: "chips-fill",
         type: "fill",
@@ -203,24 +234,18 @@ export default function EvidenceMap({
           "fill-color": [
             "case",
             ["==", ["get", "inside"], false],
-            "#e97800",
-            "#01bdda",
+            orange,
+            blue,
           ],
           "fill-opacity": 0.2,
         },
       });
-      const outside = ["==", ["get", "inside"], false];
       m.addLayer({
         id: "chips-line",
         type: "line",
         source: "chips",
-        paint: {
-          "line-color": ["case", outside, ORANGE, CYAN],
-          "line-width": 1.6,
-        },
+        paint: { "line-color": blue, "line-width": 1 },
       });
-      // Footprints are ~150 m across, invisible at county zoom: a dot per result stands in until close up.
-      m.addSource("chip-dots", { type: "geojson", data: empty });
       m.addLayer({
         id: "chip-dots",
         type: "circle",
@@ -228,135 +253,348 @@ export default function EvidenceMap({
         maxzoom: 14,
         paint: {
           "circle-radius": ["interpolate", ["linear"], ["zoom"], 4, 3, 13, 6],
-          "circle-color": ["case", outside, ORANGE, CYAN],
+          "circle-color": ["case", ["==", ["get", "inside"], false], orange, blue],
           "circle-stroke-width": 1.5,
           "circle-stroke-color": "#ffffff",
         },
       });
+      // Clicking an imagery result opens it in the inspector (dot when zoomed out, footprint up close).
       m.on("click", (e: any) => {
-        for (const id of ["chip-dots", "chips-fill"]) {
-          const hit = m.queryRenderedFeatures(e.point, { layers: [id] })[0];
-          if (!hit) continue;
-          const p = hit.properties;
-          const at: [number, number] =
-            Number.isFinite(Number(p.lon)) && Number.isFinite(Number(p.lat))
-              ? [Number(p.lon), Number(p.lat)]
-              : [e.lngLat.lng, e.lngLat.lat];
-          showPopup(at, p.node || p.claim || "Imagery result", p);
-          m.easeTo({ center: at, offset: [0, POPUP_ROOM], duration: 500 });
-          return;
-        }
+        const dot = m.queryRenderedFeatures(e.point, { layers: ["chip-dots"] })[0];
+        if (dot) return onSelectChipRef.current(Number(dot.properties.i));
+        const hit = m.queryRenderedFeatures(e.point, { layers: ["chips-fill"] })[0];
+        if (!hit) return;
+        const chips = viewRef.current?.map.chips?.features || [];
+        const i = chips.findIndex(
+          (f: any) => f?.properties?.node && f.properties.node === hit.properties.node,
+        );
+        if (i >= 0) onSelectChipRef.current(i);
       });
       for (const id of ["chip-dots", "chips-fill"]) {
         m.on("mouseenter", id, () => (m.getCanvas().style.cursor = "pointer"));
         m.on("mouseleave", id, () => (m.getCanvas().style.cursor = ""));
       }
+      const colour = ["case", ["get", "found"], blue, orange];
+      m.addLayer({
+        id: "ref-fill",
+        type: "fill",
+        source: "reference",
+        filter: ["!=", ["geometry-type"], "Point"],
+        paint: { "fill-color": colour, "fill-opacity": 0.35 },
+      });
+      m.addLayer({
+        id: "ref-line",
+        type: "line",
+        source: "reference",
+        paint: { "line-color": colour, "line-width": 2 },
+      });
+      m.addLayer({
+        id: "ref-points",
+        type: "circle",
+        source: "reference",
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: {
+          "circle-color": colour,
+          "circle-radius": 5,
+          "circle-stroke-color": "white",
+          "circle-stroke-width": 1,
+        },
+      });
+      m.addLayer({
+        id: "false-line",
+        type: "line",
+        source: "false-alarms",
+        paint: {
+          "line-color": orange,
+          "line-width": 2,
+          "line-dasharray": [2, 2],
+        },
+      });
     }
-    m.getSource("chips")?.setData(view?.map.chips || empty);
-    m.getSource("chip-dots")?.setData({
-      type: "FeatureCollection",
-      features: (view?.map.chips?.features || []).flatMap((f: any) => {
-        const at = chipCenter(f);
-        return at
-          ? [{ type: "Feature", geometry: { type: "Point", coordinates: at }, properties: f.properties }]
-          : [];
-      }),
-    });
-    // One list for markers and the location panel, so marker i is always candidate i (same
-    // dedup and finite-coordinate filter).
+    m.setPaintProperty("area-line", "line-color", blue);
+    m.setPaintProperty("area-fill", "fill-color", blue);
+    m.setPaintProperty("chips-fill", "fill-color", [
+      "case",
+      ["==", ["get", "inside"], false],
+      orange,
+      blue,
+    ]);
+    m.setPaintProperty("chips-line", "line-color", blue);
+    m.setPaintProperty("chip-dots", "circle-color", [
+      "case",
+      ["==", ["get", "inside"], false],
+      orange,
+      blue,
+    ]);
+    for (const [id, prop] of [
+      ["ref-fill", "fill-color"],
+      ["ref-line", "line-color"],
+      ["ref-points", "circle-color"],
+    ])
+      m.setPaintProperty(id, prop, ["case", ["get", "found"], blue, orange]);
+    m.setPaintProperty("false-line", "line-color", orange);
+    markers.current.forEach((x) => x.remove());
+    markers.current = [];
     candidatesOf(view).forEach((c) => {
       const el = document.createElement("button");
       el.className = `evidence-marker ${c.inside === false ? "outside" : ""}`;
       el.textContent = String(c.id + 1);
       el.setAttribute("aria-label", `Open location ${c.id + 1}: ${c.name}`);
-      el.onclick = () => onSelect(c.id);
+      el.onclick = () => onSelectRef.current(c.id);
       markers.current.push(
         new lib.Marker({ element: el }).setLngLat(c.coordinates).addTo(m),
       );
     });
     const bounds = new lib.LngLatBounds();
-    function include(coords: any): void {
+    function include(c: any): void {
       if (
-        Array.isArray(coords) &&
-        Number.isFinite(coords[0]) &&
-        Number.isFinite(coords[1])
-      ) {
-        bounds.extend(coords as [number, number]);
-      } else if (Array.isArray(coords)) coords.forEach(include);
+        Array.isArray(c) &&
+        Number.isFinite(c[0]) &&
+        Number.isFinite(c[1]) &&
+        Math.abs(c[0]) <= 180 &&
+        Math.abs(c[1]) <= 90
+      )
+        bounds.extend(c as [number, number]);
+      else if (Array.isArray(c)) c.forEach(include);
     }
     include(view?.map.area?.geometry?.coordinates);
     [
       ...(view?.map.claims?.features || []),
       ...(view?.map.chips?.features || []),
     ].forEach((f: any) => include(f?.geometry?.coordinates));
-    if (!bounds.isEmpty())
-      m.fitBounds(bounds, { padding: 70, maxZoom: 14, duration: 800 });
-  }, [view, ready]);
+    fit.current = (animate = true) => {
+      m.setPadding({ top: 40, bottom: 50, left: 40, right: 40 });
+      if (!bounds.isEmpty())
+        m.fitBounds(bounds, {
+          padding: 60,
+          maxZoom: 14,
+          duration: animate ? duration : 0,
+        });
+    };
+    if (!inspecting) fit.current(false);
+  }, [view, ready, preferences.colour]);
   useEffect(() => {
-    markers.current.forEach((marker, i) =>
-      marker.getElement().classList.toggle("selected", i === selected),
+    if (!ready || !map.current) return;
+    for (const id of ["area-fill", "area-line"])
+      map.current.setLayoutProperty(
+        id,
+        "visibility",
+        overlays.area ? "visible" : "none",
+      );
+    for (const id of ["chips-fill", "chips-line", "chip-dots"])
+      map.current.setLayoutProperty(
+        id,
+        "visibility",
+        overlays.chips ? "visible" : "none",
+      );
+    for (const id of ["ref-fill", "ref-line", "ref-points", "false-line"])
+      map.current.setLayoutProperty(
+        id,
+        "visibility",
+        overlays.reference ? "visible" : "none",
+      );
+  }, [overlays, ready, view]);
+  useEffect(() => {
+    if (!ready || !map.current) return;
+    markers.current.forEach((m, i) =>
+      m.getElement().classList.toggle("selected", i === selected),
     );
-    const site = selected !== null ? candidatesOf(viewRef.current)[selected] : null;
-    if (!site || !map.current || !markers.current[selected!]) return;
-    // Close enough to separate stacked markers and see the footprint.
-    map.current.easeTo({
-      center: site.coordinates,
-      zoom: Math.max(map.current.getZoom(), 14),
-      offset: [0, POPUP_ROOM],
-      duration: 650,
-    });
-    const chips = viewRef.current?.map.chips?.features || [];
-    const chip = chips[chipFor(site, chips)];
-    showPopup(site.coordinates, `${selected! + 1}. ${site.name}`, {
-      ...(chip?.properties || {}),
-      lat: site.lat,
-      lon: site.lon,
-      inside: site.inside,
-      ref: site.ref || chip?.properties?.ref,
-    });
-  }, [selected, ready]);
+    const m = map.current;
+    if (inspecting) {
+      const narrow = host.current!.clientWidth < 650;
+      const padding = narrow
+        ? { top: 100, left: 30, right: 30, bottom: 285 }
+        : { top: 100, left: 40, right: 365, bottom: 70 };
+      let center = candidate?.coordinates;
+      if (!center && chip) {
+        const box = chip.properties?.bbox;
+        const ring = chip.geometry?.coordinates?.[0];
+        if (box?.length === 4)
+          center = [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2];
+        else if (ring?.length) center = ring[0];
+      }
+      if (center) m.easeTo({ center, padding, duration });
+    } else if (
+      lastInspection.current.open &&
+      lastInspection.current.runId === view?.run.id
+    )
+      m.easeTo({
+        padding: { top: 40, left: 40, right: 40, bottom: 50 },
+        duration,
+      });
+    lastInspection.current = { open: inspecting, runId: view?.run.id || "" };
+  }, [selected, selectedChip, ready, view]);
   useEffect(() => {
-    if (!focusChip || !map.current) return;
-    const f = viewRef.current?.map.chips?.features?.[focusChip.index];
-    const at = chipCenter(f);
-    if (!at) return;
-    map.current.easeTo({
-      center: at,
-      zoom: Math.max(map.current.getZoom(), 15),
-      offset: [0, POPUP_ROOM],
-      duration: 650,
-    });
-    showPopup(at, f.properties.node || "Imagery result", f.properties);
-  }, [focusChip]);
+    if (
+      ready &&
+      focusBounds?.length === 4 &&
+      focusBounds.every(Number.isFinite)
+    ) {
+      map.current?.fitBounds(
+        [
+          [focusBounds[0], focusBounds[1]],
+          [focusBounds[2], focusBounds[3]],
+        ],
+        { padding: 60, duration },
+      );
+    }
+  }, [focusBounds, ready]);
+  useEffect(() => {
+    if (!inspecting) return;
+    const close = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        markers.current[selected ?? -1]?.getElement().focus();
+      }
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [inspecting, onClose, selected]);
   return (
-    <div className="evidence-map">
+    <div className={`evidence-map ${inspecting ? "has-inspector" : ""}`}>
       <div ref={host} className="map-canvas" />
-      <div className="map-style">
+      <div className="map-tools">
+        <label>
+          <span className="sr-only">Map layer</span>
+          <select
+            aria-label="Map layer"
+            value={layer}
+            onChange={(e) => setLayer(e.target.value)}
+          >
+            <option value="s2">Sentinel-2 satellite</option>
+            <option value="usgs">USGS imagery</option>
+            <option value="naip">NAIP imagery (US)</option>
+            <option value="streets">Street map</option>
+          </select>
+        </label>
         <button
-          className={layer === "satellite" ? "active" : ""}
-          onClick={() => setLayer("satellite")}
+          onClick={() => {
+            onClose();
+            fit.current();
+          }}
         >
-          Satellite
+          Fit all evidence
         </button>
-        <button
-          className={layer === "streets" ? "active" : ""}
-          onClick={() => setLayer("streets")}
-        >
-          Streets
-        </button>
+        <details>
+          <summary>Map overlays</summary>
+          {Object.entries(overlays).map(([key, value]) => (
+            <label key={key}>
+              <input
+                type="checkbox"
+                checked={value}
+                onChange={(e) =>
+                  setOverlays((old) => ({ ...old, [key]: e.target.checked }))
+                }
+              />
+              {key === "area"
+                ? "Requested boundary"
+                : key === "chips"
+                  ? "Tool image footprints"
+                  : "Reference assets / false alarms"}
+            </label>
+          ))}
+        </details>
       </div>
-      {error && <div className="map-warning">{error}</div>}
+      {error && (
+        <div className="map-warning" role="status">
+          {error}
+        </div>
+      )}
       <div className="map-key">
         <span>
           <i /> Requested area
         </span>
         <span>
-          <b /> Reported locations
+          <b /> Numbered reported sites
         </span>
+        {view?.reference && (
+          <span>Reference: blue = found · orange = missed / false alarm</span>
+        )}
         <span className="map-key-caption">
-          Map context is not independent verification
+          Context map is not independent verification
         </span>
       </div>
+      {inspecting && (
+        <aside className="tile-inspector" aria-label="Map imagery inspector">
+          <div className="tile-inspector-heading">
+            <h3>
+              {candidate ? `Location ${candidate.id + 1}` : "Tool imagery"}
+            </h3>
+            <button
+              ref={tileFocus}
+              className="icon-button"
+              aria-label="Close imagery inspector"
+              onClick={onClose}
+            >
+              <Icon name="x" />
+            </button>
+          </div>
+          {chip?.properties?.tile_url && !imageError ? (
+            <img
+              className="inspected-image"
+              src={chip.properties.tile_url}
+              alt={`Saved tool imagery ${chip.properties.node || ""}`}
+              onError={() => setImageError(true)}
+            />
+          ) : (
+            <p className="notice">
+              {imageError
+                ? "This archived image could not load. The source step is still available."
+                : "No imagery from this location’s cited tool result was saved."}
+            </p>
+          )}
+          <p>{candidate?.name || chip?.properties?.node}</p>
+          <dl>
+            <dt>Location</dt>
+            <dd>
+              {candidate
+                ? `${candidate.lat.toFixed(5)}, ${candidate.lon.toFixed(5)}`
+                : "See tool footprint on map"}
+            </dd>
+            <dt>Observed</dt>
+            <dd>{chip?.properties?.observed || "Not recorded"}</dd>
+            <dt>Source</dt>
+            <dd>
+              {chip?.properties?.index || "Not recorded"} ·{" "}
+              {chip?.properties?.ref || candidate?.ref || "No reference"}
+            </dd>
+            <dt>Similarity</dt>
+            <dd>
+              {chip?.properties?.similarity ?? "Not recorded"} (retrieval rank,
+              not confidence)
+            </dd>
+          </dl>
+          {(chip?.properties?.ref || candidate?.ref) && (
+            <button
+              className="secondary"
+              onClick={() => onTrace(chip?.properties?.ref || candidate?.ref!)}
+            >
+              Inspect cited step
+            </button>
+          )}
+          <p className="fine-print">
+            {selectedChip === null
+              ? "Nearest imagery within the cited tool result. "
+              : ""}
+            Imagery does not independently establish asset identity or current
+            status.
+          </p>
+          <div className="tile-thumbs">
+            {(view?.map.chips?.features || []).map((f: any, i: number) =>
+              f.properties?.tile_url ? (
+                <button
+                  key={i}
+                  aria-label={`Inspect tool image ${i + 1}`}
+                  aria-pressed={chipIndex === i}
+                  onClick={() => onSelectChip(i)}
+                >
+                  <img src={f.properties.tile_url} alt="" loading="lazy" />
+                </button>
+              ) : null,
+            )}
+          </div>
+        </aside>
+      )}
     </div>
   );
 }

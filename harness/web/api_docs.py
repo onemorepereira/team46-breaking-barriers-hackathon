@@ -3,7 +3,7 @@ FastAPI renders at /api/docs. Kept apart from app.py so the routes stay readable
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -153,6 +153,20 @@ class RunsResponse(BaseModel):
     runs: list[RunRow] = Field(description="One page of runs, newest first.")
     next: str | None = Field(None, description="Pass as `before` for the next page; null on the last page.")
     total: int = Field(description="Runs matching the filters, across all pages.")
+
+
+class ReactionRequest(BaseModel):
+    judged_at: str = Field(min_length=1, max_length=100, description="The judgement timestamp displayed.")
+    target: str = Field(
+        min_length=1, max_length=100, description="overall, workflow, output or criterion ID."
+    )
+    vote: Literal["up", "down"]
+
+
+class ReactionComment(BaseModel):
+    comment: str = Field(
+        "", max_length=2000, description="Optional thumbs-down feedback; not a judge instruction."
+    )
 
 
 class ReviewCriterion(BaseModel):

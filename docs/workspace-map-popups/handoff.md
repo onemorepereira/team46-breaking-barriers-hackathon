@@ -29,3 +29,6 @@ CI checks all pass: ruff, ruff format, mypy, the full pytest suite, the frontend
 
 ## Rollback
 Revert the PR. No data or archive format change.
+
+## Later change (2026-11-05)
+PR #15's imagery inspector, beside the map, replaced this popup when main was merged into it. The imagery dots (when zoomed out) and clicking a dot or footprint carried over: a click now opens that tile in the inspector. Archived runs still open quickly, since `analysis/trace.py` is unchanged.

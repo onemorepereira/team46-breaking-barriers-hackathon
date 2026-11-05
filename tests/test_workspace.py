@@ -118,3 +118,20 @@ def test_progress_reads_done_before_events(tmp_path, monkeypatch):
     nxt = client.get(f"/api/runs/ui-race/progress?cursor={first['cursor']}").json()
     seen = [e["type"] for e in first["events"] + nxt["events"]]
     assert seen == ["judge", "done"] and nxt["done"] is True  # every event once, done last
+
+
+def test_guidance_progress_drains_the_existing_job_once(tmp_path, monkeypatch):
+    from harness.web import live
+
+    state = live.RunState("guidance-1", tmp_path / "missing.jsonl")
+    state.push({"type": "evaluating", "done": 1, "total": 5})
+    monkeypatch.setitem(live.GUIDANCE_JOBS, 1, state)
+    client = TestClient(create_app(cfg_for(tmp_path)))
+    first = client.get("/api/guidance/1/progress").json()
+    assert first["done"] is False and len(first["events"]) == 1
+    assert client.get(f"/api/guidance/1/progress?cursor={first['cursor']}").json()["events"] == []
+    state.push({"type": "evaluated", "verdict": "insufficient_evidence"})
+    state.done, state.final = True, {"type": "done", "report": {"verdict": "insufficient_evidence"}}
+    last = client.get(f"/api/guidance/1/progress?cursor={first['cursor']}").json()
+    assert [e["type"] for e in last["events"]] == ["evaluated", "done"] and last["done"] is True
+    assert client.get("/api/guidance/9/progress").status_code == 404

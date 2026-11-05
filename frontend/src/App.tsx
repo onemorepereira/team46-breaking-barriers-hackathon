@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from "react";
-import { markdownLibs, renderMarkdown } from "./markdown";
+import { Text, Stat } from "./UI";
+import Evaluation from "./Evaluation";
+import Guidance from "./Guidance";
+import RunSummary, { DetailedSummary } from "./RunSummary";
+import { Accessibility, Dialog, Disclosure } from "./Controls";
+import {
+  readAccessibility,
+  buildPrompt,
+  hasTemplateBlanks,
+  writePreference,
+} from "./preferences";
 import { Icon } from "./Icon";
 import EvidenceMap from "./Map";
 import {
@@ -35,24 +45,6 @@ const examples = [
       "Find data centers within the city limits of Richardson, TX. Give each one's location exactly as the tool returned it.",
   },
 ];
-function Text({ value }: { value: unknown }) {
-  const text = typeof value === "string" ? value : "";
-  const [html, setHtml] = useState<string | null>(null);
-  useEffect(() => {
-    let live = true;
-    markdownLibs()
-      .then((libs) => live && setHtml(renderMarkdown(libs, text)))
-      .catch(() => live && setHtml(null)); // plain text below if the renderer can't load
-    return () => {
-      live = false;
-    };
-  }, [text]);
-  return html === null ? (
-    <div className="markdown markdown-plain">{text}</div>
-  ) : (
-    <div className="markdown" dangerouslySetInnerHTML={{ __html: html }} />
-  );
-}
 function Empty({
   title,
   children,
@@ -65,23 +57,6 @@ function Empty({
       <Icon name="search" size={26} />
       <h3>{title}</h3>
       <p>{children}</p>
-    </div>
-  );
-}
-function Stat({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: React.ReactNode;
-  sub?: string;
-}) {
-  return (
-    <div className="stat">
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {sub && <small>{sub}</small>}
     </div>
   );
 }
@@ -142,26 +117,36 @@ function Reviewer({
     [refs, setRefs] = useState(""),
     [saved, setSaved] = useState(""),
     [error, setError] = useState(""),
-    [sending, setSending] = useState(false);
+    [sending, setSending] = useState(false),
+    [basket, setBasket] = useState<Record<string, any>>({}),
+    [measuredNote, setMeasuredNote] = useState("");
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setSaved("");
     setSending(true);
     try {
-      const payload = reviewPayload(
-        name,
-        criterion,
-        decision,
-        score,
-        notes,
-        refs,
-      );
+      const payload = criterion
+        ? reviewPayload(name, criterion, decision, score, notes, refs)
+        : {
+            reviewer: name.trim(),
+            criteria: {},
+            note: notes,
+            measured_note: "",
+          };
+      if (!name.trim()) throw new Error("Enter your name.");
+      payload.criteria = { ...basket, ...payload.criteria };
+      payload.measured_note = measuredNote;
+      if (!Object.keys(payload.criteria).length)
+        throw new Error("Choose at least one rubric question.");
       await request(`/api/runs/${view.run.id}/reviews`, payload);
       setSaved(
         "Review saved to the run archive. The automated score has not been changed.",
       );
       setNotes("");
+      setBasket({});
+      setCriterion("");
+      setMeasuredNote("");
       onSaved();
     } catch (e) {
       setError((e as Error).message);
@@ -178,13 +163,38 @@ function Reviewer({
         inform a later judge reconsideration.
       </p>
       <form onSubmit={submit}>
+        {Object.keys(basket).length > 0 && (
+          <div className="review-basket">
+            <b>Criteria ready to save</b>
+            {Object.entries(basket).map(([id, item]: [string, any]) => (
+              <div key={id}>
+                <span>
+                  {judged.find((c: any) => c.id === id)?.plain || id}:{" "}
+                  {item.agree ? "Agree" : `Suggested rating ${item.score}`}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setBasket((old) =>
+                      Object.fromEntries(
+                        Object.entries(old).filter(([key]) => key !== id),
+                      ),
+                    )
+                  }
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <label>
           Your name
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            maxLength={100}
+            maxLength={80}
           />
         </label>
         <label>
@@ -265,10 +275,48 @@ function Reviewer({
             />
           </label>
         )}
+        <label>
+          Note on measured checks (kept out of judge prompts)
+          <textarea
+            value={measuredNote}
+            onChange={(e) => setMeasuredNote(e.target.value)}
+            maxLength={4000}
+          />
+        </label>
+        <button
+          className="secondary"
+          type="button"
+          disabled={busy || sending || !criterion}
+          onClick={() => {
+            try {
+              const part = reviewPayload(
+                name,
+                criterion,
+                decision,
+                score,
+                notes,
+                refs,
+              );
+              setBasket((old) => ({ ...old, ...part.criteria }));
+              setCriterion("");
+              setNotes("");
+              setRefs("");
+              setError("");
+            } catch (e) {
+              setError((e as Error).message);
+            }
+          }}
+        >
+          Add criterion to review
+        </button>
         <button
           className="primary"
           disabled={
-            sending || !criterion || !view.scorecard || view.kpis.score === null
+            busy ||
+            sending ||
+            (!criterion && !Object.keys(basket).length) ||
+            !view.scorecard ||
+            view.kpis.score === null
           }
         >
           {sending ? "Saving…" : "Save human review"}
@@ -295,6 +343,7 @@ function Reviewer({
               {r.current === false ? " · earlier judgement" : ""}
             </summary>
             <p>{r.note || "Criterion review saved."}</p>
+            {r.measured_note && <p>Measured-check note: {r.measured_note}</p>}
             <pre>{JSON.stringify(r.criteria, null, 2)}</pre>
             {r.current &&
               !r.reconsidered &&
@@ -331,8 +380,21 @@ export default function App() {
     [historyNext, setHistoryNext] = useState<string | null>(null),
     [loading, setLoading] = useState(false),
     [modal, setModal] = useState(false),
-    [focusedRef, setFocusedRef] = useState<string | null>(null),
-    [focusChip, setFocusChip] = useState<{ index: number; nonce: number } | null>(null);
+    [settingsOpen, setSettingsOpen] = useState(false),
+    [preferences, setPreferences] = useState(readAccessibility),
+    [page, setPage] = useState(() =>
+      new URLSearchParams(window.location.search).get("page") === "guidance"
+        ? "guidance"
+        : "workspace",
+    ),
+    [selectedChip, setSelectedChip] = useState<number | null>(null),
+    [focusBounds, setFocusBounds] = useState<number[] | null>(null),
+    [previous, setPrevious] = useState<any>(null),
+    [filterModel, setFilterModel] = useState(""),
+    [filterVerdict, setFilterVerdict] = useState(""),
+    [asset, setAsset] = useState(""),
+    [area, setArea] = useState(""),
+    [focusedRef, setFocusedRef] = useState<string | null>(null);
   const stream = useRef<{ close: () => void } | null>(null),
     active = useRef(""),
     busyRef = useRef(false),
@@ -340,7 +402,69 @@ export default function App() {
   const sites = candidatesOf(view),
     chips = view?.map.chips?.features || [];
   const running = busy || loading;
+  const promptBox = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const root = document.documentElement;
+    root.dataset.reading = String(preferences.reading);
+    root.dataset.colour = preferences.colour;
+    root.dataset.contrast = String(preferences.contrast);
+    root.dataset.largeText = String(preferences.largeText);
+    root.dataset.reducedMotion = String(preferences.reducedMotion);
+  }, [preferences]);
+  function navigate(next: string) {
+    setPage(next);
+    const url = new URL(window.location.href);
+    if (next === "guidance") url.searchParams.set("page", "guidance");
+    else url.searchParams.delete("page");
+    if (
+      url.pathname + url.search !==
+      window.location.pathname + window.location.search
+    )
+      window.history.pushState({}, "", url.pathname + url.search);
+  }
+  function showSummary() {
+    setPage("workspace");
+    setHistory(null);
+    setTab("summary");
+  }
+  function inspectStep(ref: string) {
+    setFocusedRef(ref);
+    setTab("trace");
+    setPage("workspace");
+  }
+  async function openPrevious(at: string) {
+    if (!view) return;
+    try {
+      setPrevious(
+        await request(
+          `/api/runs/${view.run.id}/judgements/${encodeURIComponent(at)}`,
+        ),
+      );
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  function useTemplate() {
+    const text = buildPrompt(asset, area);
+    setPrompt(text);
+    requestAnimationFrame(() => {
+      promptBox.current?.focus();
+      const start = text.indexOf("[");
+      if (start >= 0)
+        promptBox.current?.setSelectionRange(
+          start,
+          text.indexOf("]", start) + 1,
+        );
+    });
+  }
   async function load(id: string, updateUrl = true) {
+    if (
+      updateUrl ||
+      new URLSearchParams(window.location.search).get("page") !== "guidance"
+    )
+      setPage("workspace");
+    setSelectedChip(null);
+    setFocusBounds(null);
     const ticket = ++requestId.current;
     setError("");
     setLoading(true);
@@ -370,7 +494,6 @@ export default function App() {
       setPrompt(data.run.prompt);
       active.current = id;
       setSelected(null);
-      setFocusChip(null);
       setEvents([]);
       setPhase(data.kpis.verdict || "Run loaded");
       setHistory(null);
@@ -396,6 +519,13 @@ export default function App() {
     const id = new URLSearchParams(window.location.search).get("run");
     if (id) void load(id, false);
     const pop = () => {
+      if (
+        new URLSearchParams(window.location.search).get("page") === "guidance"
+      ) {
+        setPage("guidance");
+        return;
+      }
+      setPage("workspace");
       const id = new URLSearchParams(window.location.search).get("run");
       if (id) void load(id, false);
       else reset(false);
@@ -418,13 +548,15 @@ export default function App() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [busy]);
   function reset(updateUrl = true) {
+    setPage("workspace");
+    setSelectedChip(null);
+    setFocusBounds(null);
     requestId.current++;
     stream.current?.close();
     setView(null);
     active.current = "";
     setPrompt("");
     setSelected(null);
-    setFocusChip(null);
     setHistory(null);
     setEvents([]);
     setTab("findings");
@@ -438,7 +570,6 @@ export default function App() {
     active.current = id;
     setBusy(true);
     setSelected(null);
-    setFocusChip(null);
     setEvents([]);
     setPhase("Following a run in progress");
     if (updateUrl)
@@ -513,7 +644,11 @@ export default function App() {
               setTab("evaluation");
             } else
               request<View>(`/api/runs/${id}`)
-                .then(setView)
+                .then((fresh) =>
+                  setView((old) =>
+                    old?.run.id === fresh.run.id ? fresh : old,
+                  ),
+                )
                 .catch((e) => setError(e.message));
           }
         }
@@ -537,13 +672,17 @@ export default function App() {
   }
   async function start() {
     if (!prompt.trim() || busy) return;
+    if (hasTemplateBlanks(prompt)) {
+      setError("Fill in [asset type] and [area] before starting.");
+      promptBox.current?.focus();
+      return;
+    }
     const ticket = ++requestId.current; // a load still in flight must not overwrite this run
     stream.current?.close();
     setError("");
     setBusy(true);
     setView(null);
     setSelected(null);
-    setFocusChip(null);
     setEvents([]);
     setPhase("Starting research");
     try {
@@ -598,11 +737,15 @@ export default function App() {
       setBusy(false);
     }
   }
-  async function runs(more = false) {
+  async function runs(
+    more = false,
+    filters = { model: filterModel, verdict: filterVerdict },
+  ) {
+    navigate("workspace");
     setError("");
     try {
       const data = await request<{ runs: Row[]; next: string | null }>(
-        `/api/runs?limit=30${more && historyNext ? `&before=${encodeURIComponent(historyNext)}` : ""}`,
+        `/api/runs?limit=30${filters.model ? `&model=${encodeURIComponent(filters.model)}` : ""}${filters.verdict ? `&verdict=${encodeURIComponent(filters.verdict)}` : ""}${more && historyNext ? `&before=${encodeURIComponent(historyNext)}` : ""}`,
       );
       setHistory((old) => (more ? [...(old || []), ...data.runs] : data.runs));
       setHistoryNext(data.next);
@@ -643,8 +786,11 @@ export default function App() {
         </button>
         <nav className="main-nav" aria-label="Main navigation">
           <button
-            className={`nav-item ${history === null ? "active" : ""}`}
-            onClick={() => setHistory(null)}
+            className={`nav-item ${page === "workspace" && history === null ? "active" : ""}`}
+            onClick={() => {
+              setHistory(null);
+              navigate("workspace");
+            }}
           >
             Workspace
           </button>
@@ -655,9 +801,12 @@ export default function App() {
           >
             <Icon name="clock" size={16} /> Previous runs
           </button>
-          <a className="nav-item" href={endpoint("/guidance")}>
+          <button
+            className={`nav-item ${page === "guidance" ? "active" : ""}`}
+            onClick={() => navigate("guidance")}
+          >
             Judge guidance
-          </a>
+          </button>
         </nav>
         <div className="header-actions">
           <div
@@ -671,11 +820,19 @@ export default function App() {
             className="evaluation-button"
             onClick={() => {
               setTab("evaluation");
+              navigate("workspace");
               setHistory(null);
             }}
             disabled={!view}
           >
             <Icon name="panel" size={16} /> Evaluation
+          </button>
+          <button
+            className="icon-button accessibility-trigger"
+            aria-label="Accessibility and reading settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <span aria-hidden="true">Aa</span>
           </button>
           <button
             className="avatar"
@@ -695,7 +852,9 @@ export default function App() {
           </button>
         </div>
       )}
-      {history !== null ? (
+      {page === "guidance" ? (
+        <Guidance onRun={(id) => void load(id)} />
+      ) : history !== null ? (
         <main className="history-page">
           <div className="page-heading">
             <div>
@@ -708,6 +867,47 @@ export default function App() {
             <button className="primary" onClick={() => reset()}>
               New research <Icon name="plus" />
             </button>
+          </div>
+          <div className="run-filters">
+            <label>
+              Agent model
+              <select
+                value={filterModel}
+                onChange={(e) => {
+                  setFilterModel(e.target.value);
+                  void runs(false, {
+                    model: e.target.value,
+                    verdict: filterVerdict,
+                  });
+                }}
+              >
+                <option value="">All models</option>
+                {models.map((m) => (
+                  <option key={m}>{m}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Result
+              <select
+                value={filterVerdict}
+                onChange={(e) => {
+                  setFilterVerdict(e.target.value);
+                  void runs(false, {
+                    model: filterModel,
+                    verdict: e.target.value,
+                  });
+                }}
+              >
+                {["", "scored", "FAILED", "not scored", "not judged"].map(
+                  (v) => (
+                    <option key={v} value={v}>
+                      {v || "All results"}
+                    </option>
+                  ),
+                )}
+              </select>
+            </label>
           </div>
           {!history.length ? (
             <Empty title="No archived runs yet">
@@ -755,8 +955,20 @@ export default function App() {
               <EvidenceMap
                 view={view}
                 selected={selected}
-                focusChip={focusChip}
+                selectedChip={selectedChip}
+                preferences={preferences}
+                focusBounds={focusBounds}
+                onSelectChip={(i) => {
+                  setSelectedChip(i);
+                  setSelected(null);
+                }}
+                onClose={() => {
+                  setSelected(null);
+                  setSelectedChip(null);
+                }}
+                onTrace={inspectStep}
                 onSelect={(i) => {
+                  setSelectedChip(null);
                   setSelected(i);
                   setTab("findings");
                 }}
@@ -785,6 +997,7 @@ export default function App() {
                     }}
                   >
                     <textarea
+                      ref={promptBox}
                       aria-label="Geographic research question"
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
@@ -794,7 +1007,7 @@ export default function App() {
                           void start();
                         }
                       }}
-                      placeholder="Find solar parks in Jodhpur, India, and show their locations…"
+                      placeholder="Find [asset type] in [area]. Return locations, cite evidence, and explain uncertainty."
                     />
                     <div className="composer-footer">
                       <label className="model-select">
@@ -814,12 +1027,47 @@ export default function App() {
                       <span className="keyboard-hint">⌘ / Ctrl ↵</span>
                       <button
                         className="run-button"
-                        disabled={!prompt.trim() || !models.length}
+                        disabled={
+                          !prompt.trim() ||
+                          !models.length ||
+                          hasTemplateBlanks(prompt)
+                        }
                       >
                         Run research <Icon name="arrow" size={16} />
                       </button>
                     </div>
                   </form>
+                  <div className="template-builder">
+                    <label>
+                      Asset type
+                      <input
+                        value={asset}
+                        onChange={(e) => setAsset(e.target.value)}
+                        placeholder="e.g. solar parks"
+                      />
+                    </label>
+                    <label>
+                      Area
+                      <input
+                        value={area}
+                        onChange={(e) => setArea(e.target.value)}
+                        placeholder="e.g. Jodhpur, India"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="secondary"
+                      onClick={useTemplate}
+                    >
+                      Use editable template
+                    </button>
+                  </div>
+                  {hasTemplateBlanks(prompt) && (
+                    <p className="template-hint">
+                      Replace the bracketed fields with your asset and area. The
+                      template is editable text.
+                    </p>
+                  )}
                   <div className="real-examples">
                     <span>START WITH A QUESTION</span>
                     <div>
@@ -893,48 +1141,36 @@ export default function App() {
                 </div>
               )}
             </section>
-            {view && (
-              <section className="live-summary">
-                <div className="summary-label">
-                  <Icon name="check" size={18} />
-                  <span>What this result means</span>
-                </div>
-                <h2>
-                  {view.explanation?.headline ||
-                    "Review this run before using its findings."}
-                </h2>
-                <p>{view.explanation?.summary}</p>
-                <div className="summary-actions">
-                  {view.explanation?.check_by_hand?.map((t: string) => (
-                    <span key={t}>
-                      <Icon name="arrow" size={13} />
-                      {t}
-                    </span>
-                  ))}
-                </div>
-              </section>
-            )}
+            {view && <RunSummary view={view} onExpand={showSummary} />}
           </div>
           {(view || busy) && (
             <aside className="side-panel real-panel">
               <div className="panel-header">
                 <div className="panel-tabs">
-                  {["findings", "evaluation", "trace"].map((t) => (
+                  {["findings", "evaluation", "trace", "summary"].map((t) => (
                     <button
                       key={t}
-                      onClick={() => setTab(t)}
+                      onClick={() => {
+                        setTab(t);
+                        setFocusedRef(null);
+                      }}
                       className={tab === t ? "active" : ""}
                     >
                       {t === "findings"
                         ? `Findings${view ? " · " + sites.length : ""}`
                         : t === "trace"
-                          ? "Activity"
-                          : "Evaluation"}
+                          ? "Actions"
+                          : t === "summary"
+                            ? "Summary"
+                            : "Evaluation"}
                     </button>
                   ))}
                 </div>
               </div>
-              <div className="panel-content">
+              <div
+                className="panel-content"
+                key={`${view?.run.id || "live"}-${tab}`}
+              >
                 {!view ? (
                   <>
                     <div className="section-kicker">Live research</div>
@@ -1037,27 +1273,26 @@ export default function App() {
                         aria-label="Tool-returned imagery"
                       >
                         {chips
-                          .map((f: any, index: number) => ({ f, index }))
-                          .filter(({ f }: any) => f.properties.tile_url)
+                          .filter((f: any) => f.properties.tile_url)
                           .slice(0, 24)
-                          .map(({ f, index }: any, i: number) => (
-                            <figure key={index}>
+                          .map((f: any, i: number) => (
+                            <figure key={i}>
                               <button
-                                type="button"
-                                className="evidence-thumb"
-                                aria-label={`Show imagery ${f.properties.node || i + 1} on the map`}
-                                onClick={() =>
-                                  setFocusChip({ index, nonce: Date.now() })
-                                }
-                              >
-                              <img
-                                src={f.properties.tile_url}
-                                alt={`Tool-returned imagery ${f.properties.node || i + 1}`}
-                                loading="lazy"
-                                onError={(e) => {
-                                  e.currentTarget.hidden = true;
+                                className="chip-open"
+                                aria-label={`Open imagery result ${i + 1} on map`}
+                                onClick={() => {
+                                  setSelected(null);
+                                  setSelectedChip(chips.indexOf(f));
                                 }}
-                              />
+                              >
+                                <img
+                                  src={f.properties.tile_url}
+                                  alt={`Tool-returned imagery ${f.properties.node || i + 1}`}
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    e.currentTarget.hidden = true;
+                                  }}
+                                />
                               </button>
                               <figcaption>
                                 {f.properties.ref} ·{" "}
@@ -1070,335 +1305,51 @@ export default function App() {
                           ))}
                       </div>
                     )}
-                    <section className="answer-section">
-                      <h3>Final answer</h3>
+                    <Disclosure id="full-answer" title="Full agent answer">
                       <Text value={view.final_answer} />
-                    </section>
-                    <details className="source-details">
-                      <summary>
-                        Check all {view.claims.length} declared source values
-                      </summary>
+                    </Disclosure>
+                    <Disclosure
+                      id="source-values"
+                      title={`Check all ${view.claims.length} declared source values`}
+                    >
                       <DataTable rows={view.claims} />
-                    </details>
-                    <Reviewer
-                      key={view.run.id}
-                      view={view}
-                      busy={busy}
-                      onReconsider={(id) => void reconsider(id)}
-                      onSaved={() =>
-                        void request<View>(`/api/runs/${view.run.id}`)
-                          .then(setView)
-                          .catch((e) => setError(e.message))
-                      }
-                    />
+                    </Disclosure>
+                    <button
+                      className="secondary"
+                      onClick={() => setTab("evaluation")}
+                    >
+                      Review evaluation scores →
+                    </button>
                   </>
                 ) : tab === "evaluation" ? (
                   <>
-                    <div className="section-kicker">Quality and trust</div>
-                    <div className="evaluation-heading">
-                      <h2>Evaluate the result</h2>
-                      <button
-                        className="secondary small"
-                        disabled={busy}
-                        onClick={() => void rejudge()}
-                      >
-                        Re-judge
-                      </button>
-                    </div>
-                    <div className="score-hero">
-                      <strong>
-                        {formatScore(view.kpis.score)}
-                        <small>/100</small>
-                      </strong>
-                      <div>
-                        <span>{view.kpis.verdict}</span>
-                        <p>
-                          {view.kpis.confidence
-                            ? `${view.kpis.confidence} evidence agreement`
-                            : "Not judged"}
-                        </p>
-                      </div>
-                    </div>
-                    <p className="fine-print">
-                      Agreement measures how closely the judges agree on the
-                      evidence. It is not a probability that the answer is
-                      correct.
-                    </p>
-                    <div className="mini-stats">
-                      <Stat
-                        label="Workflow"
-                        value={formatScore(view.kpis.workflow)}
-                      />
-                      <Stat
-                        label="Output"
-                        value={formatScore(view.kpis.output)}
-                      />
-                      <Stat
-                        label="Trace integrity"
-                        value={
-                          view.kpis.trace_integrity ? "Intact" : "Needs review"
-                        }
-                      />
-                    </div>
-                    {view.licences?.presentable === false && (
-                      <p className="notice">
-                        Some source licences need review before sharing these
-                        results. Open the source and licence record below.
-                      </p>
-                    )}
-                    {view.source_check_note && (
-                      <p className="notice">{view.source_check_note}</p>
-                    )}
-                    {view.kpis.not_scored_cause && (
-                      <p className="notice">{view.kpis.not_scored_cause}</p>
-                    )}
-                    <h3 className="section-title">Rubric scorecard</h3>
-                    {view.scorecard?.criteria?.map((c: any) => (
-                      <details key={c.id} className="criterion">
-                        <summary>
-                          <span>
-                            {c.plain || c.question}
-                            <small>
-                              {c.kind === "measured"
-                                ? "Measured by code"
-                                : c.dimension}
-                            </small>
-                          </span>
-                          <strong>
-                            {formatScore(c.score)}
-                            {c.score !== null && <small>/100</small>}
-                          </strong>
-                        </summary>
-                        <p>{c.question}</p>
-                        {c.value && <p>Measured: {c.value}</p>}
-                        <div className="score-bar">
-                          <span style={{ width: `${c.score || 0}%` }} />
-                        </div>
-                        {Object.entries(
-                          view.scorecard.anchors?.[c.id] || {},
-                        ).map(([s, t]) => (
-                          <p key={s} className="anchor">
-                            <b>{s}</b> {String(t)}
-                          </p>
-                        ))}
-                        {view.scorecard.judges?.map((j: any) => {
-                          const jc = j.criteria?.find(
-                            (x: any) => x.id === c.id,
-                          );
-                          return jc ? (
-                            <div key={j.key} className="judge-reason">
-                              <strong>
-                                {j.key} · {jc.score}
-                              </strong>
-                              <p>{jc.rationale}</p>
-                              <small>{jc.refs?.join(" · ")}</small>
-                            </div>
-                          ) : null;
-                        })}
-                      </details>
-                    ))}
-                    <h3 className="section-title">
-                      Every condition in your request
-                    </h3>
-                    {view.conditions ? (
-                      <>
-                        <p>
-                          {view.conditions.supported}/{view.conditions.total}{" "}
-                          code-checked cells supported. Target identity and
-                          other conditions may still need judge or human review.
-                        </p>
-                        {view.conditions.error && (
-                          <p className="error-message">
-                            {view.conditions.error}
-                          </p>
-                        )}
-                        {view.conditions.rows?.map((row: any, i: number) => (
-                          <div className="condition-row" key={i}>
-                            <strong>{row.claim}</strong>
-                            {row.cells.map((cell: any) => {
-                              const condition = view.conditions.conditions.find(
-                                (c: any) => c.id === cell.condition_id,
-                              );
-                              return (
-                                <div key={cell.condition_id}>
-                                  <span className={`status-tag ${cell.status}`}>
-                                    {cell.status}
-                                  </span>
-                                  <b>{condition?.text || cell.condition_id}</b>
-                                  <p>{cell.reason}</p>
-                                  <small>{cell.refs?.join(" · ")}</small>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </>
-                    ) : (
-                      <p className="notice">
-                        No request-condition matrix is stored for this run. It
-                        is not treated as fully compliant.
-                      </p>
-                    )}
-                    <h3 className="section-title">Independent judge panel</h3>
-                    {view.scorecard?.judges?.map((j: any) => (
-                      <div key={j.key} className="judge-line">
-                        <div>
-                          <strong>{j.key}</strong>
-                          <small>
-                            {j.family}
-                            {j.stood_in_for
-                              ? ` · replacing ${j.stood_in_for}`
-                              : ""}
-                          </small>
-                        </div>
-                        <span>
-                          {j.status === "ok"
-                            ? `${formatScore(j.score)}/100`
-                            : "Unavailable"}
-                        </span>
-                      </div>
-                    ))}
-                    <h3 className="section-title">Cost and review effort</h3>
-                    <div className="mini-stats">
-                      <Stat
-                        label="Agent estimate"
-                        value={money(view.kpis.agent_cost_usd)}
-                      />
-                      <Stat
-                        label="Judge estimate"
-                        value={money(view.kpis.judging_cost_usd)}
-                      />
-                      <Stat
-                        label="Elapsed"
-                        value={
-                          view.kpis.runtime_s != null
-                            ? `${Math.round(view.kpis.runtime_s)}s`
-                            : "—"
-                        }
-                      />
-                    </div>
-                    <p className="fine-print">
-                      Token-based estimates, not a full AWS bill. Imagery
-                      procurement and analyst time are not included unless
-                      explicitly recorded.
-                    </p>
-                    <section className="reference-card">
-                      <h3 className="section-title">
-                        Independent reference check
-                      </h3>
-                      {view.reference && !view.reference.error ? (
-                        <>
-                          <p>
-                            {view.reference.concept} · {view.reference.place}
-                          </p>
-                          <div className="mini-stats">
-                            <Stat
-                              label="Known assets found"
-                              value={
-                                typeof view.reference.site_recall === "number"
-                                  ? `${Math.round(view.reference.site_recall * 100)}%`
-                                  : "Not defined"
-                              }
-                            />
-                            <Stat
-                              label="Cell precision"
-                              value={
-                                typeof view.reference.cell_precision ===
-                                "number"
-                                  ? `${Math.round(view.reference.cell_precision * 100)}%`
-                                  : "Not defined"
-                              }
-                            />
-                            <Stat
-                              label="Reference assets"
-                              value={view.reference.assets ?? "—"}
-                            />
-                          </div>
-                          <p className="fine-print">
-                            Reference completeness:{" "}
-                            {view.reference.completeness}. Matching uses{" "}
-                            {view.reference.cell_m} m cells and the archived
-                            any-touch rule; this is separate from the model
-                            judges’ score.
-                          </p>
-                          {view.reference.notes?.map((note: string) => (
-                            <p key={note} className="fine-print">
-                              {note}
-                            </p>
-                          ))}
-                          <details className="source-details">
-                            <summary>Reference source and full metrics</summary>
-                            <pre>
-                              {JSON.stringify(
-                                Object.fromEntries(
-                                  Object.entries(view.reference).filter(
-                                    ([k]) =>
-                                      !["features", "found", "missed"].includes(
-                                        k,
-                                      ),
-                                  ),
+                    <Evaluation
+                      view={view}
+                      busy={busy}
+                      onRejudge={() => void rejudge()}
+                      onExport={exportJson}
+                      onPrevious={(at) => void openPrevious(at)}
+                      reviewer={
+                        <Reviewer
+                          key={view.run.id}
+                          view={view}
+                          busy={busy}
+                          onReconsider={(id) => void reconsider(id)}
+                          onSaved={() =>
+                            void request<View>(`/api/runs/${view.run.id}`)
+                              .then((fresh) =>
+                                setView((old) =>
+                                  old?.run.id === fresh.run.id ? fresh : old,
                                 ),
-                                null,
-                                2,
-                              )}
-                            </pre>
-                          </details>
-                        </>
-                      ) : (
-                        <p className="notice">
-                          {view.reference?.error ||
-                            "No independent reference set is tied to this run. Recall, precision and transfer performance are not established."}
-                        </p>
-                      )}
-                    </section>
-                    <details className="source-details">
-                      <summary>
-                        Sources, licences and presentation limits
-                      </summary>
-                      <p>
-                        Presentation status:{" "}
-                        <b>
-                          {view.licences?.presentable === true
-                            ? "No recorded blockers"
-                            : view.licences?.presentable === false
-                              ? "Needs licence review"
-                              : "Not recorded"}
-                        </b>
-                      </p>
-                      <div className="licence-list">
-                        {view.licences?.items?.map((item: any, i: number) => (
-                          <div key={i}>
-                            <strong>{item.name}</strong>
-                            <span
-                              className={`status-tag ${item.presentable === true ? "supported" : "unverified"}`}
-                            >
-                              {item.presentable === true
-                                ? "Recorded as presentable"
-                                : "Check terms"}
-                            </span>
-                            <p>{item.licence || "Licence not recorded"}</p>
-                          </div>
-                        ))}
-                      </div>
-                      <details>
-                        <summary>Full licence record</summary>
-                        <pre>{JSON.stringify(view.licences, null, 2)}</pre>
-                      </details>
-                    </details>
-                    <div className="export-actions">
-                      <a
-                        className="secondary"
-                        href={endpoint(`/reports/${view.run.id}`)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open static report <Icon name="external" size={14} />
-                      </a>
-                      <button className="secondary" onClick={exportJson}>
-                        Export evidence JSON
-                      </button>
-                    </div>
+                              )
+                              .catch((e) => setError(e.message))
+                          }
+                        />
+                      }
+                    />
                   </>
+                ) : tab === "summary" ? (
+                  <DetailedSummary view={view} />
                 ) : (
                   <>
                     <div className="section-kicker">Reproducible activity</div>
@@ -1407,17 +1358,28 @@ export default function App() {
                       Open any step to inspect the saved tool arguments, results
                       or model reply.
                     </p>
-                    <Trace entries={timeline} focusedRef={focusedRef} />
+                    <Trace
+                      entries={timeline}
+                      focusedRef={focusedRef}
+                      onZoom={(bounds) => {
+                        setSelected(null);
+                        setSelectedChip(null);
+                        setFocusBounds([...bounds]);
+                      }}
+                    />
                     <details className="source-details">
                       <summary>Run metadata</summary>
                       <pre>{JSON.stringify(view.run, null, 2)}</pre>
                     </details>
-                    {view.narrative && (
-                      <>
-                        <h3 className="section-title">Run summary</h3>
-                        <Text value={view.narrative} />
-                      </>
-                    )}
+                    <Disclosure
+                      id="datasets-used"
+                      title="Datasets and sources accessed"
+                    >
+                      <pre>{JSON.stringify(view.datasets || [], null, 2)}</pre>
+                    </Disclosure>
+                    <button className="secondary" onClick={showSummary}>
+                      Read the run summary →
+                    </button>
                   </>
                 )}
               </div>
@@ -1434,43 +1396,36 @@ export default function App() {
         <a href={endpoint("/")}>Classic console</a>
       </footer>
       {modal && (
-        <div className="modal-backdrop" onClick={() => setModal(false)}>
-          <section
-            className="about-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="About this workspace"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className="close-panel"
-              aria-label="Close about"
-              onClick={() => setModal(false)}
-              autoFocus
-            >
-              <Icon name="x" />
-            </button>
-            <span className="section-kicker">Built for the analyst</span>
-            <h2>Research you can inspect.</h2>
-            <p>
-              Foundry connects a tool-using agent, its evidence, independent
-              model judges and your review in one workspace.
-            </p>
-            <p>
-              Start a request, inspect the returned imagery and claims, then use
-              Evaluation to see what was supported and what needs checking.
-              Reference accuracy is reported only when a suitable reference set
-              is attached.
-            </p>
-            <p>
-              Your AWS and LGND credentials remain on the backend. Run history
-              and reviews are saved in the configured deployment archive.
-            </p>
-            <button className="primary" onClick={() => setModal(false)}>
-              Back to workspace
-            </button>
-          </section>
-        </div>
+        <Dialog title="About this workspace" onClose={() => setModal(false)}>
+          <p>
+            Foundry records what an agent did, its tool evidence, rubric ratings
+            and your review. The /100 number evaluates workflow and output; it
+            is not confidence or verified accuracy.
+          </p>
+          <p>
+            AWS and LGND credentials stay on the backend. Run records live in
+            the configured archive. Display settings are saved only in this
+            browser.
+          </p>
+        </Dialog>
+      )}
+      {settingsOpen && (
+        <Accessibility
+          value={preferences}
+          onChange={setPreferences}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+      {previous && (
+        <Dialog title="Earlier judgement" onClose={() => setPrevious(null)}>
+          <p>
+            Judged {localTime(previous.judged_at)} · Run {previous.run_id}
+          </p>
+          <p>
+            Rubric evaluation score: {formatScore(previous.panel?.overall)}/100
+          </p>
+          <pre>{JSON.stringify(previous, null, 2)}</pre>
+        </Dialog>
       )}
     </div>
   );
@@ -1478,7 +1433,9 @@ export default function App() {
 function Trace({
   entries,
   focusedRef,
+  onZoom,
 }: {
+  onZoom?: (bounds: number[]) => void;
   entries: any[];
   focusedRef?: string | null;
 }) {
@@ -1509,6 +1466,11 @@ function Trace({
             </span>
             <Icon name="chevron" size={14} />
           </summary>
+          {e.bounds?.length === 4 && onZoom && (
+            <button className="secondary" onClick={() => onZoom(e.bounds)}>
+              Show this step on map
+            </button>
+          )}
           {e.detail && <p>{e.detail}</p>}
           <pre>{JSON.stringify(e.raw || e, null, 2)}</pre>
         </details>
