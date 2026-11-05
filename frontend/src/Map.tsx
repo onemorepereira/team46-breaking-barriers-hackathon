@@ -102,6 +102,14 @@ export default function EvidenceMap({
           m.addControl(new lib.NavigationControl(), "bottom-right");
           // Evidence overlays must load even if a context basemap tile is unavailable.
           m.on("style.load", () => setReady(true));
+          // MapLibre's compact attribution starts expanded and only folds after the first drag, so it
+          // sat over the legend. Start it folded behind its (i) button; a click still expands it.
+          m.once("load", () =>
+            m
+              .getContainer()
+              .querySelector(".maplibregl-ctrl-attrib.maplibregl-compact")
+              ?.classList.remove("maplibregl-compact-show"),
+          );
           m.on("error", () =>
             setError(
               "Some map imagery is unavailable. The saved evidence and coordinates remain accessible.",
