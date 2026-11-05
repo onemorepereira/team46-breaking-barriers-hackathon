@@ -2451,3 +2451,162 @@ html[data-colour="colour-safe"] .vote.v0 {
 .map-key-caption {
   flex-basis: auto;
 }
+
+/* ---------- Tile panel: docked inside the map's right edge (restores the PR #17 layout) ---------- */
+.tile-inspector {
+  top: 12px;
+  right: 12px;
+  bottom: 40px; /* the imagery attribution stays visible below */
+  width: 340px;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #fbfcfa;
+  border-radius: 12px;
+  box-shadow: 0 12px 40px #0006;
+  animation: drawer-in 0.22s ease-out;
+}
+@keyframes drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+.tile-inspector .inspected-image,
+.tile-inspector > .notice {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: 46%;
+  object-fit: cover;
+  border-radius: 0;
+  background: #1c2b33;
+  flex-shrink: 0;
+  margin: 0;
+}
+.tile-inspector > .notice {
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  aspect-ratio: 2;
+  color: #b9c6c9;
+  background: #1c2b33;
+  border: 0;
+  font-size: 13px;
+}
+.tile-inspector-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  width: 32px;
+  height: 32px;
+  border: 0 !important;
+  background: #0b1220c4 !important;
+  color: #fff !important;
+}
+.tile-inspector-body {
+  padding: 14px 18px 16px;
+  overflow: auto;
+  min-height: 0;
+}
+.tile-inspector-body h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  color: #15262e;
+}
+.tile-inspector-body > p {
+  font-size: 13px;
+  line-height: 1.5;
+  color: #4a656e;
+  margin: 0 0 6px;
+  overflow-wrap: anywhere;
+}
+.tile-inspector-body dl {
+  grid-template-columns: 96px 1fr;
+  gap: 7px 10px;
+  font-size: 13px;
+  margin: 12px 0;
+}
+.tile-inspector-body .fine-print {
+  font-size: 11.5px;
+}
+/* While the panel is open it owns the right edge: basemap tools and zoom hide (wheel/pinch still zoom). */
+.has-inspector .map-tools,
+.has-inspector .maplibregl-ctrl-group {
+  display: none;
+}
+@media (max-width: 760px) {
+  .tile-inspector {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 36px;
+    width: auto;
+    height: auto;
+    max-height: 58%;
+    flex-direction: row;
+  }
+  .tile-inspector .inspected-image,
+  .tile-inspector > .notice {
+    float: none;
+    width: 40%;
+    height: auto;
+    max-height: none;
+    aspect-ratio: auto;
+    margin: 0;
+  }
+  .tile-inspector-body dl {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .tile-inspector-body h3 {
+    padding-right: 34px;
+    font-size: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile-inspector {
+    animation: none;
+  }
+}
+/* Phones: the prototype stylesheet makes the side panel an absolute overlay on the map (and a
+   410 px flex-basis pushes it off-screen). Map on top, panel below, full width. */
+@media (max-width: 800px) {
+  .live-workspace .workspace {
+    flex-direction: column;
+    overflow: visible;
+  }
+  .live-workspace .side-panel {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    flex-basis: auto !important;
+    max-width: none;
+  }
+  .live-workspace .main-nav {
+    display: flex !important;
+  }
+}
+@media (max-width: 800px) {
+  .live-workspace .app-header {
+    height: auto !important;
+    min-height: 0 !important;
+    flex: 0 0 auto !important; /* index.css pins it with flex: 0 0 64px */
+    flex-wrap: wrap;
+    padding: 12px 14px 0 !important;
+    row-gap: 4px;
+  }
+  .live-workspace .main-nav {
+    order: 3;
+    width: 100%;
+    overflow-x: auto;
+    gap: 18px;
+    height: auto !important;
+  }
+  .live-workspace .main-nav .nav-item {
+    white-space: nowrap;
+    height: 40px;
+    flex-shrink: 0;
+  }
+}
