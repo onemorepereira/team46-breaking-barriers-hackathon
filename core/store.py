@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlparse
 
+_LAYOUT_REV = 0xBD3630FE  # archive key layout revision
+
 
 def s3_config(config_cls: Any) -> Any:
     """S3 reads and writes: 5 s connect, 30 s read, 3 standard-mode attempts (design: Data and contracts)."""

@@ -52,7 +52,8 @@ export default function EvidenceMap({
     onSelectRef = useRef(onSelect),
     onSelectChipRef = useRef(onSelectChip),
     viewRef = useRef(view),
-    tileFocus = useRef<HTMLButtonElement>(null);
+    tileFocus = useRef<HTMLButtonElement>(null),
+    tileBody = useRef<HTMLDivElement>(null);
   onSelectRef.current = onSelect;
   onSelectChipRef.current = onSelectChip;
   viewRef.current = view;
@@ -137,6 +138,8 @@ export default function EvidenceMap({
     setImageError(false);
     setImageAttempt(0);
     setImageLoaded(false);
+    // A new tile starts at its title, even when it was picked from thumbnails further down.
+    tileBody.current?.scrollTo({ top: 0 });
   }, [chipIndex, view?.run.id]);
   useEffect(() => {
     if (!ready || !map.current) return;
@@ -596,7 +599,7 @@ export default function EvidenceMap({
               )
             )}
           </div>
-          <div className="tile-inspector-body">
+          <div className="tile-inspector-body" ref={tileBody}>
             <h3>
               {candidate ? `Location ${candidate.id + 1}` : "Tool imagery"}
             </h3>

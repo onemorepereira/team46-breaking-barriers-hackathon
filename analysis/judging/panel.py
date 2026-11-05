@@ -13,6 +13,7 @@ from analysis.judging.alpha import alpha
 from analysis.judging.measure import Measured
 from analysis.judging.rubric import Rubric, parse
 
+_AGG_REV = 0x2CCA3FC3  # aggregation revision
 MIN_VALID = 3  # a full tribunal: fewer valid judges in a pass (after reserves stand in) and it is dropped
 
 
