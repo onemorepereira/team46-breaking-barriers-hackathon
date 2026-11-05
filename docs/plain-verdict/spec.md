@@ -1,7 +1,7 @@
 # Slice: Evals Explained in Plain Language
 
-**Status:** Built (merged with prompt compliance in PR #7, 2026-11-04; the three-real-archive check, AC6, is not recorded; [handoff](handoff.md)) · **Owner:** Aditya · **Size:** about half a day · **Branch:** `slice/plain-verdict` from `main` · **Merges:** first (see [merge order](../factory.md#slices-open-for-the-team-2026-11-04))
-**Read first:** [how a run is scored](../judging/guide.md), the [factory rules for slices](../factory.md#how-to-take-a-slice).
+**Status:** Built (merged with prompt compliance in PR #7, 2026-11-04; the three-real-archive check, AC6, is not recorded; [handoff](handoff.md)) · **Owner:** Aditya · **Size:** about half a day · **Branch:** `slice/plain-verdict` from `main` · **Merges:** first (see [merge order](../factory.md#shipped))
+**Read first:** [how a run is scored](../judging/guide.md), the [factory rules for slices](../factory.md#how-to-take-an-effort).
 
 ## Problem
 A run's score page speaks to evaluators: criterion IDs, medians, "within one point", MAD, confidence reasons such as `fatal gate: no_answer`. An ADB program officer, or a hackathon judge, can't tell from it **what the agent found, whether to trust it, and what to check by hand**. Every fact needed is already in the run's archive. It just isn't said in plain words.

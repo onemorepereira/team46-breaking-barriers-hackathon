@@ -1,7 +1,7 @@
 # Slice: Presentation and Demo Materials
 
 **Status:** Built (PR #3; slides added in PRs #6, #10 and #11; a 5-minute deck in PR #16; rehearsal, AC6, not logged; [handoff](handoff.md)) · **Owner:** Miguel · **Size:** about a day · **Branch:** `slice/presentation` from `main` · **Deck freeze:** 2 hours before the presentation slot
-**Read first:** the [README](../../README.md) (mission, what we built, verified results, and "How we win", which lists the four judging criteria), [the factory](../factory.md) (every effort and its status), the [factory rules for slices](../factory.md#how-to-take-a-slice).
+**Read first:** the [README](../../README.md) (mission, what we built, verified results, and "How we win", which lists the four judging criteria), [the factory](../factory.md) (every effort and its status), the [factory rules for slices](../factory.md#how-to-take-an-effort).
 
 ## Problem
 Tomorrow we present to the judges and to Clay and ADB. The work is spread across a README, seven feature records and a live console, and none of it is a story yet. We need a short deck, a demo that can't fail, and answers ready for the hard questions. Every number has to be true and traceable to the repo, because the judges include domain experts.
