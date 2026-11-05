@@ -479,6 +479,7 @@ export default function Evaluation({
                 value={reference.sites ?? "—"}
               />
             </div>
+            {reference.ranking && <Ranking rk={reference.ranking} />}
             <p>
               {reference.completeness} reference · {reference.cell_m} m cells ·
               any-touch matching. Incomplete references cannot establish recall.
@@ -673,4 +674,40 @@ function judgeMean(card: any, key: string): number | null {
   return all.length
     ? (all.reduce((a, b) => a + b, 0) / all.length / 2) * 100
     : null;
+}
+
+// Ranking metrics over the run's ranked candidates (docs/ranking-metrics).
+function effortText(e: any, random: number | undefined): string {
+  if (!e) return "Not defined";
+  return e.cells != null
+    ? `${e.cells.toLocaleString("en-US")} cells (random ≈ ${random != null ? random.toLocaleString("en-US") : "—"})`
+    : `Not reached (${Math.round((e.reached ?? 0) * 100)}% after ${e.after} cells; random ≈ ${random != null ? random.toLocaleString("en-US") : "—"})`;
+}
+function Ranking({ rk }: { rk: any }) {
+  const num = (v: any) => (typeof v === "number" ? String(v) : "Not defined");
+  return (
+    <>
+      <p>
+        <b>Ranking</b> · {rk.candidates} ranked cells: the answer's sites first,
+        then each LGND search's results by similarity, searches interleaved.
+      </p>
+      <div className="mini-stats">
+        <Stat label={`Recall@k (k = ${rk.k})`} value={num(rk.recall_at_k)} />
+        <Stat label="AUROC" value={num(rk.auroc)} />
+        <Stat label="AP" value={num(rk.ap)} />
+        {["50", "80", "90"].map((p) => (
+          <Stat
+            key={p}
+            label={`Cells to ${p}% of assets`}
+            value={effortText(rk.effort?.[p], rk.random_effort?.[p])}
+          />
+        ))}
+      </div>
+      {rk.notes?.map((n: string) => (
+        <p key={n} className="fine-print">
+          {n}
+        </p>
+      ))}
+    </>
+  );
 }

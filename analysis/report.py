@@ -62,7 +62,11 @@ class RunReport:
 def reference_of(run: Run, m: measure.Measured, prov: provenance.Provenance,
                  repo_sha: str | None = None) -> dict[str, Any] | None:  # fmt: skip
     claims = [(x.lat, x.lon) for x in m.located if x.source == "claim"]
-    return ref_mod.from_run(run, claims, prov.claims_block_missing, repo_sha)
+    # every LGND search result per call, not deduplicated across calls (docs/ranking-metrics); untied runs
+    # have no reference to rank against, so skip the parse
+    tied = run.store.read_text(f"runs/{run.run_id}/{ref_mod.SNAPSHOT}/tie.json")
+    chips = measure.search_candidates(run) if tied else None
+    return ref_mod.from_run(run, claims, prov.claims_block_missing, repo_sha, chips)
 
 
 def licences_of(
@@ -122,6 +126,7 @@ COMPARE_COLUMNS = [
     "claims_block_missing", "claims_in_area", "search_footprint", "score", "workflow_score", "output_score",
     "confidence", "within_one", "judging_cost_usd", "datasets_accessed",
     "concept", "place", "role", "site_recall", "cell_precision", "count_ratio",
+    "recall_at_k", "auroc", "ap", "effort_80",
 ]  # fmt: skip
 
 
@@ -166,7 +171,15 @@ def _meta_cols(rep: RunReport) -> dict[str, Any]:
         "site_recall": ref.get("site_recall"),
         "cell_precision": ref.get("cell_precision"),
         "count_ratio": ref.get("count_ratio"),
+        **_ranking_cols(ref.get("ranking") or {}),
     }
+
+
+def _ranking_cols(rk: dict[str, Any]) -> dict[str, Any]:
+    """The ranking metrics in compare (docs/ranking-metrics AC6); effort_80 is None when not reached."""
+    effort = (rk.get("effort") or {}).get("80") or {}
+    return {"recall_at_k": rk.get("recall_at_k"), "auroc": rk.get("auroc"), "ap": rk.get("ap"),
+            "effort_80": effort.get("cells")}  # fmt: skip
 
 
 def _mean(vals: list[Any]) -> float | None:
@@ -183,6 +196,10 @@ CONCEPT_COLUMNS = [
     "site_recall",
     "cell_precision",
     "count_ratio",
+    "recall_at_k",
+    "auroc",
+    "ap",
+    "effort_80",
     "n_home",
     "n_transfer",
     "score_home",
@@ -209,6 +226,10 @@ def concept_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "site_recall": _mean([r["site_recall"] for r in rs]),
             "cell_precision": _mean([r["cell_precision"] for r in rs]),
             "count_ratio": _mean([r["count_ratio"] for r in rs]),
+            "recall_at_k": _mean([r.get("recall_at_k") for r in rs]),
+            "auroc": _mean([r.get("auroc") for r in rs]),
+            "ap": _mean([r.get("ap") for r in rs]),
+            "effort_80": _mean([r.get("effort_80") for r in rs]),
         }
         for c, rs in sorted(by.items())
     ]

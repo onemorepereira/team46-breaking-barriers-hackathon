@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
@@ -122,6 +123,27 @@ def located_results(run: Run, prov: Provenance, geom: dict[str, Any] | None) -> 
             out.append(
                 Located("claim", cl.ref, None, pair[0], pair[1], inside(pair[0], pair[1]), claim=cl.claim)
             )
+    return out
+
+
+def search_candidates(run: Run) -> list[tuple[float, float, float, str]]:
+    """Every LGND search result per call, as (lat, lon, similarity, call ref), in call order and each
+    call's own row order (docs/ranking-metrics). Unlike located_results, a place returned by two calls is
+    kept in both, so each call's ranking is whole. Only rows with a similarity count: search `matches`;
+    survey cells and classifier rows carry none."""
+    out: list[tuple[float, float, float, str]] = []
+    for span in run.tool_results:
+        if span.attr("harness.tool.server") != lgnd.SERVER or span.attr("harness.tool.status") == "error":
+            continue
+        text = run.tool_result_text(span) or str(span.attr("harness.tool.result", ""))
+        data = _json(text)
+        ref = str(span.attr("harness.tool.ref") or "")
+        if not re.fullmatch(r"T\d+", ref):  # a call with no number ("T?"): its own group, never merged
+            ref = f"T?:{span.span_id}"
+        for c in chips_of(data) if data else []:
+            sim = c.get("similarity")
+            if isinstance(sim, int | float) and not isinstance(sim, bool):
+                out.append((float(c["lat"]), float(c["lon"]), float(sim), ref))
     return out
 
 

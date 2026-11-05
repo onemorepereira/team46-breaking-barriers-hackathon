@@ -44,7 +44,7 @@ Update this page when an effort is specified, starts, changes status or ships (s
 | R1 | **ADB answer keys** | Reference sets for ADB's test places, so recall is measurable beyond Pecos: PLATEAU warehouses for Nagoya and Gifu built and tied to the T1 suite; DPWH (Manila) and PCRAFI (Port Vila) recorded as blocked candidates | §7.2.1, Table 1, Table 14, §7.4 | M (3–4 d) | — | Specified. DPWH and PCRAFI blocked on ADB legal (default: stay blocked); PLATEAU unblocked | — | [spec](adb-answer-keys/spec.md) |
 | R2 | **Hand-labelled test blocks** | A labelling mode in the workspace that turns 1 km blocks traced on licence-clean imagery into a "complete within blocks" reference set | §3.2, §7.4, Table 7 | L (6–8 d) | — | Specified | — | [spec](test-block-labelling/spec.md) |
 | R3 | **Seeded tasks** | Tasks carry seed example locations; runs record them and whether the agent used them; a seed-budget curve (score against number of seeds) | §1, Table 7, Table 9, Appendix B | M (3 d) | Complete reference for the curve (Pecos today) | Specified | — | [spec](seeded-tasks/spec.md) |
-| R4 | **Ranking metrics** | recall@k, AUROC, AP and review effort (cells inspected to find 50/80/90% of assets) from the agent's ranked candidates | §5.7 Table 11, Table 7 | S–M (2 d) | — | Specified | — | [spec](ranking-metrics/spec.md) |
+| R4 | **Ranking metrics** | recall@k, AUROC, AP and review effort (cells inspected to find 50/80/90% of assets) from the agent's ranked candidates | §5.7 Table 11, Table 7 | S–M (2 d) | — | In progress (PR open; built and verified) | Miguel | [spec](ranking-metrics/spec.md) · [design](ranking-metrics/design.md) · [handoff](ranking-metrics/handoff.md) |
 
 **Next**: the open agentic question and ADB's operating requirements
 

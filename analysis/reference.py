@@ -280,8 +280,134 @@ def sites(cells: set[Cell]) -> list[set[Cell]]:
     return out
 
 
-def score(ref: Reference, claims: list[tuple[float, float]]) -> dict[str, Any]:
-    """Score located claims (lat, lon) against a reference with the benchmark's unit and matching rule."""
+# ---- Ranking metrics (docs/ranking-metrics): the run's ranked candidates, not only its reported sites ----
+
+Candidate = tuple[float, float, float, str]  # (lat, lon, similarity, the tool call it came from)
+RECALL_AT = (10, 20, 50)
+EFFORT_AT = (50, 80, 90)
+
+
+def rank_cells(grid: Grid, area: dict[str, Any], claims: list[tuple[float, float]],
+               chips: list[Candidate]) -> list[Cell]:  # fmt: skip
+    """The run's ranked area cells: claims in answer order, then search results. Similarities aren't
+    comparable across calls, so each call's results are ranked by descending similarity (ties keep first-seen
+    order) and the calls are interleaved round-robin, in the order they were made. Each cell counts once, at
+    its first rank; cells outside the area are skipped."""
+    calls: dict[str, list[Candidate]] = {}
+    for c in chips:
+        calls.setdefault(c[3], []).append(c)
+
+    # the order calls were made: refs are numbered when a call starts (T1, T2, ...); results arrive in
+    # completion order, which differs for parallel calls. Refs without a number go last, in arrival order.
+    def made(item: tuple[int, str]) -> tuple[int, int]:
+        pos, ref = item
+        m = re.fullmatch(r"T(\d+)", ref)
+        return (int(m.group(1)), pos) if m else (10**9, pos)
+
+    ordered = sorted(enumerate(calls), key=made)
+    queues = [sorted(calls[ref], key=lambda c: -c[2]) for _, ref in ordered]  # stable sort
+    order = [(lat, lon) for lat, lon in claims]
+    for depth in range(max((len(q) for q in queues), default=0)):
+        order += [(q[depth][0], q[depth][1]) for q in queues if depth < len(q)]
+    out: list[Cell] = []
+    seen: set[Cell] = set()
+    rejected: set[Cell] = set()  # outside the area: test each cell once (large runs repeat cells)
+    for lat, lon in order:
+        cell = grid.cell(lon, lat)
+        if cell in seen or cell in rejected:
+            continue
+        if not in_area(grid, area, cell):
+            rejected.add(cell)
+            continue
+        seen.add(cell)
+        out.append(cell)
+    return out
+
+
+def ranking_metrics(ranked: list[Cell], cell_assets: dict[Cell, set[str]], n_assets: int,
+                    positives: set[Cell], area_cells: int, complete: bool) -> dict[str, Any]:  # fmt: skip
+    """recall@k, AUROC, AP and review effort over a ranking of area cells (spec AC3-AC5).
+
+    Positives are area cells touched by a reference asset; every other area cell is negative. Unranked cells
+    are tied below the ranked ones: in AUROC a positive-negative tie counts half, and unranked positives add
+    nothing to AP. recall@k and review effort count assets (any-touch, each once) and need a complete set."""
+    P = len(positives)
+    N = max(0, area_cells - P)
+    notes: list[str] = []
+    if not ranked:
+        notes.append("no ranked candidates inside the reference area")
+    # one pass: positives/negatives seen, assets found, AP sum, effort ranks, recall at fixed k
+    found: set[str] = set()
+    pos_seen = neg_seen = 0
+    ap_sum = 0.0
+    pos_ranks_neg_before: list[int] = []
+    effort: dict[int, int | None] = {p: None for p in EFFORT_AT}
+    recall_at: dict[int, float] = {}
+    k_default = P
+    recall_k_default: float | None = None
+    for rank, c in enumerate(ranked, start=1):
+        if c in positives:
+            pos_seen += 1
+            ap_sum += pos_seen / rank
+            pos_ranks_neg_before.append(neg_seen)
+        else:
+            neg_seen += 1
+        found |= cell_assets.get(c, set())
+        share = len(found) / n_assets if n_assets else 0.0
+        for p in EFFORT_AT:
+            if effort[p] is None and n_assets and len(found) * 100 >= p * n_assets:  # exact, no float cut-off
+                effort[p] = rank
+        if rank in RECALL_AT:
+            recall_at[rank] = share
+        if rank == k_default:
+            recall_k_default = share
+    final_share = len(found) / n_assets if n_assets else 0.0
+    for k in RECALL_AT:  # shorter lists: everything ranked is inside the top k
+        recall_at.setdefault(k, final_share)
+    if recall_k_default is None:
+        recall_k_default = final_share
+    ranked_neg = neg_seen
+    # area_cells (scanline) and in_area can disagree on a boundary cell: never let a count go negative
+    unranked_pos, unranked_neg = max(0, P - pos_seen), max(0, N - ranked_neg)
+    auroc = ap = None
+    pos_total, neg_total = pos_seen + unranked_pos, ranked_neg + unranked_neg  # effective counts after clamps
+    if pos_total and neg_total:
+        wins = sum((ranked_neg - before) + unranked_neg for before in pos_ranks_neg_before)
+        auroc = (wins + 0.5 * unranked_pos * unranked_neg) / (pos_total * neg_total)
+    if P:
+        ap = ap_sum / P
+    else:
+        notes.append("no reference assets inside the area")
+    if P and not neg_total:
+        notes.append("every area cell touches an asset, so AUROC is undefined")
+    r3 = lambda v: None if v is None else round(v, 3)  # noqa: E731
+    out: dict[str, Any] = {
+        "candidates": len(ranked), "positives": P, "negatives": N, "k": k_default,
+        "auroc": r3(auroc), "ap": r3(ap),
+        "random_effort": {str(p): math.ceil(p / 100 * area_cells) for p in EFFORT_AT},
+        "notes": notes,
+    }  # fmt: skip
+    if complete and n_assets:
+        out["recall_at_k"] = r3(recall_k_default)
+        out["recall_at"] = {str(k): r3(v) for k, v in sorted(recall_at.items())}
+        out["effort"] = {
+            str(p): {"cells": effort[p]} if effort[p] is not None
+            else {"cells": None, "reached": r3(final_share), "after": len(ranked)}
+            for p in EFFORT_AT
+        }  # fmt: skip
+    else:
+        out["recall_at_k"], out["recall_at"], out["effort"] = None, None, None
+        if not complete:
+            notes.append("reference is incomplete: recall@k and review effort are undefined; "
+                         "AUROC and AP negatives may include unrecorded assets")  # fmt: skip
+    return out
+
+
+def score(
+    ref: Reference, claims: list[tuple[float, float]], chips: list[Candidate] | None = None
+) -> dict[str, Any]:
+    """Score located claims (lat, lon) against a reference with the benchmark's unit and matching rule. With
+    `chips` (the run's LGND results, first-seen order), also rank claims and chips (docs/ranking-metrics)."""
     grid = Grid.for_area(ref.area, ref.cell_m)
     occupied: dict[str, frozenset[Cell]] = {}
     outside_assets = []
@@ -332,7 +458,26 @@ def score(ref: Reference, claims: list[tuple[float, float]]) -> dict[str, Any]:
         "base_rate": round(base_rate, 6),
         "false_alarm_cells": [grid.cell_polygon(c) for c in sorted(flagged - asset_area_cells)],
         "notes": notes,
-    }
+        **({"ranking": _ranking(ref, grid, occupied, asset_area_cells, area_cells, claims, chips)}
+           if chips is not None else {}),
+    }  # fmt: skip
+
+
+def _ranking(
+    ref: Reference,
+    grid: Grid,
+    occupied: dict[str, frozenset[Cell]],
+    positives: set[Cell],
+    area_cells: int,
+    claims: list[tuple[float, float]],
+    chips: list[Candidate],
+) -> dict[str, Any]:
+    cell_assets: dict[Cell, set[str]] = {}
+    for rid, cells in occupied.items():
+        for c in cells:
+            cell_assets.setdefault(c, set()).add(rid)
+    ranked = rank_cells(grid, ref.area, claims, chips)
+    return ranking_metrics(ranked, cell_assets, len(occupied), positives, area_cells, ref.complete)
 
 
 # ---- A run's reference: the snapshot in its own archive (design: The tie) ----
@@ -345,6 +490,7 @@ def from_run(
     claims: list[tuple[float, float]],
     claims_block_missing: bool = False,
     repo_sha: str | None = None,
+    chips: list[Candidate] | None = None,
 ) -> dict[str, Any] | None:
     """Score a run against the reference snapshot in its archive; None when untied. Reads only the run's
     store, so replay reproduces it and a rebuilt repo set never changes an old run's metrics."""
@@ -368,7 +514,7 @@ def from_run(
         }
     out = {
         **ref.summary(),
-        **score(ref, claims),
+        **score(ref, claims, chips),
         "tied": tie,
         "stale": repo_sha is not None and repo_sha != ref.sha256,
     }

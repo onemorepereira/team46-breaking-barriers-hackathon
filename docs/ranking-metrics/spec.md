@@ -1,6 +1,6 @@
 # Ranking Metrics: recall@k, AUROC, AP, Review Effort — Spec
 
-**Roadmap:** R4 · **Track:** Standard · **Product stage:** Introduction · **Status:** Specified · **Last updated:** 2026-11-05
+**Roadmap:** R4 · **Track:** Standard · **Product stage:** Introduction · **Status:** In progress · **Last updated:** 2026-11-05
 **Depends on:** none (works on the Pecos set today; R1 and R2 add places)
 **Size:** S–M (about 2 days)
 
@@ -26,10 +26,11 @@ Our reference metrics score only the sites the agent reported: site recall, cell
 - As an evaluator, I want recall@k with k equal to the number of asset cells, so that I can read an agent beside the benchmark's warehouse table.
 
 ## Acceptance criteria
-- [ ] **AC1 The ranking.** A run's ranked candidate list is built from its located results (analysis/judging/measure.py:93-125), deduplicated by 160 m cell, keeping each cell's first and best entry:
+- [ ] **AC1 The ranking.** A run's ranked candidate list is built from its coordinate claims and each LGND call's own search results (`measure.search_candidates`, which reads each call's raw tool result), deduplicated by 160 m cell, keeping each cell's first entry:
   1. the coordinate claims, in answer order;
-  2. then LGND chips not already in a claimed cell, by descending `similarity`, ties broken by first-seen order;
-  3. then chips with no similarity, in first-seen order.
+  2. then LGND **search results** (the rows that carry a `similarity`; survey grid cells and classifier rows don't, so they are not candidates). Similarities aren't comparable across calls, so each tool call's results are ordered by descending similarity (ties keep first-seen order), and the calls are interleaved round-robin in the order they were made (their call number, `T1`, `T2`, …, assigned when a call starts; results can arrive in a different order when calls run in parallel).
+
+  *(Amended in Design, 2026-11-05: an earlier draft sorted all chips globally and appended chips without a similarity. That would have ranked survey cells and negative classifier rows, and compared similarities across calls.)*
 
   A candidate's cell is the cell of its lat/lon, the same rule as for claims (design.md:190, ruling 2). Only area cells (centre inside the reference area) are ranked. Every other area cell is unranked and tied at the bottom.
 - [ ] **AC2 Positives.** A positive cell is an area cell touched by a reference asset: the `asset_area_cells` set at analysis/reference.py:296. Every other area cell is negative.
@@ -49,8 +50,8 @@ Our reference metrics score only the sites the agent reported: site recall, cell
 - [ ] **AC8 Speed.** On Pecos (482,799 area cells), the ranking metrics add under 0.5 s to scoring after the first pass. AUROC is computed in closed form from the ranked positions, not by enumerating pairs.
 
 ## Success signals
-- **Metric (coverage):** numerator = runs tied to a complete reference with non-null `auroc` and `recall_at_k`; denominator = runs tied to a complete reference. Target 100%.
-- **Metric (diagnostic value):** numerator = reference-tied runs whose recall@k is higher than their site recall; denominator = reference-tied runs with at least one LGND chip in the area. It's reported once in the handoff, with no target. A non-zero share shows that the ranking finds assets the agent's answer left out, which the claim-only metrics can't show.
+- **Metric (coverage):** numerator = runs tied to a complete reference with non-null `auroc` and `recall_at_k`; denominator = runs tied to a complete reference with at least one asset in the area. Target 100%.
+- **Metric (diagnostic value):** numerator = reference-tied runs whose recall@k is higher than their site recall; denominator = reference-tied runs with at least one ranked LGND search result in the area. It's reported once in the handoff, with no target. A non-zero share shows that the ranking finds assets the agent's answer left out, which the claim-only metrics can't show.
 
 ## Constraints
 - **Report definitions:** the metric names and meanings follow §5.7 Table 11, and review effort at 50, 80 and 90% follows the same table **[ext]**. Cell-level AUROC and AP over 160 m cells match Table 21's setup **[ext]**.
