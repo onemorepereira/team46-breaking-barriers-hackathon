@@ -2646,3 +2646,171 @@ html[data-colour="colour-safe"] .vote.v0 {
 .live-now {
   margin-left: 0;
 }
+
+/* ---------- Tile panel v2: a full-height slide-out on the map's right edge, compact ---------- */
+.tile-inspector {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 320px;
+  border-radius: 0;
+  border: 0;
+  border-left: 1px solid #ffffff30;
+  box-shadow: -12px 0 32px #0005;
+  animation: panel-slide 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes panel-slide {
+  from {
+    transform: translateX(100%);
+  }
+}
+.tile-frame {
+  position: relative;
+  flex-shrink: 0;
+  aspect-ratio: 4 / 3;
+  max-height: 42%;
+  background: #1c2b33;
+  overflow: hidden;
+}
+.tile-frame .inspected-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  aspect-ratio: auto;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.tile-frame.loaded .inspected-image {
+  opacity: 1;
+}
+.tile-frame.loading {
+  background: linear-gradient(100deg, #1c2b33 30%, #2a3e48 50%, #1c2b33 70%);
+  background-size: 300% 100%;
+  animation: live-shimmer 1.6s linear infinite;
+}
+.tile-frame-note {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 18px;
+  text-align: center;
+  color: #d5e1e3;
+  font-size: 13px;
+}
+.tile-frame-note small {
+  color: #93a7ac;
+  font-size: 11.5px;
+}
+.tile-frame-note button {
+  justify-self: center;
+  margin-top: 4px;
+}
+.tile-inspector-body {
+  padding: 12px 14px 14px;
+}
+.tile-inspector-body h3 {
+  font-size: 15px;
+  margin: 0;
+}
+.tile-name {
+  font-size: 12.5px !important;
+  margin: 2px 0 8px !important;
+  color: #4a656e;
+}
+.tile-facts {
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 8px 12px !important;
+  margin: 0 0 10px !important;
+}
+.tile-facts div {
+  min-width: 0;
+}
+.tile-facts dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #7c8e8f;
+}
+.tile-facts dd {
+  margin: 1px 0 0;
+  font-size: 13px;
+  color: #15323a;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.tile-step {
+  margin-bottom: 8px;
+}
+.tile-caveat {
+  font-size: 11px !important;
+  line-height: 1.45;
+  margin: 0 0 10px;
+}
+.tile-inspector .tile-thumbs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+  gap: 4px;
+  overflow: visible;
+  margin-top: 4px;
+}
+.tile-inspector .tile-thumbs img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+/* The attribution's (i) stays visible beside the panel. */
+.has-inspector .maplibregl-ctrl-bottom-right {
+  right: 320px !important;
+}
+@media (max-width: 760px) {
+  .tile-inspector {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 62%;
+    border-left: 0;
+    border-top: 1px solid #ffffff30;
+    border-radius: 12px 12px 0 0;
+    flex-direction: column;
+    animation-name: sheet-up;
+  }
+  @keyframes sheet-up {
+    from {
+      transform: translateY(100%);
+    }
+  }
+  .tile-frame {
+    aspect-ratio: 16 / 9;
+    max-height: 34%;
+    width: 100%;
+  }
+  .tile-inspector .inspected-image {
+    width: 100%;
+    float: none;
+    margin: 0;
+  }
+  .tile-inspector-body {
+    overflow: auto;
+  }
+  .has-inspector .maplibregl-ctrl-bottom-right {
+    right: 0 !important;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile-inspector,
+  .tile-frame.loading {
+    animation: none !important;
+  }
+}
+.tile-inspector .tile-thumbs img {
+  background: #e3ebe7;
+}

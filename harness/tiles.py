@@ -26,10 +26,12 @@ from harness import imagery
 log = logging.getLogger(__name__)
 
 USER_AGENT = "TeamFoundryConsole/1 (+https://github.com/onemorepereira/team46-breaking-barriers-hackathon)"
-TIMEOUT_S = 10
+# USGS's NAIP ImageServer took 12.6 s on a cold request and 0.06 s warm (measured 2026-11-05); a 10 s
+# timeout failed every first request for an uncached US tile (run 554470cb archived 0 of 26).
+TIMEOUT_S = 30
 MAX_RUN_TILES = 120
 RUN_WORKERS = 8
-RUN_DEADLINE_S = 45
+RUN_DEADLINE_S = 90
 EVICT_EVERY = 200
 DEFAULTS = {"archive": False, "serve": True, "cache_max_mb": 1024, "max_age_days": 30}
 
@@ -60,7 +62,7 @@ def image_type(data: bytes) -> str | None:
 
 
 def fetch_upstream(url: str) -> bytes:
-    """GET with a 10 s timeout and an identifying User-Agent; raises unless the body is an image."""
+    """GET with a TIMEOUT_S timeout and an identifying User-Agent; raises unless the body is an image."""
     if not url.startswith("https://"):
         raise TileUnavailable("only https:// provider URLs are fetched")
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
