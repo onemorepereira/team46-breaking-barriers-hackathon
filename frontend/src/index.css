@@ -174,24 +174,7 @@
   background: #4d9c72;
 }
 
-.evaluation-button {
-  height: 34px;
-  border: 1px solid #d2d6d4;
-  border-radius: 7px;
-  background: #fff;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 11px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
 
-.evaluation-button:hover {
-  border-color: #aab0ad;
-  background: #f8f8f6;
-}
 
 .avatar {
   width: 32px;
@@ -2667,8 +2650,7 @@
   }
 
   .main-nav,
-  .run-status,
-  .evaluation-button {
+  .run-status {
     display: none;
   }
 

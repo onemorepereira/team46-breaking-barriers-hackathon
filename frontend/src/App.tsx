@@ -814,17 +814,6 @@ export default function App() {
             {busy ? "Working" : view ? view.kpis.verdict : "Ready"}
           </div>
           <button
-            className="evaluation-button"
-            onClick={() => {
-              setTab("evaluation");
-              navigate("workspace");
-              setHistory(null);
-            }}
-            disabled={!view}
-          >
-            <Icon name="panel" size={16} /> Evaluation
-          </button>
-          <button
             className="icon-button accessibility-trigger"
             aria-label="Accessibility and reading settings"
             onClick={() => setSettingsOpen(true)}
